@@ -58,7 +58,20 @@ Those sessions shared a world, so they say nothing about worlds generated indepe
 
 **Cross-release conversion.** Translation has unit tests and an end-to-end run against a synthetic target profile, but no converted world has been opened in an older release. There is no committed profile for any release other than 26.2, because building one requires that release's own artifact.
 
-**Performance.** There are no benchmarks. The engineering guardrails in [`test-strategy.md`](test-strategy.md) are design intent, not measurements. Nothing has measured the adapter's cost on the client frame budget.
+**Performance on the client.** Nothing has measured the adapter's cost on the client frame budget. That work happens in Java on a live client, and the numbers below say nothing about it.
+
+The Go core now has benchmarks over the committed fixtures and the committed capture bundle, covering the two halves [`test-strategy.md`](test-strategy.md) asks for. Measured on one Windows machine, so they are indicative rather than guarantees:
+
+```text
+decode a block section              ~12 us          8-17 allocations
+decode a high-palette section      ~592 us       12,293 allocations
+encode a block section         ~354-448 us        4,121 allocations
+encode a full-height chunk        ~10.6 ms       98,823 allocations
+import one bundle, fresh archive    ~37 ms        2,023 allocations
+import one bundle, already held     ~24 ms        2,047 allocations
+```
+
+Two of these are worth reading carefully. Encoding costs roughly thirty times what decoding does and allocates about once per block state; the reference encoder is used by the fixture tooling rather than on any path a player waits on, so this is a known cost rather than a problem to date. Import spends its time in durability, not computation: two thousand allocations against thirty-seven milliseconds is the signature of the fsync calls that put an observation on disk before the import is acknowledged. Reimporting an observation already held still costs most of that, because it verifies rather than assuming.
 
 **Race detection on Windows.** The race gate needs cgo and is run in Linux CI only.
 

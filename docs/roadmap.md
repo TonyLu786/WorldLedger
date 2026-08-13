@@ -16,7 +16,7 @@ The roadmap is ordered around irreversible interfaces first. Public archives bec
 - [x] archive integrity scan
 - [x] portable archive manifest
 - [x] multi-component capture-bundle ingest in one command
-- [ ] benchmark fixtures
+- [x] benchmark fixtures
 
 Exit criterion: the same fixture ingested on different machines produces identical object and observation identities.
 

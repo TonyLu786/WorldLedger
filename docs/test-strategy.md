@@ -119,7 +119,9 @@ CI runs all Go gates on Linux and separately tests, vets, and builds the Windows
 
 ## 7. Performance guardrails
 
-Benchmarks should measure canonicalization and spool throughput separately.
+Benchmarks measure canonicalization and spool throughput separately, in `internal/mcjava/bench_test.go` and `internal/bundle/bench_test.go`. Both run over committed fixtures and the committed capture bundle, so their inputs are real component sizes rather than shapes chosen to look fast.
+
+Run them with `make bench`. They are deliberately not part of `make check`: timings vary with the machine and with what else it is doing, so a gate built on them would fail for reasons unrelated to the change under test. Recorded figures live in [`status.md`](status.md), with the machine they came from.
 
 Initial engineering guardrails, not protocol guarantees:
 
