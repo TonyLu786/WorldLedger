@@ -1,0 +1,179 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+def expandedModVersion = version.toString()
+def licenseArchiveName = project.archives_base_name.toString()
+
+base {
+	archivesName = project.archives_base_name
+}
+
+def gametestRunDirName = 'build/run-gametest'
+def gametestRunDir = layout.buildDirectory.dir('run-gametest')
+
+// splitEnvironmentSourceSets creates the client source set, so it has to run
+// before anything can extend that source set's classpath.
+loom {
+	splitEnvironmentSourceSets()
+}
+
+sourceSets {
+	// The client game test is a separate mod so that nothing under test ships
+	// inside the adapter JAR. It inherits the client classpath because it runs
+	// against the same Minecraft and Fabric API.
+	gametest {
+		compileClasspath += sourceSets.main.compileClasspath + sourceSets.client.compileClasspath
+		runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.client.runtimeClasspath
+	}
+}
+
+loom {
+	mods {
+		worldledger {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+
+		'worldledger-gametest' {
+			sourceSet sourceSets.gametest
+		}
+	}
+
+	runs {
+		clientGametest {
+			client()
+			// These are methods on RunConfigSettings, not properties: getSource
+			// takes a Project, so an assignment does not resolve.
+			source 'gametest'
+			runDir gametestRunDirName
+
+			// Enables the Fabric client game test runner and limits it to this
+			// mod's tests.
+			property 'fabric.client.gametest', 'true'
+			property 'fabric.client.gametest.modid', 'worldledger-gametest'
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	implementation 'com.google.code.gson:gson:2.13.2'
+
+	gametestImplementation sourceSets.main.output
+	gametestImplementation sourceSets.client.output
+
+	testImplementation platform('org.junit:junit-bom:5.13.4')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+	inputs.property 'version', expandedModVersion
+	filesMatching('fabric.mod.json') {
+		expand version: expandedModVersion
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	options.release = 25
+	options.encoding = 'UTF-8'
+	options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+test {
+	useJUnitPlatform()
+	systemProperty 'worldledger.fixtureDir', file('../../testdata/mcjava-v1').absolutePath
+	systemProperty 'worldledger.e2eFixtureDir', file('../../testdata/e2e-capture-bundle/spool').absolutePath
+}
+
+tasks.register('writeCaptureBundleFixture', JavaExec) {
+	group = 'verification'
+	description = 'Writes the committed Java-to-Go capture-bundle fixture into testdata.'
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'org.worldledger.fabric.capture.SpoolFixtureGenerator'
+	args file('../../testdata/e2e-capture-bundle/spool').absolutePath
+}
+
+// Capture is disabled while the contributor is blank, and the adapter reads its
+// configuration when the client starts. Writing it before launch is what makes
+// the game test exercise capture rather than pass on an empty spool.
+// The client game test needs a dedicated server, and a dedicated server will not
+// start until Mojang's EULA is accepted. Accepting a licence agreement is the
+// operator's decision, so this build will not do it silently: the acceptance has
+// to be passed in, and it is recorded in the run directory under the name of
+// whoever passed it.
+def eulaAccepted = project.findProperty('worldledger.acceptMinecraftEula') == 'true'
+
+tasks.register('prepareClientGametest') {
+	group = 'verification'
+	description = 'Writes adapter configuration into the client game test run directory.'
+	def configFile = gametestRunDir.map { it.file('config/worldledger/capture.properties') }
+	def eulaFile = gametestRunDir.map { it.file('eula.txt') }
+	def accepted = eulaAccepted
+	outputs.files(configFile, eulaFile)
+	doLast {
+		if (!accepted) {
+			throw new GradleException(
+				'The client game test starts a Minecraft dedicated server, which requires accepting\n'
+				+ "Mojang's End User Licence Agreement: https://aka.ms/MinecraftEULA\n"
+				+ '\n'
+				+ 'This build will not accept it on your behalf. If you agree to it, re-run with:\n'
+				+ '  ./gradlew runClientGametest -Pworldledger.acceptMinecraftEula=true')
+		}
+
+		def target = configFile.get().asFile
+		target.parentFile.mkdirs()
+		// Deliberately below the shipped default. A queue large enough never to
+		// fill would stop exercising backpressure and the final flush, which are
+		// the paths a live session is uniquely able to test.
+		target.text = [
+			'contributor=client-gametest',
+			'server_id=worldledger-client-gametest',
+			'coalesce_ticks=10',
+			'queue_capacity=8',
+			'max_snapshots_per_tick=1',
+			''
+		].join('\n')
+
+		def eula = eulaFile.get().asFile
+		eula.parentFile.mkdirs()
+		eula.text = [
+			'# Accepted for this test run by passing -Pworldledger.acceptMinecraftEula=true',
+			'# https://aka.ms/MinecraftEULA',
+			'eula=true',
+			''
+		].join('\n')
+	}
+}
+
+tasks.matching { it.name == 'runClientGametest' }.configureEach {
+	dependsOn 'prepareClientGametest'
+	// Start from a clean spool so the test cannot pass on a previous run's output.
+	doFirst {
+		delete gametestRunDir.map { it.dir('config/worldledger/spool') }
+	}
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+	preserveFileTimestamps = false
+	reproducibleFileOrder = true
+}
+
+jar {
+	from('../../LICENSE') {
+		rename { "${it}_${licenseArchiveName}" }
+	}
+}

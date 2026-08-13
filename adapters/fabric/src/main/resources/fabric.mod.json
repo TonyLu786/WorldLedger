@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "worldledger",
+  "version": "${version}",
+  "name": "WorldLedger Capture Adapter",
+  "description": "Captures client-observable Minecraft chunk state into a local WorldLedger spool.",
+  "authors": [
+    "WorldLedger contributors"
+  ],
+  "contact": {
+    "sources": "https://github.com/worldledger/worldledger-mc",
+    "issues": "https://github.com/worldledger/worldledger-mc/issues"
+  },
+  "license": "Apache-2.0",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "org.worldledger.fabric.WorldLedgerClient"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "worldledger.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "=26.2",
+    "java": ">=25",
+    "fabric-api": ">=0.156.0+26.2"
+  }
+}

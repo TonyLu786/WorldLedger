@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "worldledger-gametest",
+  "version": "1.0.0",
+  "name": "WorldLedger client game tests",
+  "description": "Drives a real 26.2 client through a multiplayer session and checks the capture bundles the adapter wrote. Not shipped with the mod.",
+  "license": "Apache-2.0",
+  "environment": "client",
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "java": ">=25",
+    "worldledger": "*",
+    "fabric-client-gametest-api-v1": "*"
+  },
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "org.worldledger.fabric.gametest.CaptureClientGameTest"
+    ]
+  }
+}
