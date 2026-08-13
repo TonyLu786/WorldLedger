@@ -78,3 +78,13 @@ Secrecy of a seed is a weak protection and was never designed as a security boun
 The software can technically archive data that a multiplayer client receives. Public archive operators still need publication rules appropriate to their community, jurisdiction, and server context.
 
 The project should support server- and collection-level embargoes, contributor deletion of account metadata where feasible, and separation between raw observations and curated public landmarks. Those are service policies, not reasons to weaken the integrity of the underlying archive format.
+
+## What withdrawal can and cannot undo
+
+A contributor can ask for their observations to be withheld, and a server operator can ask for an area to be excluded. `worldledger redact` records either as an attributed, dated, reversible declaration, and anything the archive builds for sharing skips the observations it covers.
+
+Removing the underlying bytes is a different matter, and the difference is not a limitation of the implementation. Objects are stored by content, so two contributors who observed the same chunk in the same state reference one object. When one of them withdraws, that object is still what the other one saw. Deleting it would destroy an observation that was never theirs to withdraw.
+
+This is the ordinary case rather than a corner. In the first real archive here holding two contributors, withdrawing one removed 40 observation records and zero bytes: every state they had seen had been independently observed by the other. `redact purge` reports each object it kept and names the surviving contributor who still references it.
+
+The consequence is worth stating plainly to anyone who asks to be forgotten. What a contributor can withdraw is their own claim to have seen something: their name, their timing, their attestation. What they cannot withdraw is the fact of the world's state, once someone else has independently recorded the same thing. An archive built on corroboration cannot offer more than that without lying, and the exposure that actually matters here comes from accumulated coverage rather than from any one contributor's records.

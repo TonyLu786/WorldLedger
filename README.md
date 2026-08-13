@@ -136,6 +136,29 @@ worldledger policy list --archive ./archive
 
 Dispositions are `private`, `embargoed` (with `--until`), `research`, and `public`. An undeclared server is treated as an unanswered question, not as permission. See [`docs/trust-model.md`](docs/trust-model.md) for why accumulated coverage, rather than any single observation, is what this guards.
 
+### Withhold observations
+
+A contributor may withdraw consent, or an operator may ask for one area to be excluded whoever observed it. Both are declared, attributed, and reversible:
+
+```sh
+worldledger redact set --archive ./archive --server example.org \
+    --contributor alice --reason "contributor withdrew consent" --declared-by your-name
+worldledger redact set --archive ./archive --server example.org \
+    --region -2,-2,2,2 --reason "operator asked for the spawn area to be excluded" --declared-by your-name
+worldledger redact list --archive ./archive
+```
+
+Declared redactions are withheld from coverage, export, and convert immediately. `inspect`, `fsck`, and `fingerprint` still see everything: an operator examining their own archive is not what this guards, and a diagnostic that hides data is a diagnostic that lies.
+
+Removing the data is a separate, irreversible step, and it will not always remove much:
+
+```sh
+worldledger redact purge --archive ./archive        # describes what would go
+worldledger redact purge --archive ./archive --yes  # carries it out
+```
+
+Objects are addressed by content, so two contributors who observed the same chunk in the same state share one object. Purging reports every object it could not remove and names the surviving contributor who still references it. On the first real two-contributor archive measured here, withdrawing one contributor removed 40 observations and zero bytes, because every state they had seen had been independently observed by someone else. An archive that claimed otherwise would be lying to the person who asked to be forgotten.
+
 ### Export a world
 
 ```sh

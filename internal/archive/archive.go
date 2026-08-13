@@ -35,7 +35,7 @@ func Init(root string) (Archive, error) {
 	} else if !os.IsNotExist(err) {
 		return Archive{}, fmt.Errorf("inspect archive version: %w", err)
 	}
-	for _, dir := range []string{"objects", "observations", "index/chunks", transactionDirectory} {
+	for _, dir := range []string{"objects", "observations", "index/chunks", transactionDirectory, purgeDirectory} {
 		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
 			return Archive{}, err
 		}
@@ -87,6 +87,12 @@ func Open(root string) (Archive, error) {
 	defer lock.Close()
 	if err := a.recoverTransactions(); err != nil {
 		return Archive{}, fmt.Errorf("recover archive transactions: %w", err)
+	}
+	// An interrupted purge leaves observations the index no longer lists, or
+	// index entries pointing at nothing. Both fail the integrity check, so the
+	// journal is finished before the archive is handed to anyone.
+	if err := a.recoverPurges(); err != nil {
+		return Archive{}, fmt.Errorf("recover archive purges: %w", err)
 	}
 	return a, nil
 }

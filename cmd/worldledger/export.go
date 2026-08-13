@@ -14,6 +14,7 @@ import (
 	"github.com/worldledger/worldledger-mc/internal/anvil"
 	"github.com/worldledger/worldledger-mc/internal/archive"
 	"github.com/worldledger/worldledger-mc/internal/epoch"
+	"github.com/worldledger/worldledger-mc/internal/redact"
 	"github.com/worldledger/worldledger-mc/internal/translate"
 )
 
@@ -30,9 +31,32 @@ func snapshotAt(a archive.Archive, server, dimension, moment string) (epoch.Snap
 	if err != nil {
 		return epoch.Snapshot{}, err
 	}
+
+	// Every command that builds something shareable reaches the archive through
+	// here, so this is where withheld observations are dropped. Applying it in
+	// each command instead would put the burden on whoever adds the next one.
+	//
+	// inspect, fsck, and fingerprint deliberately still see everything. An
+	// operator examining their own archive is not the risk this guards, and a
+	// diagnostic that hides data is a diagnostic that lies. Removing data is
+	// what purge is for.
+	redactions, err := redact.NewStore(a.Root).List()
+	if err != nil {
+		return epoch.Snapshot{}, fmt.Errorf("read redactions: %w", err)
+	}
+
 	inputs := make([]epoch.ChunkInput, 0, len(gathered))
+	withheld := 0
 	for _, entry := range gathered {
-		inputs = append(inputs, epoch.ChunkInput{Chunk: entry.Chunk, Observations: entry.Observations})
+		kept, dropped := redactions.Filter(entry.Observations)
+		withheld += len(dropped)
+		if len(kept) == 0 {
+			continue
+		}
+		inputs = append(inputs, epoch.ChunkInput{Chunk: entry.Chunk, Observations: kept})
+	}
+	if withheld > 0 {
+		fmt.Fprintf(os.Stderr, "withholding %d observation(s) under %d declared redaction(s)\n", withheld, len(redactions))
 	}
 	return epoch.BuildSnapshot(server, dimension, at, inputs), nil
 }

@@ -71,7 +71,7 @@ Exit criterion: **met for the faithful export path.** An exported chunk loads an
 - [x] coverage exposure assessment over the merged archive
 - [x] operations that build a shareable world require a declared policy
 - [ ] enforcement at an upload boundary, once one exists
-- [ ] contributor-level and region-level redaction
+- [x] contributor-level and region-level redaction
 
 Pulled ahead of Phase 4 deliberately. Accumulated observations make a server's generation parameters recoverable, which is irreversible and affects people who never contributed, so the decision has to exist before the ability to publish does. See [`trust-model.md`](trust-model.md).
 

@@ -118,6 +118,28 @@ func (s Store) Open(ref model.BlobRef) (*os.File, error) {
 	return os.Open(s.Path(ref))
 }
 
+// Remove deletes an object. It reports whether anything was there, because a
+// caller sweeping objects that no observation references any longer needs to
+// distinguish a deletion from an object that was already gone, and neither is
+// an error.
+//
+// The store has no idea how many observations point at an object, so it cannot
+// refuse a removal that would break one. Deciding that is the caller's job.
+func (s Store) Remove(ref model.BlobRef) (bool, error) {
+	path := s.Path(ref)
+	if path == "" {
+		return false, fmt.Errorf("refusing to remove an object with digest %q", ref.Digest)
+	}
+	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (s Store) Verify(ref model.BlobRef) error {
 	f, err := s.Open(ref)
 	if err != nil {
