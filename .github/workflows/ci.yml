@@ -144,6 +144,19 @@ jobs:
           name: linux-capture-fingerprint
           path: ${{ runner.temp }}/linux-capture-fingerprint.txt
           retention-days: 30
+      # Live as soon as a reference produced on another platform is committed.
+      # Until then it reports that the gate is not yet guarding anything, rather
+      # than passing silently and reading as though it were.
+      - name: Compare against the committed cross-platform reference
+        run: |
+          reference=testdata/capture-fingerprint-reference.txt
+          if [ ! -f "$reference" ]; then
+            echo "no cross-platform reference is committed yet, so this gate is not guarding anything"
+            echo "commit one produced on another platform to make it live"
+            exit 0
+          fi
+          go run ./cmd/worldledger fingerprint \
+            --file "${RUNNER_TEMP}/linux-capture-fingerprint.txt" --compare "$reference"
       - name: Upload run directory on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
