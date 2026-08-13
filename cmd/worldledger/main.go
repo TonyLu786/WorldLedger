@@ -60,6 +60,10 @@ func run(args []string) error {
 		return cmdFingerprint(args[1:])
 	case "redact":
 		return cmdRedact(args[1:])
+	case "identity":
+		return cmdIdentity(args[1:])
+	case "attest":
+		return cmdAttest(args[1:])
 	case "fsck":
 		return cmdFsck(args[1:])
 	case "help", "--help", "-h":
@@ -282,6 +286,8 @@ func usage(w io.Writer) {
 		"  worldledger manifest --archive <archive-dir> [--out <file>] [--compare <file>]",
 		"  worldledger fingerprint (--archive <archive-dir> | --file <file>) [--out <file>] [--compare <file>]",
 		"  worldledger redact <set|list|withdraw|purge> --archive <archive-dir> [flags]",
+		"  worldledger identity <create|register|list|remove> --archive <archive-dir> [flags]",
+		"  worldledger attest <sign|verify> --archive <archive-dir> [flags]",
 		"  worldledger fsck --archive <archive-dir>",
 		"  worldledger version",
 		"",

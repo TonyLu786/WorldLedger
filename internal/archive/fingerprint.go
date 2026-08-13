@@ -239,6 +239,55 @@ func ParseFingerprint(r io.Reader) (Fingerprint, error) {
 	return fingerprint, nil
 }
 
+// Negotiation is what two mirrors need to exchange, worked out from their
+// fingerprints alone.
+//
+// Objects are addressed by content, so deciding what to transfer is a set
+// difference over digests and needs neither side to send data, open the other's
+// archive, or share a database. This is the exchange half of the same property
+// that makes deduplication work.
+type Negotiation struct {
+	// Want is held by the remote and missing locally.
+	Want []FingerprintComponent
+	// Offer is held locally and missing remotely.
+	Offer []FingerprintComponent
+	// Shared is how many objects both already hold, which is what determines
+	// whether an exchange is worth starting at all.
+	Shared     int
+	WantBytes  int64
+	OfferBytes int64
+}
+
+// Negotiate works out the transfer in both directions.
+func Negotiate(local, remote Fingerprint) Negotiation {
+	localComponents := map[string]FingerprintComponent{}
+	for _, component := range local.Components {
+		localComponents[component.Digest] = component
+	}
+	remoteComponents := map[string]FingerprintComponent{}
+	for _, component := range remote.Components {
+		remoteComponents[component.Digest] = component
+	}
+
+	var negotiation Negotiation
+	for _, component := range remote.Components {
+		if _, held := localComponents[component.Digest]; held {
+			continue
+		}
+		negotiation.Want = append(negotiation.Want, component)
+		negotiation.WantBytes += component.Size
+	}
+	for _, component := range local.Components {
+		if _, held := remoteComponents[component.Digest]; held {
+			negotiation.Shared++
+			continue
+		}
+		negotiation.Offer = append(negotiation.Offer, component)
+		negotiation.OfferBytes += component.Size
+	}
+	return negotiation
+}
+
 // Difference kinds, ordered by how much they tell you.
 //
 // A digest comparison can prove agreement outright: identical digests mean

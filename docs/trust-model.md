@@ -73,6 +73,14 @@ Consequences for the project:
 
 Secrecy of a seed is a weak protection and was never designed as a security boundary. That is a reason to be careful about publishing archives, not a reason to treat the exposure as acceptable.
 
+## What signatures changed, and what they did not
+
+A contributor label was a string an adapter wrote into a bundle. `worldledger attest` binds an observation to an ed25519 key instead. The signature covers the observation id, which is a digest over the schema, server, dimension, chunk, instant, protocol, contributor label, and state digest, so a signature cannot be lifted onto a different record, chunk, moment, or claimed author.
+
+That closes fabricated attribution, and only that. A signature proves the holder of a key asserted something; it does not make the assertion true, and generating a key costs nothing. The threats above are unchanged by it: a Sybil contributor can hold as many keys as they like, and a fabricated payload signed by a real key is still fabricated.
+
+The registry of known identities is where judgment enters, and it is deliberately manual. Registering a key names who decided to trust it. A label already held by one key cannot be taken by another, because silently accepting the second would let anyone who generates a key inherit the standing of the name they picked. Removing an identity does not invalidate signatures already made with it; they remain valid signatures from a key this archive no longer recognises, which is a different statement from a forgery and is reported as one.
+
 ## Publication policy
 
 The software can technically archive data that a multiplayer client receives. Public archive operators still need publication rules appropriate to their community, jurisdiction, and server context.

@@ -9,6 +9,11 @@
 /adapters/fabric/config/
 /adapters/fabric/mods/
 /adapters/fabric/saves/
+# Signing keys. 'worldledger identity create' writes one wherever it is told,
+# and a committed private key cannot be un-published once it is pushed.
+*.key
+*.pem
+
 *.tmp
 *.log
 hs_err_pid*

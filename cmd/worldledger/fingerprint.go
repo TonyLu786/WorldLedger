@@ -18,6 +18,7 @@ func cmdFingerprint(args []string) error {
 	server := fs.String("server", "", "limit to one server")
 	out := fs.String("out", "", "write the fingerprint to a file instead of standard output")
 	compareWith := fs.String("compare", "", "compare against a fingerprint file from another machine")
+	negotiateWith := fs.String("negotiate", "", "work out what a mirror holding this fingerprint would need")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -49,8 +50,14 @@ func cmdFingerprint(args []string) error {
 		fingerprint = loaded
 	}
 
+	if *compareWith != "" && *negotiateWith != "" {
+		return errors.New("give either --compare or --negotiate, not both")
+	}
 	if *compareWith != "" {
 		return reportFingerprintComparison(fingerprint, *compareWith)
+	}
+	if *negotiateWith != "" {
+		return reportNegotiation(fingerprint, *negotiateWith)
 	}
 	if *out == "" {
 		return fingerprint.WriteText(os.Stdout)
@@ -74,10 +81,6 @@ func cmdFingerprint(args []string) error {
 	return nil
 }
 
-// reportFingerprintComparison answers whether two machines canonicalized the
-// same observed state into the same bytes. It deliberately says nothing about
-// who observed or when, because those differ between any two captures and are
-// not what this comparison is for.
 func readFingerprint(path string) (archive.Fingerprint, error) {
 	handle, err := os.Open(path)
 	if err != nil {
@@ -87,6 +90,10 @@ func readFingerprint(path string) (archive.Fingerprint, error) {
 	return archive.ParseFingerprint(handle)
 }
 
+// reportFingerprintComparison answers whether two machines canonicalized the
+// same observed state into the same bytes. It deliberately says nothing about
+// who observed or when, because those differ between any two captures and are
+// not what this comparison is for.
 func reportFingerprintComparison(local archive.Fingerprint, path string) error {
 	remote, err := readFingerprint(path)
 	if err != nil {
@@ -131,4 +138,24 @@ func reportFingerprintComparison(local archive.Fingerprint, path string) error {
 		fmt.Printf("  %s %s (%d,%d)  %s\n", difference.Server, difference.Dimension, difference.X, difference.Z, difference.Detail)
 	}
 	return fmt.Errorf("%d chunk(s) disagree", len(content))
+}
+
+// reportNegotiation works out an exchange between two mirrors from digests
+// alone. Neither side opens the other's archive and no chunk data moves to
+// decide what would move.
+func reportNegotiation(local archive.Fingerprint, path string) error {
+	remote, err := readFingerprint(path)
+	if err != nil {
+		return err
+	}
+	negotiation := archive.Negotiate(local, remote)
+
+	fmt.Printf("held by both        %d object(s)\n", negotiation.Shared)
+	fmt.Printf("they have, we lack  %d object(s), %s\n", len(negotiation.Want), humanBytes(negotiation.WantBytes))
+	fmt.Printf("we have, they lack  %d object(s), %s\n", len(negotiation.Offer), humanBytes(negotiation.OfferBytes))
+
+	if len(negotiation.Want) == 0 && len(negotiation.Offer) == 0 {
+		fmt.Println("\nthe two mirrors already hold the same objects")
+	}
+	return nil
 }

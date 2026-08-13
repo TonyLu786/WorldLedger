@@ -136,6 +136,36 @@ worldledger policy list --archive ./archive
 
 Dispositions are `private`, `embargoed` (with `--until`), `research`, and `public`. An undeclared server is treated as an unanswered question, not as permission. See [`docs/trust-model.md`](docs/trust-model.md) for why accumulated coverage, rather than any single observation, is what this guards.
 
+### Sign what you contributed
+
+A contributor label is a string an adapter wrote. Anyone can put any name there, which is fine while an archive is your own files and useless the moment two parties exchange observations.
+
+```sh
+worldledger identity create --archive ./archive --label alice \
+    --declared-by your-name --key-out alice.key
+worldledger attest sign --archive ./archive --key alice.key
+worldledger attest verify --archive ./archive
+```
+
+The signature covers the observation id, which already digests the server, dimension, chunk, instant, protocol, contributor label, and state, so it cannot be moved to another record. Signing only touches observations already attributed to that label: vouching for someone else's record is a different act, and mixing the two would make a signature mean less than nothing.
+
+To recognise a contributor whose observations arrived from elsewhere, register their public key:
+
+```sh
+worldledger identity register --archive ./archive --label bob \
+    --public-key <hex> --declared-by your-name --note "how you checked"
+```
+
+A signature proves a key asserted something. It does not make the assertion true, and nothing stops someone generating a key and picking a name. The registry is where that judgment lives: it is attributed, and it refuses to let a second key take a label another key already holds. An unsigned observation is not suspect, it is simply a claim nothing backs.
+
+### Work out what two mirrors need to exchange
+
+```sh
+worldledger fingerprint --file ours.txt --negotiate theirs.txt
+```
+
+Objects are addressed by content, so deciding what to transfer is a set difference over digests. Neither side opens the other's archive and no chunk data moves in order to decide what would move.
+
 ### Withhold observations
 
 A contributor may withdraw consent, or an operator may ask for one area to be excluded whoever observed it. Both are declared, attributed, and reversible:

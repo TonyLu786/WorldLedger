@@ -79,14 +79,20 @@ Pulled ahead of Phase 4 deliberately. Accumulated observations make a server's g
 
 **Goal:** allow independent clients to exchange observations without trusting a central database format.
 
-- contributor public keys
-- signed observation envelopes
-- resumable upload protocol
-- object existence negotiation
-- server registry and aliases
-- collection/landmark metadata
-- archive epoch manifests
-- mirror-friendly immutable bundles
+- [x] contributor public keys
+- [x] signed observation envelopes
+- [x] object existence negotiation
+- [ ] resumable upload protocol
+- [ ] server registry and aliases
+- [ ] collection/landmark metadata
+- [ ] archive epoch manifests
+- [ ] mirror-friendly immutable bundles
+
+The three that are done are the ones that can be done without a network service, and they are the ones the rest depends on. A contributor label used to be a string an adapter wrote; an attestation is now an ed25519 signature over the observation id, which already digests the server, dimension, chunk, instant, protocol, contributor, and state, so a signature cannot be moved to another record. Object existence negotiation falls out of content addressing: two mirrors work out what to send from digests alone, with neither opening the other's archive.
+
+What signing does not do is worth repeating here. It proves a key asserted something. It does not make the assertion true, and nothing stops someone generating a key and picking a name, which is why the identity registry is explicit, attributed, and refuses to let a second key take a label already held. Sybil contributors remain a threat this cannot solve alone.
+
+The remaining items need a service to exist first. A resumable upload protocol has nothing to resume against, and a server registry with no servers registering is a schema rather than a feature.
 
 Exit criterion: two independently operated nodes can exchange, verify, and merge an archive without sharing a database.
 

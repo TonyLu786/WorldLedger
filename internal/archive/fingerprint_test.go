@@ -261,3 +261,49 @@ func TestFingerprintFiltersByServer(t *testing.T) {
 		t.Fatalf("got server %q", fingerprint.States[0].Server)
 	}
 }
+
+// Two mirrors decide what to send each other from digests alone, without
+// either opening the other's archive.
+func TestNegotiateWorksOutTheTransferBothWays(t *testing.T) {
+	mine := archiveWith(t,
+		observationOf(t, "s", "minecraft:overworld", 0, 0, "alice", 1, 'a'),
+		observationOf(t, "s", "minecraft:overworld", 1, 0, "alice", 2, 'b'),
+	)
+	theirs := archiveWith(t,
+		observationOf(t, "s", "minecraft:overworld", 1, 0, "bob", 3, 'b'),
+		observationOf(t, "s", "minecraft:overworld", 2, 0, "bob", 4, 'c'),
+	)
+
+	local, err := mine.Fingerprint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote, err := theirs.Fingerprint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	negotiation := Negotiate(local, remote)
+	if len(negotiation.Want) != 1 || negotiation.Want[0].Digest != repeatHex('c') {
+		t.Fatalf("expected to want only the object we lack, got %v", negotiation.Want)
+	}
+	if len(negotiation.Offer) != 1 || negotiation.Offer[0].Digest != repeatHex('a') {
+		t.Fatalf("expected to offer only the object they lack, got %v", negotiation.Offer)
+	}
+	if negotiation.Shared != 1 {
+		t.Fatalf("both hold one object in common, got %d", negotiation.Shared)
+	}
+}
+
+func TestNegotiateWithAnIdenticalMirrorTransfersNothing(t *testing.T) {
+	a := archiveWith(t, observationOf(t, "s", "minecraft:overworld", 0, 0, "alice", 1, 'a'))
+	fingerprint, err := a.Fingerprint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	negotiation := Negotiate(fingerprint, fingerprint)
+	if len(negotiation.Want) != 0 || len(negotiation.Offer) != 0 {
+		t.Fatalf("two identical mirrors have nothing to exchange, got want %d offer %d",
+			len(negotiation.Want), len(negotiation.Offer))
+	}
+}
