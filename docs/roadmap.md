@@ -14,7 +14,7 @@ The roadmap is ordered around irreversible interfaces first. Public archives bec
 - [x] basic corroboration/conflict analysis
 - [x] CLI development workflow
 - [x] archive integrity scan
-- [ ] portable archive manifest
+- [x] portable archive manifest
 - [x] multi-component capture-bundle ingest in one command
 - [ ] benchmark fixtures
 
@@ -35,9 +35,10 @@ Exit criterion: the same fixture ingested on different machines produces identic
 - [x] bounded canonicalization queue
 - [x] crash-safe spool using capture-bundle v1
 - [x] controlled vanilla integration fixture
-- [ ] Linux client record and cross-platform digest comparison
+- [x] Linux client record
+- [ ] cross-platform digest comparison
 
-The integration fixture is now an automated client game test rather than only a written procedure. It passed against a real 26.2 client on Windows: 50 ready bundles, all imported, idempotent on repeat, `fsck` clean. The remaining item is the second platform.
+The integration fixture is now an automated client game test rather than only a written procedure. It passed against a real 26.2 client on Windows: 158 ready bundles, none dropped, all imported, idempotent on repeat, `fsck` clean. The same test runs headless in Linux CI on every push. What remains is comparing the two: CI does not publish the bundles it produces, so no run has yet shown that the same world state yields identical digests on both platforms.
 
 Exit criterion: **met on Windows.** A live multiplayer session produced a deterministic local archive that then exported to a playable world. See [`status.md`](status.md).
 
