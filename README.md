@@ -113,6 +113,17 @@ worldledger manifest --archive ./other --compare manifest.json
 
 A manifest carries per-chunk digests, so two mirrors agree or disagree on a single root value and can localise every difference to an individual chunk without transferring any chunk data.
 
+### Compare two captures
+
+```sh
+worldledger fingerprint --archive ./archive --out capture.txt
+worldledger fingerprint --archive ./other --compare capture.txt
+```
+
+A manifest digests observation identities, and an identity carries the instant and the session that produced it, so two captures of the same world always disagree there. A fingerprint carries state and component digests only. Two machines that observed the same states agree exactly, whatever else differed.
+
+The comparison separates three things, because running them together hides the one that matters: chunks only one capture saw, chunks where one capture caught a change the other missed, and chunks where each side holds a state the other cannot account for. Only the last indicates a defect.
+
 ### Declare a publication policy
 
 Every server needs one explicit, attributed decision before the archive will build a world from it:

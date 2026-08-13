@@ -48,6 +48,35 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 	private static final String SHAPE_COMPONENT = "mcjava.shape";
 	private static final String BLOCKS_PREFIX = "mcjava.blocks.";
 
+	/**
+	 * Server settings that make the captured world the same world on every run
+	 * and on every platform.
+	 *
+	 * <p>The point of this test is to compare what two machines canonicalize from
+	 * the same observed state. A default server generates terrain from a random
+	 * seed, so two runs would differ in their content before any encoder was
+	 * involved and a digest comparison between them would mean nothing. A
+	 * superflat world with a fixed seed and no structures removes generated
+	 * variation entirely, leaving only what the fixture commands place.
+	 *
+	 * <p>The view distance is pinned because it decides how many chunks the
+	 * client loads, and therefore which chunks the adapter captures. The default
+	 * is a client and server negotiation whose result is not guaranteed to match
+	 * across machines.
+	 */
+	private static Properties deterministicServerProperties() {
+		Properties properties = new Properties();
+		properties.setProperty("level-seed", "worldledger-capture-fixture");
+		properties.setProperty("level-type", "minecraft:flat");
+		properties.setProperty("generate-structures", "false");
+		properties.setProperty("view-distance", "5");
+		properties.setProperty("simulation-distance", "5");
+		properties.setProperty("spawn-monsters", "false");
+		properties.setProperty("spawn-npcs", "false");
+		properties.setProperty("spawn-animals", "false");
+		return properties;
+	}
+
 	@Override
 	public void runTest(ClientGameTestContext context) {
 		CapturePaths paths = CapturePaths.fromFabricConfigDirectory(FabricLoader.getInstance().getConfigDir());
@@ -55,7 +84,7 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 
 		Set<Path> before = readySpoolEntries(paths.spoolDirectory());
 
-		try (TestDedicatedServerContext server = context.worldBuilder().createServer()) {
+		try (TestDedicatedServerContext server = context.worldBuilder().createServer(deterministicServerProperties())) {
 			try (TestDedicatedServerConnection connection = server.connect()) {
 				connection.waitForChunksDownload();
 				placeFixture(server);

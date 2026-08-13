@@ -50,7 +50,11 @@ The same game test runs in Linux CI on every push, headless under a software ren
 
 ## Not verified
 
-**Cross-platform digest agreement.** The game test passes on both Windows and Linux, but the two runs have never been compared to each other. CI does not publish the bundles it produces, so nothing has yet shown that the same world state captured on either platform yields identical component digests. That comparison is the point of the procedure in [`../examples/minecraft-26.2-fixture/`](../examples/minecraft-26.2-fixture/README.md), and it is what would justify calling the canonical encoding platform independent in practice rather than by construction.
+**Cross-platform digest agreement.** The game test passes on both Windows and Linux, and the comparison between them is now mechanised: `worldledger fingerprint` reduces a capture to state and component digests alone, and Linux CI publishes its fingerprint as a build artifact. What has not happened is the comparison itself, against a Windows capture of the same fixture. Until it does, the canonical encoding is platform independent by construction and not by measurement.
+
+One thing already measured is worth separating from that claim. Two capture sessions on one machine, under different contributors and session identifiers, agreed byte for byte on every one of the 40 chunks they both observed, and on 50 of the 52 distinct components between them. The one chunk whose states differed differed by absence: the shorter session left before the fixture was applied, so it holds the earlier state and not the later one. That is a difference in what was caught rather than in how it was encoded, and the comparison reports the two separately.
+
+Those sessions shared a world, so they say nothing about worlds generated independently. The game test's server sets no seed by default, which means two fresh worlds need not contain the same terrain at all. It now pins the seed, the generator, and the view distance, because otherwise a difference between two platforms could not be attributed to the encoder rather than to the world each one happened to generate.
 
 **Cross-release conversion.** Translation has unit tests and an end-to-end run against a synthetic target profile, but no converted world has been opened in an older release. There is no committed profile for any release other than 26.2, because building one requires that release's own artifact.
 

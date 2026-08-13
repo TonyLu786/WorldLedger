@@ -122,12 +122,28 @@ jobs:
       # Mojang's EULA: https://aka.ms/MinecraftEULA. Passing the flag here is the
       # repository owner's acceptance for automated runs. The build never
       # accepts it implicitly.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.23.12'
+          cache: true
       - name: Run the capture game test
         working-directory: adapters/fabric
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
           GALLIUM_DRIVER: llvmpipe
         run: xvfb-run -a --server-args="-screen 0 1280x1024x24" ./gradlew --no-daemon runClientGametest -Pworldledger.acceptMinecraftEula=true
+      # The fingerprint carries state and component digests only, so it can be
+      # compared against a capture from another platform whose instants,
+      # contributors, and session identifiers necessarily differ.
+      - name: Fingerprint what this platform captured
+        run: ./scripts/capture-fingerprint.sh adapters/fabric/build/run-gametest/config/worldledger/spool "${RUNNER_TEMP}/linux-capture-fingerprint.txt"
+      - name: Upload the capture fingerprint
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-capture-fingerprint
+          path: ${{ runner.temp }}/linux-capture-fingerprint.txt
+          retention-days: 30
       - name: Upload run directory on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
