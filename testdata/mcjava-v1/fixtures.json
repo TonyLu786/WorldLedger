@@ -1,0 +1,266 @@
+{
+  "schema": "worldledger.minecraft.java.chunk-fixtures/v1",
+  "fixtures": [
+    {
+      "name": "shape-negative",
+      "component": "shape",
+      "output": "shape-negative.bin",
+      "shape": {
+        "min_section_y": -4,
+        "section_count": 24
+      }
+    },
+    {
+      "name": "blocks-all-air-negative",
+      "component": "block_section",
+      "output": "blocks-all-air-negative.bin",
+      "block_section": {
+        "section_y": -4,
+        "states": {
+          "kind": "constant",
+          "state": {
+            "name": "minecraft:air"
+          }
+        }
+      }
+    },
+    {
+      "name": "blocks-high-palette",
+      "component": "block_section",
+      "output": "blocks-high-palette.bin",
+      "block_section": {
+        "section_y": 7,
+        "states": {
+          "kind": "indexed_resources",
+          "namespace": "fixture",
+          "path_prefix": "block_",
+          "count": 4096,
+          "width": 4
+        }
+      }
+    },
+    {
+      "name": "blocks-property-order",
+      "component": "block_section",
+      "output": "blocks-property-order.bin",
+      "block_section": {
+        "section_y": 0,
+        "states": {
+          "kind": "constant",
+          "state": {
+            "name": "minecraft:oak_stairs",
+            "properties": [
+              {
+                "name": "waterlogged",
+                "value": "false"
+              },
+              {
+                "name": "shape",
+                "value": "straight"
+              },
+              {
+                "name": "half",
+                "value": "bottom"
+              },
+              {
+                "name": "facing",
+                "value": "north"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "biomes-mixed-negative",
+      "component": "biome_section",
+      "output": "biomes-mixed-negative.bin",
+      "biome_section": {
+        "section_y": -1,
+        "biomes": {
+          "kind": "cycle",
+          "values": [
+            "minecraft:plains",
+            "minecraft:desert",
+            "minecraft:forest",
+            "minecraft:badlands"
+          ]
+        }
+      }
+    },
+    {
+      "name": "block-entities-empty",
+      "component": "block_entities",
+      "output": "block-entities-empty.bin",
+      "block_entities": {
+        "entries": []
+      }
+    },
+    {
+      "name": "block-entities-nbt-special",
+      "component": "block_entities",
+      "output": "block-entities-nbt-special.bin",
+      "block_entities": {
+        "entries": [
+          {
+            "local_x": 12,
+            "block_y": 64,
+            "local_z": 3,
+            "type": "minecraft:sign",
+            "nbt": {
+              "type": "compound",
+              "entries": [
+                {
+                  "name": "zeta",
+                  "value": {
+                    "type": "string",
+                    "string": "last in ASCII"
+                  }
+                },
+                {
+                  "name": "nested",
+                  "value": {
+                    "type": "compound",
+                    "entries": [
+                      {
+                        "name": "values",
+                        "value": {
+                          "type": "list",
+                          "element_type": "int",
+                          "values": [
+                            {
+                              "type": "int",
+                              "int": 3
+                            },
+                            {
+                              "type": "int",
+                              "int": 1
+                            },
+                            {
+                              "type": "int",
+                              "int": 2
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "empty",
+                        "value": {
+                          "type": "list",
+                          "element_type": "end"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "longs",
+                  "value": {
+                    "type": "long_array",
+                    "longs": [
+                      "-9223372036854775808",
+                      "0",
+                      "9223372036854775807"
+                    ]
+                  }
+                },
+                {
+                  "name": "ints",
+                  "value": {
+                    "type": "int_array",
+                    "ints": [
+                      -2147483648,
+                      0,
+                      2147483647
+                    ]
+                  }
+                },
+                {
+                  "name": "float_nan",
+                  "value": {
+                    "type": "float_bits",
+                    "float_bits": "0x7fc01234"
+                  }
+                },
+                {
+                  "name": "double_negative_infinity",
+                  "value": {
+                    "type": "double_bits",
+                    "double_bits": "0xfff0000000000000"
+                  }
+                },
+                {
+                  "name": "bytes",
+                  "value": {
+                    "type": "byte_array",
+                    "bytes_hex": "00ff7f80"
+                  }
+                },
+                {
+                  "name": "byte_min",
+                  "value": {
+                    "type": "byte",
+                    "byte": -128
+                  }
+                },
+                {
+                  "name": "short_min",
+                  "value": {
+                    "type": "short",
+                    "short": -32768
+                  }
+                },
+                {
+                  "name": "int_min",
+                  "value": {
+                    "type": "int",
+                    "int": -2147483648
+                  }
+                },
+                {
+                  "name": "long_min",
+                  "value": {
+                    "type": "long",
+                    "long": "-9223372036854775808"
+                  }
+                },
+                {
+                  "name": "\ue000",
+                  "value": {
+                    "type": "string",
+                    "string": "UTF-8 order precedes U+10000"
+                  }
+                },
+                {
+                  "name": "\ud800\udc00",
+                  "value": {
+                    "type": "string",
+                    "string": "supplementary code point"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "local_x": 1,
+            "block_y": -20,
+            "local_z": 1,
+            "type": "minecraft:banner",
+            "nbt": {
+              "type": "compound",
+              "entries": [
+                {
+                  "name": "custom_name",
+                  "value": {
+                    "type": "string",
+                    "string": "fixture"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
