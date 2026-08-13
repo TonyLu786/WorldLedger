@@ -1,0 +1,49 @@
+WorldLedger
+Copyright 2026 WorldLedger contributors
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+Minecraft is a trademark of Microsoft Corporation. WorldLedger is an independent
+open-source project and is not affiliated with, sponsored by, or endorsed by
+Microsoft or Mojang Studios. Other names may be trademarks of their respective
+owners.
+
+--------------------------------------------------------------------------------
+DISCLAIMER
+
+This software is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
+OF ANY KIND, either express or implied, including without limitation any
+warranties of merchantability, fitness for a particular purpose, accuracy, or
+non-infringement. See LICENSE for the full terms, which govern in the event of
+any conflict with this notice.
+
+This software is a general-purpose tool. It is supplied without knowledge of the
+data any particular user chooses to process with it, the systems that data came
+from, or the arrangements under which that user obtained it.
+
+Responsibility for use rests entirely with the user. By using this software you
+are responsible for determining that your use is appropriate, and for obtaining
+any rights, permissions, licences, or authorisations it requires. In particular
+you are responsible for your own compliance with:
+
+  - all laws and regulations applicable to you and to your use;
+  - the terms of service, acceptable use policies, rules, and contractual terms
+    of any system, service, network, or platform you interact with or obtain
+    data from;
+  - the rights of any third party, including rights in data, privacy rights, and
+    intellectual property rights;
+  - any rules of any organisation, community, competition, or event you
+    participate in.
+
+Nothing in this software, its documentation, or any output it produces
+constitutes permission, authorisation, endorsement, or legal advice, and nothing
+grants any right that the user does not already independently hold. Technical
+ability to perform an operation is not permission to perform it.
+
+To the maximum extent permitted by applicable law, the authors, copyright
+holders, and contributors shall not be liable for any claim, damages, losses, or
+other liability, whether in an action of contract, tort, or otherwise, arising
+from, out of, or in connection with the software, its use, or anything derived
+from its use.
+
+If you do not accept these terms, do not use this software.
