@@ -1,0 +1,541 @@
+{
+ "schema": "worldledger.datafix-renames/v1",
+ "source": "26.2",
+ "coverage": {
+  "block_fixers": 21,
+  "block_fixers_extracted": 15,
+  "item_fixers": 28,
+  "item_fixers_extracted": 19,
+  "unextracted": [
+   "Block renamening fix",
+   "Colorless shulker block fixer",
+   "Colorless shulker item fixer",
+   "Item renamening fix",
+   "Rename cod/salmon egg items",
+   "Rename copper blocks suffixes",
+   "Rename coral blocks",
+   "Rename coral items",
+   "Rename dye items",
+   "Rename pufferfish egg item",
+   "Rename ravager egg item",
+   "Rename zombie pigman egg item",
+   "Renamed copper blocks to new oxidized terms",
+   "Renamed grimstone blocks to deepslate",
+   "cooked_fished item renamer"
+  ]
+ },
+ "blocks": [
+  {
+   "data_version": 1475,
+   "from": "minecraft:flowing_lava",
+   "to": "minecraft:lava"
+  },
+  {
+   "data_version": 1475,
+   "from": "minecraft:flowing_water",
+   "to": "minecraft:water"
+  },
+  {
+   "data_version": 1484,
+   "from": "minecraft:sea_grass",
+   "to": "minecraft:seagrass"
+  },
+  {
+   "data_version": 1484,
+   "from": "minecraft:tall_sea_grass",
+   "to": "minecraft:tall_seagrass"
+  },
+  {
+   "data_version": 1487,
+   "from": "minecraft:prismarine_bricks_slab",
+   "to": "minecraft:prismarine_brick_slab"
+  },
+  {
+   "data_version": 1487,
+   "from": "minecraft:prismarine_bricks_stairs",
+   "to": "minecraft:prismarine_brick_stairs"
+  },
+  {
+   "data_version": 1488,
+   "from": "minecraft:kelp",
+   "to": "minecraft:kelp_plant"
+  },
+  {
+   "data_version": 1488,
+   "from": "minecraft:kelp_top",
+   "to": "minecraft:kelp"
+  },
+  {
+   "data_version": 1490,
+   "from": "minecraft:melon_block",
+   "to": "minecraft:melon"
+  },
+  {
+   "data_version": 1515,
+   "from": "minecraft:dive_one_cm",
+   "to": "minecraft:walk_under_water_one_cm"
+  },
+  {
+   "data_version": 1515,
+   "from": "minecraft:swim_one_cm",
+   "to": "minecraft:walk_on_water_one_cm"
+  },
+  {
+   "data_version": 1802,
+   "from": "minecraft:sign",
+   "to": "minecraft:oak_sign"
+  },
+  {
+   "data_version": 1802,
+   "from": "minecraft:stone_slab",
+   "to": "minecraft:smooth_stone_slab"
+  },
+  {
+   "data_version": 1802,
+   "from": "minecraft:wall_sign",
+   "to": "minecraft:oak_wall_sign"
+  },
+  {
+   "data_version": 2209,
+   "from": "minecraft:bee_hive",
+   "to": "minecraft:beehive"
+  },
+  {
+   "data_version": 2508,
+   "from": "minecraft:recipes/misc/composter",
+   "to": "minecraft:recipes/decorations/composter"
+  },
+  {
+   "data_version": 2528,
+   "from": "minecraft:soul_fire_lantern",
+   "to": "minecraft:soul_lantern"
+  },
+  {
+   "data_version": 2528,
+   "from": "minecraft:soul_fire_torch",
+   "to": "minecraft:soul_torch"
+  },
+  {
+   "data_version": 2528,
+   "from": "minecraft:soul_fire_wall_torch",
+   "to": "minecraft:soul_wall_torch"
+  },
+  {
+   "data_version": 2680,
+   "from": "minecraft:grass_path",
+   "to": "minecraft:dirt_path"
+  },
+  {
+   "data_version": 2700,
+   "from": "minecraft:cave_vines_body",
+   "to": "minecraft:cave_vines_plant"
+  },
+  {
+   "data_version": 2700,
+   "from": "minecraft:cave_vines_head",
+   "to": "minecraft:cave_vines"
+  },
+  {
+   "data_version": 2717,
+   "from": "minecraft:azalea_leaves_flowers",
+   "to": "minecraft:flowering_azalea_leaves"
+  },
+  {
+   "data_version": 3692,
+   "from": "minecraft:grass",
+   "to": "minecraft:short_grass"
+  },
+  {
+   "data_version": 4541,
+   "from": "minecraft:horse.jump_strength",
+   "to": "minecraft:generic.jump_strength"
+  }
+ ],
+ "items": [
+  {
+   "data_version": 820,
+   "from": "minecraft:totem",
+   "to": "minecraft:totem_of_undying"
+  },
+  {
+   "data_version": 1484,
+   "from": "minecraft:sea_grass",
+   "to": "minecraft:seagrass"
+  },
+  {
+   "data_version": 1484,
+   "from": "minecraft:tall_sea_grass",
+   "to": "minecraft:tall_seagrass"
+  },
+  {
+   "data_version": 1487,
+   "from": "minecraft:prismarine_bricks_slab",
+   "to": "minecraft:prismarine_brick_slab"
+  },
+  {
+   "data_version": 1487,
+   "from": "minecraft:prismarine_bricks_stairs",
+   "to": "minecraft:prismarine_brick_stairs"
+  },
+  {
+   "data_version": 1488,
+   "from": "minecraft:kelp_top",
+   "to": "minecraft:kelp"
+  },
+  {
+   "data_version": 1490,
+   "from": "minecraft:melon",
+   "to": "minecraft:melon_slice"
+  },
+  {
+   "data_version": 1490,
+   "from": "minecraft:melon_block",
+   "to": "minecraft:melon"
+  },
+  {
+   "data_version": 1490,
+   "from": "minecraft:speckled_melon",
+   "to": "minecraft:glistering_melon_slice"
+  },
+  {
+   "data_version": 1802,
+   "from": "minecraft:sign",
+   "to": "minecraft:oak_sign"
+  },
+  {
+   "data_version": 1802,
+   "from": "minecraft:stone_slab",
+   "to": "minecraft:smooth_stone_slab"
+  },
+  {
+   "data_version": 2209,
+   "from": "minecraft:bee_hive",
+   "to": "minecraft:beehive"
+  },
+  {
+   "data_version": 2508,
+   "from": "minecraft:recipes/misc/composter",
+   "to": "minecraft:recipes/decorations/composter"
+  },
+  {
+   "data_version": 2528,
+   "from": "minecraft:soul_fire_lantern",
+   "to": "minecraft:soul_lantern"
+  },
+  {
+   "data_version": 2528,
+   "from": "minecraft:soul_fire_torch",
+   "to": "minecraft:soul_torch"
+  },
+  {
+   "data_version": 2680,
+   "from": "minecraft:nether",
+   "to": "minecraft:nether_wastes"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:lightly_weathered_copper_block",
+   "to": "minecraft:exposed_copper_block"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:lightly_weathered_cut_copper",
+   "to": "minecraft:exposed_cut_copper"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:lightly_weathered_cut_copper_slab",
+   "to": "minecraft:exposed_cut_copper_slab"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:lightly_weathered_cut_copper_stairs",
+   "to": "minecraft:exposed_cut_copper_stairs"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:semi_weathered_copper_block",
+   "to": "minecraft:weathered_copper_block"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:semi_weathered_cut_copper",
+   "to": "minecraft:weathered_cut_copper"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:semi_weathered_cut_copper_slab",
+   "to": "minecraft:weathered_cut_copper_slab"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:semi_weathered_cut_copper_stairs",
+   "to": "minecraft:weathered_cut_copper_stairs"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:waxed_lightly_weathered_copper",
+   "to": "minecraft:waxed_exposed_copper"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:waxed_lightly_weathered_cut_copper",
+   "to": "minecraft:waxed_exposed_cut_copper"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:waxed_lightly_weathered_cut_copper_slab",
+   "to": "minecraft:waxed_exposed_cut_copper_slab"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:waxed_lightly_weathered_cut_copper_stairs",
+   "to": "minecraft:waxed_exposed_cut_copper_stairs"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:waxed_semi_weathered_copper",
+   "to": "minecraft:waxed_weathered_copper"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:waxed_semi_weathered_cut_copper",
+   "to": "minecraft:waxed_weathered_cut_copper"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:waxed_semi_weathered_cut_copper_slab",
+   "to": "minecraft:waxed_weathered_cut_copper_slab"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:waxed_semi_weathered_cut_copper_stairs",
+   "to": "minecraft:waxed_weathered_cut_copper_stairs"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:weathered_copper_block",
+   "to": "minecraft:oxidized_copper_block"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:weathered_cut_copper",
+   "to": "minecraft:oxidized_cut_copper"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:weathered_cut_copper_slab",
+   "to": "minecraft:oxidized_cut_copper_slab"
+  },
+  {
+   "data_version": 2690,
+   "from": "minecraft:weathered_cut_copper_stairs",
+   "to": "minecraft:oxidized_cut_copper_stairs"
+  },
+  {
+   "data_version": 2691,
+   "from": "minecraft:exposed_copper_block",
+   "to": "minecraft:exposed_copper"
+  },
+  {
+   "data_version": 2691,
+   "from": "minecraft:oxidized_copper_block",
+   "to": "minecraft:oxidized_copper"
+  },
+  {
+   "data_version": 2691,
+   "from": "minecraft:waxed_copper",
+   "to": "minecraft:waxed_copper_block"
+  },
+  {
+   "data_version": 2691,
+   "from": "minecraft:weathered_copper_block",
+   "to": "minecraft:weathered_copper"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:chiseled_grimstone",
+   "to": "minecraft:chiseled_deepslate"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone",
+   "to": "minecraft:deepslate"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_brick_slab",
+   "to": "minecraft:deepslate_brick_slab"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_brick_stairs",
+   "to": "minecraft:deepslate_brick_stairs"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_brick_wall",
+   "to": "minecraft:deepslate_brick_wall"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_bricks",
+   "to": "minecraft:deepslate_bricks"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_slab",
+   "to": "minecraft:cobbled_deepslate_slab"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_stairs",
+   "to": "minecraft:cobbled_deepslate_stairs"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_tile_slab",
+   "to": "minecraft:deepslate_tile_slab"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_tile_stairs",
+   "to": "minecraft:deepslate_tile_stairs"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_tile_wall",
+   "to": "minecraft:deepslate_tile_wall"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_tiles",
+   "to": "minecraft:deepslate_tiles"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:grimstone_wall",
+   "to": "minecraft:cobbled_deepslate_wall"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:polished_grimstone",
+   "to": "minecraft:polished_deepslate"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:polished_grimstone_slab",
+   "to": "minecraft:polished_deepslate_slab"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:polished_grimstone_stairs",
+   "to": "minecraft:polished_deepslate_stairs"
+  },
+  {
+   "data_version": 2696,
+   "from": "minecraft:polished_grimstone_wall",
+   "to": "minecraft:polished_deepslate_wall"
+  },
+  {
+   "data_version": 2717,
+   "from": "minecraft:azalea_leaves_flowers",
+   "to": "minecraft:flowering_azalea_leaves"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:block_press",
+   "to": "minecraft:block_activate"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:block_switch",
+   "to": "minecraft:block_activate"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:block_unpress",
+   "to": "minecraft:block_deactivate"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:block_unswitch",
+   "to": "minecraft:block_deactivate"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:drinking_finish",
+   "to": "minecraft:drink"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:elytra_free_fall",
+   "to": "minecraft:elytra_glide"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:entity_damaged",
+   "to": "minecraft:entity_damage"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:entity_dying",
+   "to": "minecraft:entity_die"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:entity_killed",
+   "to": "minecraft:entity_die"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:mob_interact",
+   "to": "minecraft:entity_interact"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:ravager_roar",
+   "to": "minecraft:entity_roar"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:ring_bell",
+   "to": "minecraft:block_change"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:shulker_close",
+   "to": "minecraft:container_close"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:shulker_open",
+   "to": "minecraft:container_open"
+  },
+  {
+   "data_version": 3438,
+   "from": "minecraft:wolf_shaking",
+   "to": "minecraft:entity_shake"
+  },
+  {
+   "data_version": 3447,
+   "from": "minecraft:overworld_update_1_20",
+   "to": "minecraft:overworld"
+  },
+  {
+   "data_version": 3692,
+   "from": "minecraft:grass",
+   "to": "minecraft:short_grass"
+  },
+  {
+   "data_version": 3800,
+   "from": "minecraft:scute",
+   "to": "minecraft:turtle_scute"
+  },
+  {
+   "data_version": 4541,
+   "from": "minecraft:chain",
+   "to": "minecraft:iron_chain"
+  }
+ ]
+}
