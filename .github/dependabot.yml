@@ -1,16 +1,36 @@
 version: 2
+
+# Version updates are off; security updates are not.
+#
+# This project documents its build inputs as exact and checksum-pinned, and a
+# bot that raises the versions on its own schedule makes that claim false
+# between one merge and the next README edit. Security advisories are a
+# different matter: those are worth interrupting for.
+#
+# open-pull-requests-limit: 0 disables version updates for a package manager.
+# Security update pull requests are not subject to that limit and do not count
+# toward it, so they still arrive. This depends on Dependabot security updates
+# being enabled for the repository; the file alone does not turn them on.
+#
+# Entries under ignore are excluded from security updates as well, so anything
+# listed there will not raise a pull request even for an advisory. That is the
+# intended trade for the pinned game baseline and the Gradle wrapper, both of
+# which are deliberate version choices rather than dependencies to track.
+
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
+
   - package-ecosystem: gradle
     directory: /adapters/fabric
     schedule:
       interval: monthly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     ignore:
+      - dependency-name: gradle-wrapper
       - dependency-name: com.mojang:minecraft
       - dependency-name: net.fabricmc:fabric-loader
       - dependency-name: net.fabricmc.fabric-api:fabric-api
