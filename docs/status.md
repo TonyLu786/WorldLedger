@@ -46,9 +46,11 @@ After the fix the same test enqueued 158 chunks and dropped none, while the in-p
 
 Evidence for both runs is under `validation/gametest-evidence-2026-08-13*/`.
 
+The same game test runs in Linux CI on every push, headless under a software renderer, and passes there. Because the test fails when no bundle appears, a passing run is evidence that capture produced and verified bundles on that platform, not merely that the client started.
+
 ## Not verified
 
-**Cross-platform capture evidence.** The passing run was on Windows. The committed procedure in [`../examples/minecraft-26.2-fixture/`](../examples/minecraft-26.2-fixture/README.md) additionally calls for a Linux record and a digest comparison between the two.
+**Cross-platform digest agreement.** The game test passes on both Windows and Linux, but the two runs have never been compared to each other. CI does not publish the bundles it produces, so nothing has yet shown that the same world state captured on either platform yields identical component digests. That comparison is the point of the procedure in [`../examples/minecraft-26.2-fixture/`](../examples/minecraft-26.2-fixture/README.md), and it is what would justify calling the canonical encoding platform independent in practice rather than by construction.
 
 **Cross-release conversion.** Translation has unit tests and an end-to-end run against a synthetic target profile, but no converted world has been opened in an older release. There is no committed profile for any release other than 26.2, because building one requires that release's own artifact.
 

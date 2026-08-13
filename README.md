@@ -9,7 +9,7 @@ The repository contains two deliberately separate systems:
 
 The Fabric process never opens or mutates an archive. The Go importer is the only boundary that turns a capture bundle into archive objects, observation records, and chunk indexes.
 
-> **Development status.** The archive core, canonical encoders and decoders, epoch selection, Anvil export, release profiles, and publication policy are implemented and automatically tested. Reconstruction has been verified end to end against an unmodified Minecraft 26.2 client: an exported chunk loads and renders correctly, including negative sections and block state properties. The capture side has not had an equivalent live run, so the Fabric adapter remains `0.1.0-dev`. See [`docs/status.md`](docs/status.md).
+> **Development status.** The archive core, canonical encoders and decoders, epoch selection, Anvil export, release profiles, and publication policy are implemented and automatically tested. Reconstruction has been verified end to end against an unmodified Minecraft 26.2 client: an exported chunk loads and renders correctly, including negative sections and block state properties. Capture has been exercised against a real 26.2 client as well, and the client game test runs headless in Linux CI on every push. What has not been done is a digest comparison between captures taken on different platforms, so the Fabric adapter remains `0.1.0-dev`. See [`docs/status.md`](docs/status.md).
 
 ## What makes this different from a world downloader
 
