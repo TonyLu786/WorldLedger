@@ -1,0 +1,136 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cli:
+    name: CLI ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: linux
+            goarch: amd64
+            ext: ''
+          - goos: darwin
+            goarch: arm64
+            ext: ''
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.23.12'
+          cache: true
+      - name: Verify before packaging
+        run: |
+          go run ./cmd/mcjava-fixtures
+          go test -count=1 ./...
+          go vet ./...
+      # Reproducible: trimmed paths, no VCS stamp, no cgo. The same source
+      # produces the same binary, which matters for a tool whose output people
+      # are asked to trust.
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p dist
+          go build -trimpath -buildvcs=false -ldflags='-s -w' \
+            -o "dist/worldledger${{ matrix.ext }}" ./cmd/worldledger
+      - name: Package with the documents a user needs
+        run: |
+          cd dist
+          cp ../LICENSE ../NOTICE ../README.md .
+          mkdir -p profiles docs
+          cp ../profiles/*.json profiles/
+          cp ../docs/status.md ../docs/trust-model.md ../docs/version-compatibility.md docs/
+          name="worldledger-${{ matrix.goos }}-${{ matrix.goarch }}"
+          tar -czf "../${name}.tar.gz" .
+          cd ..
+          sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+      - name: Upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: worldledger-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            worldledger-*.tar.gz
+            worldledger-*.tar.gz.sha256
+
+  mod:
+    name: Fabric mod JAR
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Java 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Validate wrapper and set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+      - name: Build
+        working-directory: adapters/fabric
+        run: ./gradlew --no-daemon clean build --warning-mode all
+      - name: Checksum
+        working-directory: adapters/fabric/build/libs
+        run: sha256sum *.jar > SHA256SUMS.txt
+      - name: Upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: worldledger-fabric-mod
+          path: |
+            adapters/fabric/build/libs/*.jar
+            adapters/fabric/build/libs/SHA256SUMS.txt
+
+  publish:
+    name: Publish release
+    needs: [cli, mod]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Collect artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts
+          merge-multiple: true
+      # Drafted rather than published: a release carries a capture adapter and a
+      # world exporter, and a person should look at what is being handed out
+      # before it reaches anyone.
+      - name: Draft the release
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          draft: true
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.sha256
+            artifacts/**/*.jar
+            artifacts/**/SHA256SUMS.txt
+          body: |
+            See `docs/status.md` in the archive for what is verified and what is not.
+
+            **Java Edition 26.2 only.** The adapter is pinned to one Minecraft
+            release; see `docs/adapter-versioning.md`.
+
+            Read `NOTICE` before use.

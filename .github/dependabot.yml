@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: gradle
+    directory: /adapters/fabric
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: com.mojang:minecraft
+      - dependency-name: net.fabricmc:fabric-loader
+      - dependency-name: net.fabricmc.fabric-api:fabric-api
+      - dependency-name: net.fabricmc.fabric-loom

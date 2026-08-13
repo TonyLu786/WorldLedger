@@ -1,0 +1,137 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go core
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.23.12'
+          cache: true
+      - name: Check formatting
+        shell: bash
+        run: |
+          mapfile -d '' go_files < <(find . -type f -name '*.go' -print0)
+          unformatted="$(gofmt -l "${go_files[@]}")"
+          test -z "$unformatted" || { printf '%s\n' "$unformatted"; exit 1; }
+      - name: Check committed canonical fixtures
+        run: go run ./cmd/mcjava-fixtures
+      - name: Test
+        run: go test -count=1 ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Race test
+        run: go test -race -count=1 ./...
+      - name: Build CLI
+        run: go build -trimpath -o "${RUNNER_TEMP}/worldledger" ./cmd/worldledger
+
+  go-windows:
+    name: Go core (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.23.12'
+          cache: true
+      - name: Check committed canonical fixtures
+        run: go run ./cmd/mcjava-fixtures
+      - name: Test Windows paths and locking
+        run: go test -count=1 ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Build CLI
+        shell: pwsh
+        run: go build -trimpath -o "$env:RUNNER_TEMP\worldledger.exe" ./cmd/worldledger
+
+  fabric:
+    name: Fabric 26.2 adapter
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Java 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Validate wrapper and set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+      - name: Clean build with all warnings
+        working-directory: adapters/fabric
+        run: ./gradlew --no-daemon clean build --warning-mode all
+
+  fabric-gametest:
+    name: Fabric 26.2 capture game test
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Java 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Validate wrapper and set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+      # A runner has no GPU, so the client needs a virtual display and a software
+      # OpenGL implementation. Without Mesa it starts and then fails on context
+      # creation, which reads as an unrelated crash.
+      - name: Install a virtual display and software OpenGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libxi6 libxcursor1 libxrandr2 libxinerama1 libxxf86vm1 libasound2t64
+      # The game test starts a dedicated server, which requires accepting
+      # Mojang's EULA: https://aka.ms/MinecraftEULA. Passing the flag here is the
+      # repository owner's acceptance for automated runs. The build never
+      # accepts it implicitly.
+      - name: Run the capture game test
+        working-directory: adapters/fabric
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        run: xvfb-run -a --server-args="-screen 0 1280x1024x24" ./gradlew --no-daemon runClientGametest -Pworldledger.acceptMinecraftEula=true
+      - name: Upload run directory on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: client-gametest-run
+          path: |
+            adapters/fabric/build/run-gametest/logs
+            adapters/fabric/build/run-gametest/config/worldledger
+          retention-days: 7
