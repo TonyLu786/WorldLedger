@@ -278,7 +278,7 @@ func usage(w io.Writer) {
 		"  worldledger policy <show|set|list> --archive <archive-dir> [flags]",
 		"  worldledger seed --observations <file> --operator <name> --accept-terms [flags]",
 		"  worldledger manifest --archive <archive-dir> [--out <file>] [--compare <file>]",
-		"  worldledger fingerprint --archive <archive-dir> [--server <id>] [--out <file>] [--compare <file>]",
+		"  worldledger fingerprint (--archive <archive-dir> | --file <file>) [--out <file>] [--compare <file>]",
 		"  worldledger fsck --archive <archive-dir>",
 		"  worldledger version",
 		"",

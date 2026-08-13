@@ -14,23 +14,39 @@ func cmdFingerprint(args []string) error {
 	fs := flag.NewFlagSet("fingerprint", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	archivePath := fs.String("archive", "", "archive directory")
+	file := fs.String("file", "", "read a fingerprint from a file instead of an archive")
 	server := fs.String("server", "", "limit to one server")
 	out := fs.String("out", "", "write the fingerprint to a file instead of standard output")
 	compareWith := fs.String("compare", "", "compare against a fingerprint file from another machine")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *archivePath == "" {
-		return errors.New("usage: worldledger fingerprint --archive DIR [--server ID] [--out FILE] [--compare FILE]")
+	switch {
+	case *archivePath == "" && *file == "":
+		return errors.New("usage: worldledger fingerprint (--archive DIR | --file FILE) [--server ID] [--out FILE] [--compare FILE]")
+	case *archivePath != "" && *file != "":
+		return errors.New("give either --archive or --file, not both")
 	}
 
-	a, err := archive.Open(*archivePath)
-	if err != nil {
-		return err
-	}
-	fingerprint, err := a.Fingerprint(*server)
-	if err != nil {
-		return err
+	// Two machines each produce a file, and neither keeps the other's archive.
+	// Comparing the files directly is the normal case rather than the exception.
+	var fingerprint archive.Fingerprint
+	if *file != "" {
+		loaded, err := readFingerprint(*file)
+		if err != nil {
+			return err
+		}
+		fingerprint = loaded
+	} else {
+		a, err := archive.Open(*archivePath)
+		if err != nil {
+			return err
+		}
+		loaded, err := a.Fingerprint(*server)
+		if err != nil {
+			return err
+		}
+		fingerprint = loaded
 	}
 
 	if *compareWith != "" {
@@ -40,15 +56,15 @@ func cmdFingerprint(args []string) error {
 		return fingerprint.WriteText(os.Stdout)
 	}
 
-	file, err := os.Create(*out)
+	destination, err := os.Create(*out)
 	if err != nil {
 		return err
 	}
-	if err := fingerprint.WriteText(file); err != nil {
-		file.Close()
+	if err := fingerprint.WriteText(destination); err != nil {
+		destination.Close()
 		return err
 	}
-	if err := file.Close(); err != nil {
+	if err := destination.Close(); err != nil {
 		return err
 	}
 	fmt.Printf("wrote %s\n", *out)
@@ -62,14 +78,17 @@ func cmdFingerprint(args []string) error {
 // same observed state into the same bytes. It deliberately says nothing about
 // who observed or when, because those differ between any two captures and are
 // not what this comparison is for.
-func reportFingerprintComparison(local archive.Fingerprint, path string) error {
-	file, err := os.Open(path)
+func readFingerprint(path string) (archive.Fingerprint, error) {
+	handle, err := os.Open(path)
 	if err != nil {
-		return err
+		return archive.Fingerprint{}, err
 	}
-	defer file.Close()
+	defer handle.Close()
+	return archive.ParseFingerprint(handle)
+}
 
-	remote, err := archive.ParseFingerprint(file)
+func reportFingerprintComparison(local archive.Fingerprint, path string) error {
+	remote, err := readFingerprint(path)
 	if err != nil {
 		return err
 	}
