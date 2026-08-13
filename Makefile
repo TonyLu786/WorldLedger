@@ -2,7 +2,7 @@ GO ?= go
 FABRIC_DIR := adapters/fabric
 GO_FILES := $(shell find . -type f -name '*.go' -not -path './.git/*')
 
-.PHONY: build test race vet fmt fmt-check fixture-check fabric-build check clean
+.PHONY: build test race vet fmt fmt-check fixture-check version-check fabric-build check clean
 
 build:
 	mkdir -p bin
@@ -26,10 +26,13 @@ fmt-check:
 fixture-check:
 	$(GO) run ./cmd/mcjava-fixtures
 
+version-check:
+	./scripts/check-documented-versions.sh
+
 fabric-build:
 	cd $(FABRIC_DIR) && ./gradlew --no-daemon clean build --warning-mode all
 
-check: fmt-check fixture-check test vet race build fabric-build
+check: fmt-check fixture-check version-check test vet race build fabric-build
 
 clean:
 	rm -rf bin dist

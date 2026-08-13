@@ -36,6 +36,8 @@ jobs:
           test -z "$unformatted" || { printf '%s\n' "$unformatted"; exit 1; }
       - name: Check committed canonical fixtures
         run: go run ./cmd/mcjava-fixtures
+      - name: Check the documented baseline against the build files
+        run: ./scripts/check-documented-versions.sh
       - name: Test
         run: go test -count=1 ./...
       - name: Vet

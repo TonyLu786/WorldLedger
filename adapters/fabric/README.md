@@ -10,7 +10,7 @@ Java           25
 Fabric Loader  0.19.3
 Fabric API     0.156.0+26.2
 Fabric Loom    1.17.17
-Gradle         9.5.1
+Gradle         9.7.0
 Names          native Mojang names used by 26.2
 ```
 
