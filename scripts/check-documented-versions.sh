@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Fails when the baseline versions printed in the READMEs no longer match the
-# files that actually drive the build.
+# Fails when a value printed in the documentation no longer matches the file
+# that actually decides it.
 #
-# Automated dependency updates move the real values and leave the prose behind.
-# The README claims those values are exact build inputs, so a stale line there
-# is a false claim rather than a cosmetic problem, and nothing else catches it.
+# Two kinds of drift have happened here. Automated dependency updates move the
+# build inputs and leave the prose behind. Tuning a default in the adapter moves
+# what the mod writes into capture.properties on first start, while three
+# documents keep quoting the old number. Both produce a document that is simply
+# wrong, and in both cases nothing else in the build noticed.
 
 set -euo pipefail
 
@@ -47,7 +49,24 @@ for readme in README.md adapters/fabric/README.md; do
     expect "$readme" 'Gradle' "$gradle"
 done
 
+# The adapter writes capture.properties itself on first start, so a reader who
+# compares the generated file against the documentation must see the same
+# numbers in both.
+configuration=adapters/fabric/src/main/java/org/worldledger/fabric/CaptureConfiguration.java
+queue_capacity=$(sed -n 's/.*DEFAULT_QUEUE_CAPACITY *= *\([0-9][0-9]*\).*/\1/p' "$configuration")
+if [ -z "$queue_capacity" ]; then
+    echo "could not read DEFAULT_QUEUE_CAPACITY out of $configuration" >&2
+    exit 1
+fi
+
+for readme in README.md adapters/fabric/README.md examples/minecraft-26.2-fixture/README.md; do
+    if ! grep -qE "^queue_capacity=$queue_capacity\$" "$readme"; then
+        printf '%s: queue_capacity should read %s\n' "$readme" "$queue_capacity" >&2
+        status=1
+    fi
+done
+
 if [ "$status" -eq 0 ]; then
-    echo "documented baseline matches the build files"
+    echo "documented baseline and adapter defaults match the files that decide them"
 fi
 exit "$status"

@@ -1,6 +1,6 @@
 # Controlled Minecraft 26.2 fixture
 
-> **Automated alternative.** `./gradlew runClientGametest` in `adapters/fabric` drives a real client through a dedicated-server session and checks the bundles the adapter wrote, without anyone sitting at a keyboard. It covers the capture path end to end and fails when nothing was captured. The manual procedure below remains the record for cross-platform evidence and for anything the automated run does not assert.
+> **Automated alternative.** `./gradlew runClientGametest` in `adapters/fabric` drives a real client through a dedicated-server session and checks the bundles the adapter wrote, without anyone sitting at a keyboard. It covers the capture path end to end, fails when nothing was captured, and builds its world from a fixed seed so that two runs are comparable. The manual procedure below covers what the automated run does not assert: block entities, a sign edit, an unopened chest, and the full ordered mutation sequence.
 
 This procedure validates the runtime event boundary that unit tests cannot exercise: a stock 26.2 multiplayer client receives a full chunk, applies controlled mutations, publishes ready bundles, and imports them through the Go core.
 
@@ -68,7 +68,7 @@ Set a dedicated contributor in `<minecraft-config>/worldledger/capture.propertie
 contributor=fixture-windows-01
 server_id=worldledger-fixture-26.2
 coalesce_ticks=10
-queue_capacity=8
+queue_capacity=32
 max_snapshots_per_tick=1
 ```
 
@@ -167,6 +167,17 @@ Because the component stores block-entity type resource locations and canonical 
 
 ## 6. Cross-platform comparison
 
-Repeat the same server state and mutation sequence with a clean Windows client and a clean Linux client. Compare canonical component digests by semantic step. `observed_at`, `received_at`, contributor, session UUID, sequence, and observation ID are expected to differ; component digests for equivalent states are not.
+Repeat the same server state and mutation sequence with a clean Windows client and a clean Linux client. `observed_at`, `received_at`, contributor, session UUID, sequence, and observation ID are expected to differ; component digests for equivalent states are not.
 
-Any digest mismatch is a release blocker until reduced to one named component and explained. Do not update committed golden values to accommodate an unexplained live mismatch.
+Comparing those by hand is no longer necessary. `worldledger fingerprint` reduces a capture to state and component digests alone, which is exactly the part that must agree:
+
+```sh
+scripts/capture-fingerprint.sh /path/to/spool this-platform.txt
+worldledger fingerprint --file this-platform.txt --compare other-platform.txt
+```
+
+The automated game test is the cheaper route to the same evidence, because its world is pinned to a fixed seed, a superflat generator, and a fixed view distance. Linux CI runs it on every push and publishes its fingerprint as the `linux-capture-fingerprint` artifact, so only the Windows side has to be produced by hand.
+
+Read the result by category. Chunks only one capture saw reflect how long each session ran and where the player went. Chunks where one capture caught a change the other missed mean the shorter session ended early; the states they share are still byte-identical. Only chunks where each side holds a state the other cannot account for indicate that the two platforms encoded the same observation differently.
+
+That last category is a release blocker until reduced to one named component and explained. Do not update committed golden values to accommodate an unexplained live mismatch.

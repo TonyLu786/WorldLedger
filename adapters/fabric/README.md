@@ -54,7 +54,7 @@ Default contents:
 contributor=
 server_id=
 coalesce_ticks=10
-queue_capacity=8
+queue_capacity=32
 max_snapshots_per_tick=1
 ```
 
