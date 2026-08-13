@@ -63,7 +63,7 @@ dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	implementation 'com.google.code.gson:gson:2.13.2'
+	implementation 'com.google.code.gson:gson:2.14.0'
 
 	gametestImplementation sourceSets.main.output
 	gametestImplementation sourceSets.client.output
