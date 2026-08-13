@@ -64,6 +64,10 @@ func run(args []string) error {
 		return cmdIdentity(args[1:])
 	case "attest":
 		return cmdAttest(args[1:])
+	case "send":
+		return cmdSend(args[1:])
+	case "receive":
+		return cmdReceive(args[1:])
 	case "fsck":
 		return cmdFsck(args[1:])
 	case "help", "--help", "-h":
@@ -288,6 +292,8 @@ func usage(w io.Writer) {
 		"  worldledger redact <set|list|withdraw|purge> --archive <archive-dir> [flags]",
 		"  worldledger identity <create|register|list|remove> --archive <archive-dir> [flags]",
 		"  worldledger attest <sign|verify> --archive <archive-dir> [flags]",
+		"  worldledger send --archive <archive-dir> --to <fingerprint-file> --out <bundle-dir>",
+		"  worldledger receive --archive <archive-dir> <bundle-dir>",
 		"  worldledger fsck --archive <archive-dir>",
 		"  worldledger version",
 		"",

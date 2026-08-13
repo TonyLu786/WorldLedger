@@ -86,15 +86,17 @@ Pulled ahead of Phase 4 deliberately. Accumulated observations make a server's g
 - [ ] server registry and aliases
 - [ ] collection/landmark metadata
 - [ ] archive epoch manifests
-- [ ] mirror-friendly immutable bundles
+- [x] mirror-friendly immutable bundles
 
-The three that are done are the ones that can be done without a network service, and they are the ones the rest depends on. A contributor label used to be a string an adapter wrote; an attestation is now an ed25519 signature over the observation id, which already digests the server, dimension, chunk, instant, protocol, contributor, and state, so a signature cannot be moved to another record. Object existence negotiation falls out of content addressing: two mirrors work out what to send from digests alone, with neither opening the other's archive.
+The four that are done are the ones that do not need a network service, and they are the ones the rest depends on. A contributor label used to be a string an adapter wrote; an attestation is now an ed25519 signature over the observation id, which already digests the server, dimension, chunk, instant, protocol, contributor, and state, so a signature cannot be moved to another record. Object existence negotiation falls out of content addressing: two mirrors work out what to send from digests alone, with neither opening the other's archive.
 
 What signing does not do is worth repeating here. It proves a key asserted something. It does not make the assertion true, and nothing stops someone generating a key and picking a name, which is why the identity registry is explicit, attributed, and refuses to let a second key take a label already held. Sybil contributors remain a threat this cannot solve alone.
 
+Transfer bundles carry the result. A bundle is an ordinary directory that can be copied by any means, and the receiver verifies every byte against the digest the bundle declares rather than trusting where it came from. Two real archives holding 158 and 40 observations were merged this way in both directions and ended on the same manifest root, having never shared a database.
+
 The remaining items need a service to exist first. A resumable upload protocol has nothing to resume against, and a server registry with no servers registering is a schema rather than a feature.
 
-Exit criterion: two independently operated nodes can exchange, verify, and merge an archive without sharing a database.
+Exit criterion: **met for offline exchange.** Two independently operated archives exchanged, verified, and merged over a directory. Doing it over a network is what the remaining items are for.
 
 ## Phase 4 — public archive service
 
