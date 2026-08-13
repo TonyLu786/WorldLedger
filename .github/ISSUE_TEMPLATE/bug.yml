@@ -1,0 +1,48 @@
+name: Bug report
+description: Report reproducible incorrect behaviour in WorldLedger
+title: ""
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please include enough information to reproduce the problem without access to a private server or private archive.
+  - type: input
+    id: version
+    attributes:
+      label: WorldLedger version
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Archive core
+        - CLI
+        - Capture adapter
+        - Exporter
+        - Community service
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Commands, fixture details, or a small redistributable archive are preferred.
+    validations:
+      required: true

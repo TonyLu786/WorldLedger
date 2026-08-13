@@ -1,0 +1,35 @@
+name: Design proposal
+description: Propose a change to archive semantics, canonicalization, or protocol design
+title: ""
+labels: [design]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for changes that could affect stored identities, public archive compatibility, or merge semantics.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the concrete limitation or failure mode.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and migration
+      description: Explain what happens to archives or adapters created before this change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
