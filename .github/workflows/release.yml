@@ -19,12 +19,15 @@ jobs:
           - goos: windows
             goarch: amd64
             ext: .exe
+            archive: zip
           - goos: linux
             goarch: amd64
             ext: ''
+            archive: tar.gz
           - goos: darwin
             goarch: arm64
             ext: ''
+            archive: tar.gz
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,24 +55,33 @@ jobs:
           mkdir -p dist
           go build -trimpath -buildvcs=false -ldflags='-s -w' \
             -o "dist/worldledger${{ matrix.ext }}" ./cmd/worldledger
+      # Windows gets a zip. tar.gz is openable there now, but handing a Windows
+      # user an archive their file manager will not expand is a needless first
+      # obstacle from a project whose problem is already that nobody gets past
+      # the install.
       - name: Package with the documents a user needs
         run: |
           cd dist
-          cp ../LICENSE ../NOTICE ../README.md .
+          cp ../LICENSE ../NOTICE ../README.md ../CHANGELOG.md .
           mkdir -p profiles docs
           cp ../profiles/*.json profiles/
           cp ../docs/status.md ../docs/trust-model.md ../docs/version-compatibility.md docs/
           name="worldledger-${{ matrix.goos }}-${{ matrix.goarch }}"
-          tar -czf "../${name}.tar.gz" .
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            zip -qr "../${name}.zip" .
+          else
+            tar -czf "../${name}.tar.gz" .
+          fi
           cd ..
-          sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+          sha256sum "${name}.${{ matrix.archive }}" > "${name}.${{ matrix.archive }}.sha256"
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: worldledger-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             worldledger-*.tar.gz
-            worldledger-*.tar.gz.sha256
+            worldledger-*.zip
+            worldledger-*.sha256
 
   mod:
     name: Fabric mod JAR
@@ -89,9 +101,15 @@ jobs:
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-provider: basic
+      # Same reasoning as the CLI: the JAR filename and the version the loader
+      # reports both come from this, and a release that installs as 0.1.0-dev
+      # cannot be told apart from a local build.
       - name: Build
         working-directory: adapters/fabric
-        run: ./gradlew --no-daemon clean build --warning-mode all
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then version="0.0.0-untagged"; fi
+          ./gradlew --no-daemon clean build --warning-mode all "-Pmod_version=${version}"
       - name: Checksum
         working-directory: adapters/fabric/build/libs
         run: sha256sum *.jar > SHA256SUMS.txt
@@ -110,6 +128,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Collect artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -124,11 +146,11 @@ jobs:
           draft: true
           files: |
             artifacts/**/*.tar.gz
+            artifacts/**/*.zip
             artifacts/**/*.sha256
             artifacts/**/*.jar
             artifacts/**/SHA256SUMS.txt
-          body: |
-            See `docs/status.md` in the archive for what is verified and what is not.
+          body_path: CHANGELOG.md
 
             **Java Edition 26.2 only.** The adapter is pinned to one Minecraft
             release; see `docs/adapter-versioning.md`.

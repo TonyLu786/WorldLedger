@@ -16,7 +16,11 @@ import (
 	"github.com/worldledger/worldledger-mc/internal/verify"
 )
 
-const version = "0.1.0-dev"
+// version is overridden at release time with -ldflags "-X main.version=...".
+// A released binary that reports a development version is worse than useless:
+// it is the one thing a person checks when deciding whether a bug is already
+// fixed.
+var version = "0.1.0-dev"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
