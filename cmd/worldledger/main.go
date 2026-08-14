@@ -44,6 +44,8 @@ func run(args []string) error {
 		return cmdIngest(args[1:])
 	case "ingest-bundle":
 		return cmdIngestBundle(args[1:])
+	case "ingest-spool":
+		return cmdIngestSpool(args[1:])
 	case "inspect":
 		return cmdInspect(args[1:])
 	case "verify":
@@ -284,6 +286,7 @@ func usage(w io.Writer) {
 		"  worldledger init <archive-dir>",
 		"  worldledger ingest [flags] <payload-file>",
 		"  worldledger ingest-bundle --archive <archive-dir> [flags] <bundle-dir>",
+		"  worldledger ingest-spool --archive <archive-dir> [--keep] [--dry-run] <spool-dir>",
 		"  worldledger inspect [flags]",
 		"  worldledger verify [flags]",
 		"  worldledger coverage --archive <archive-dir> --server <id> [flags]",

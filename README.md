@@ -100,9 +100,13 @@ The adapter is client-only, has no server entrypoint, and does not capture singl
 
 ```sh
 worldledger init ./archive
-worldledger ingest-bundle --archive ./archive ./spool/ready-session-sequence
+worldledger ingest-spool --archive ./archive <minecraft-config>/worldledger/spool
 worldledger fsck --archive ./archive
 ```
+
+`ingest-spool` takes in every ready bundle and removes each one once the archive has it on disk, because a spool nothing empties grows until the disk does. Pass `--keep` to leave them, or `--dry-run` to see what would happen. Entries still being written and entries the adapter quarantined are left alone and reported: the first means a client is running, the second is a failure worth looking at.
+
+Importing a real session takes a while. A captured chunk carries about fifty components and each one is put on disk durably before the import is acknowledged, which measured around 918 ms per bundle on one Windows machine.
 
 ### Inspect what an archive knows
 
