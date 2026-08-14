@@ -89,10 +89,37 @@ jobs:
       - name: Package with the documents a user needs
         run: |
           cd dist
-          cp ../LICENSE ../NOTICE ../README.md ../CHANGELOG.md .
-          mkdir -p profiles docs
+          cp ../LICENSE ../NOTICE ../README.md ../CHANGELOG.md ../CONTRIBUTING.md ../SECURITY.md .
+          mkdir -p profiles adapters/fabric
           cp ../profiles/*.json profiles/
-          cp ../docs/status.md ../docs/trust-model.md ../docs/version-compatibility.md docs/
+          cp -r ../docs ../spec ../examples .
+          cp ../adapters/fabric/README.md ../adapters/fabric/gradle.properties adapters/fabric/
+      # A README whose links go nowhere is worse than one that says less. The
+      # packaged set is checked against what the packaged documents actually
+      # reference, so adding a link without adding the file fails the release
+      # rather than shipping a dead end.
+      - name: Check every packaged link resolves inside the package
+        working-directory: dist
+        run: |
+          while IFS= read -r document; do
+            directory=$(dirname "$document")
+            grep -oE '\]\([^)#][^)]*\)' "$document" 2>/dev/null |
+              sed 's/](//; s/)$//; s/#.*$//' |
+              grep -vE '^[a-z]+:' |
+              while IFS= read -r target; do
+                [ -z "$target" ] && continue
+                [ -e "$directory/$target" ] || echo "$document -> $target"
+              done
+          done < <(find . -name '*.md') > /tmp/broken-links
+          if [ -s /tmp/broken-links ]; then
+            echo "the packaged documents reference files the package does not contain:" >&2
+            sed 's/^/  /' /tmp/broken-links >&2
+            exit 1
+          fi
+          echo "every relative link in the packaged documents resolves"
+      - name: Archive
+        run: |
+          cd dist
           name="worldledger-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.archive }}" = "zip" ]; then
             zip -qr "../${name}.zip" .
@@ -137,9 +164,22 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           if [ "$GITHUB_REF_TYPE" != "tag" ]; then version="0.0.0-untagged"; fi
           ./gradlew --no-daemon clean build --warning-mode all "-Pmod_version=${version}"
-      - name: Checksum
+      # Only the mod. A sources JAR published beside it has a near-identical
+      # name, and installing the wrong one fails silently: the loader finds no
+      # mod and the player finds no explanation. Source is on the repository
+      # page for anyone who wants it.
+      - name: Checksum the installable JAR
         working-directory: adapters/fabric/build/libs
-        run: sha256sum *.jar > SHA256SUMS.txt
+        run: |
+          rm -f ./*-sources.jar ./*-javadoc.jar
+          count=$(ls -1 ./*.jar | wc -l)
+          if [ "$count" != "1" ]; then
+            echo "expected exactly one installable JAR, found ${count}:" >&2
+            ls -1 ./*.jar >&2
+            exit 1
+          fi
+          sha256sum ./*.jar > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -164,6 +204,23 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      # The body is this version's entry, not the whole file. A release note
+      # that repeats every previous release buries what changed, and the check
+      # below stops a build from publishing the previous version's notes under
+      # a new tag.
+      - name: Take this version's notes from the changelog
+        run: |
+          awk '/^## /{ if (seen) exit; seen = 1 } seen' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md has no version entry to publish" >&2
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          if ! head -1 release-notes.md | grep -qF -- "${version}"; then
+            echo "the changelog's top entry is '$(head -1 release-notes.md)', which is not ${version}" >&2
+            exit 1
+          fi
+          head -1 release-notes.md
       # Drafted rather than published: a release carries a capture adapter and a
       # world exporter, and a person should look at what is being handed out
       # before it reaches anyone.
@@ -177,7 +234,7 @@ jobs:
             artifacts/**/*.sha256
             artifacts/**/*.jar
             artifacts/**/SHA256SUMS.txt
-          body_path: CHANGELOG.md
+          body_path: release-notes.md
 
             **Java Edition 26.2 only.** The adapter is pinned to one Minecraft
             release; see `docs/adapter-versioning.md`.

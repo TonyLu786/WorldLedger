@@ -31,7 +31,7 @@ A world downloader saves what one player can see, once, overwriting whatever it 
 
 ## Install
 
-Prebuilt archives for Windows, Linux, and macOS are on the [releases page](https://github.com/TonyLu786/WorldLedger/releases), each carrying the `worldledger` binary, the committed release profiles, and the documents describing what is and is not verified. The Fabric mod JAR is published alongside them. Every archive has a `.sha256` beside it.
+Prebuilt archives for Windows, Linux, and macOS are on the [releases page](https://github.com/TonyLu786/WorldLedger/releases). Each carries the `worldledger` binary, the committed release profiles, and every document this README links to, so the copy you download is readable offline and none of its links go nowhere. The Fabric mod JAR is published alongside them, and there is exactly one: installing a sources JAR by mistake fails silently. Every file has a `.sha256` beside it.
 
 ## Build from source
 
