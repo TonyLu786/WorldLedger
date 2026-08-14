@@ -59,6 +59,30 @@ jobs:
             exit 1
           fi
           echo "canonical, sitemap, robots, title and description all agree"
+      # configure-pages reports a bare "Not Found" from the REST API when Pages
+      # has never been switched on, which reads like a broken workflow rather
+      # than a setting nobody has flipped. Its own enablement option cannot help
+      # here: it requires a token other than GITHUB_TOKEN.
+      - name: Check Pages is switched on for this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            echo "Pages is enabled"
+            exit 0
+          fi
+          cat >&2 <<'MESSAGE'
+          Pages is not enabled for this repository, so there is nowhere to deploy to.
+
+          Enable it once, by hand:
+            Settings -> Pages -> Build and deployment -> Source: GitHub Actions
+
+          It cannot be enabled from here. The configure-pages action can do it,
+          but only with a personal access token or a GitHub App installation,
+          and adding a credential to publish a static page is a worse trade than
+          flipping a switch once.
+          MESSAGE
+          exit 1
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - name: Upload the site
