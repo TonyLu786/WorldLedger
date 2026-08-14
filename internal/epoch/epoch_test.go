@@ -180,7 +180,7 @@ func TestSelectChunkTreatsTiedCorroborationAsConflict(t *testing.T) {
 
 	selection := SelectChunk(testChunk, observations, at(20))
 	if selection.Status != StatusConflict {
-		t.Fatalf("status = %q; want %q — equally corroborated states must not pick a winner by corroboration", selection.Status, StatusConflict)
+		t.Fatalf("status = %q; want %q - equally corroborated states must not pick a winner by corroboration", selection.Status, StatusConflict)
 	}
 	if selection.Selected.ObservedAt != base.Add(3*time.Second) {
 		t.Fatalf("selected observed_at = %v; want the most recent state", selection.Selected.ObservedAt)

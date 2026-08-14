@@ -11,7 +11,7 @@
 // ranges, and the data version. Property-level validation is deliberately out of
 // scope. A client jar describes block states only through
 // assets/minecraft/blockstates, which enumerates the properties that change a
-// rendered model and omits the rest — minecraft:oak_stairs lists facing, half,
+// rendered model and omits the rest - minecraft:oak_stairs lists facing, half,
 // and shape but not waterlogged. Treating that as a full state definition would
 // reject valid states, so this profile makes no claim about properties at all.
 // Full definitions require the vanilla data generator's reports/blocks.json.

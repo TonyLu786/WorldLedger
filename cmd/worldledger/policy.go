@@ -210,14 +210,14 @@ func describePolicy(a archive.Archive, server string) (string, error) {
 		if allowed {
 			verdict = "allowed"
 		}
-		out += fmt.Sprintf("distribution  %s — %s\n", verdict, why)
+		out += fmt.Sprintf("distribution  %s - %s\n", verdict, why)
 	} else {
 		out += "disposition   undeclared\n"
-		out += "distribution  NOT ALLOWED — nobody has decided for this server\n"
+		out += "distribution  NOT ALLOWED - nobody has decided for this server\n"
 	}
 
 	out += fmt.Sprintf("\ncoverage      %d chunk(s) across %d region(s)\n", assessment.Chunks, assessment.Regions)
 	out += fmt.Sprintf("              x %d..%d, z %d..%d\n", assessment.MinX, assessment.MaxX, assessment.MinZ, assessment.MaxZ)
-	out += fmt.Sprintf("exposure      %s — %s\n", assessment.Exposure, assessment.Reason)
+	out += fmt.Sprintf("exposure      %s - %s\n", assessment.Exposure, assessment.Reason)
 	return out, nil
 }

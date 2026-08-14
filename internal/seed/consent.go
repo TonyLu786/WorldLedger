@@ -11,7 +11,7 @@ import (
 // full every time rather than reduced to a stored preference: the person running
 // the command is the person who carries the consequences, and that person can
 // change between runs.
-const Notice = `WORLD SEED RECOVERY — READ BEFORE USE
+const Notice = `WORLD SEED RECOVERY - READ BEFORE USE
 
 What this does
   It searches for world generation parameters consistent with structures you

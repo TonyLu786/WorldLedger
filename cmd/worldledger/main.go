@@ -278,7 +278,7 @@ func parseChunkSelector(name string, args []string) (archive.Archive, model.Chun
 
 func usage(w io.Writer) {
 	lines := []string{
-		"WorldLedger 鈥?community world observation archive",
+		"WorldLedger - community world observation archive",
 		"",
 		"Usage:",
 		"  worldledger init <archive-dir>",
@@ -301,7 +301,8 @@ func usage(w io.Writer) {
 		"  worldledger fsck --archive <archive-dir>",
 		"  worldledger version",
 		"",
-		"Run a command with the source tree documentation for details.",
+		"Run a command with no arguments to see what it needs.",
+		"README.md alongside this binary explains what each one is for.",
 	}
 	fmt.Fprintln(w, strings.Join(lines, "\n"))
 }
