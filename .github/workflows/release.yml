@@ -46,15 +46,42 @@ jobs:
       # Reproducible: trimmed paths, no VCS stamp, no cgo. The same source
       # produces the same binary, which matters for a tool whose output people
       # are asked to trust.
+      # The tag is the version. A downloaded binary that reports 0.1.0-dev is
+      # the one field a person checks when working out whether the bug they hit
+      # is already fixed, and an injection that silently stops working produces
+      # exactly that, so the next step proves the version reached the binary.
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: '0'
         run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then version="0.0.0-untagged"; fi
+          echo "version=${version}" >> "$GITHUB_ENV"
           mkdir -p dist
-          go build -trimpath -buildvcs=false -ldflags='-s -w' \
+          go build -trimpath -buildvcs=false \
+            -ldflags="-s -w -X main.version=${version}" \
             -o "dist/worldledger${{ matrix.ext }}" ./cmd/worldledger
+      # The native build is asked directly. A cross-compiled one cannot run
+      # here, so its binary is checked for the string instead, which is weaker
+      # but still fails when the injection is dropped.
+      - name: Check the release version reached the binary
+        run: |
+          if [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
+            reported="$(./dist/worldledger version)"
+            if [ "$reported" != "worldledger ${version}" ]; then
+              echo "the binary reports '${reported}', expected 'worldledger ${version}'" >&2
+              exit 1
+            fi
+            echo "${reported}"
+          else
+            if ! grep -qa -- "${version}" "dist/worldledger${{ matrix.ext }}"; then
+              echo "the ${{ matrix.goos }}/${{ matrix.goarch }} binary does not carry version ${version}" >&2
+              exit 1
+            fi
+            echo "version ${version} is embedded in the ${{ matrix.goos }}/${{ matrix.goarch }} binary"
+          fi
       # Windows gets a zip. tar.gz is openable there now, but handing a Windows
       # user an archive their file manager will not expand is a needless first
       # obstacle from a project whose problem is already that nobody gets past
