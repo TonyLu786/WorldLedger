@@ -63,6 +63,7 @@ final class CaptureCoordinator {
 
 	private final CaptureConfiguration configuration;
 	private final Path configurationFile;
+	private final Path spoolDirectory;
 	private final DirtyChunkTracker dirtyChunks;
 	private final BlockEntityNetworkCache blockEntities = new BlockEntityNetworkCache();
 	private final BoundedCaptureQueue queue;
@@ -74,16 +75,27 @@ final class CaptureCoordinator {
 	 * reach the log.
 	 */
 	private String previousSessionNotice;
+	/**
+	 * Set when the spool runs out of room. Capture stops for the rest of the
+	 * client session rather than retrying every chunk against a full disk, and
+	 * the player is told once rather than every tick.
+	 */
+	private volatile String spoolExhausted;
 
 	CaptureCoordinator(CaptureConfiguration configuration, Path configurationFile, BundleSpoolWriter writer) {
 		this.configuration = configuration;
 		this.configurationFile = configurationFile;
+		this.spoolDirectory = writer.spoolDirectory();
 		this.dirtyChunks = new DirtyChunkTracker(
 				configuration.coalesceTicks(), Math.max(20L, configuration.coalesceTicks() * 10L));
 		this.queue = new BoundedCaptureQueue(
 				configuration.queueCapacity(),
 				writer::write,
 				(job, exception) -> {
+					if (exception instanceof BundleSpoolWriter.SpoolFullException full) {
+						onSpoolExhausted(full.getMessage());
+						return;
+					}
 					LOGGER.error(
 							"Failed to spool capture session={} sequence={} chunk={},{}",
 							job.sessionId(),
@@ -92,6 +104,21 @@ final class CaptureCoordinator {
 							job.chunk().z(),
 							exception);
 				});
+	}
+
+	/**
+	 * Called from the writer thread when the spool has no room left.
+	 *
+	 * <p>The notice waits for the next join. A player is not looking at chat
+	 * when a background thread hits a disk limit, and the client thread is not
+	 * this thread's to write to.
+	 */
+	private void onSpoolExhausted(String detail) {
+		if (spoolExhausted != null) {
+			return;
+		}
+		spoolExhausted = detail;
+		LOGGER.warn("Capture stopped: {}", detail);
 	}
 
 	void onJoin(Minecraft client) {
@@ -106,6 +133,10 @@ final class CaptureCoordinator {
 		}
 		if (!configuration.enabled()) {
 			CaptureNotifier.warn(client, CaptureNotices.captureDisabled(configurationFile));
+			return;
+		}
+		if (spoolExhausted != null) {
+			CaptureNotifier.warn(client, CaptureNotices.spoolExhausted(spoolExhausted, spoolDirectory));
 			return;
 		}
 		ServerData server = client.getCurrentServer();

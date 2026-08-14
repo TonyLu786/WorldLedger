@@ -67,6 +67,20 @@ public final class CaptureNotices {
 	}
 
 	/**
+	 * Shown when the spool has no room left.
+	 *
+	 * <p>Nothing already recorded is deleted to make space, so the only way
+	 * forward is for someone to import what is there. Saying that is the whole
+	 * point: a capture that has quietly stopped looks exactly like one that is
+	 * working.
+	 */
+	public static String spoolExhausted(String detail, Path spoolDirectory) {
+		return PREFIX + "Capture stopped: " + detail
+				+ ". Nothing recorded was deleted. Import " + spoolDirectory
+				+ " and remove what imported, then restart the client.";
+	}
+
+	/**
 	 * Shown when a session produced nothing, which is not the same as capture
 	 * being off and would otherwise look identical to it.
 	 */

@@ -30,11 +30,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -69,13 +71,70 @@ public final class BundleSpoolWriter {
 			.create();
 	private final Path spoolDirectory;
 
+	/**
+	 * Component files already on disk, by digest.
+	 *
+	 * <p>A full-height chunk is twenty-four sections and most of them are
+	 * uniform: air above the terrain, stone below it. Different chunks
+	 * therefore produce byte-identical section components in quantity. A real
+	 * capture measured two thousand component files holding fifty distinct
+	 * blobs between them, so the spool was storing the same bytes forty times
+	 * over before anything imported it.
+	 *
+	 * <p>Rather than change the bundle format, a repeat is written as a hard
+	 * link to the copy already in the spool. Every bundle still contains every
+	 * component it declares, at the path it declares, with the bytes it
+	 * declares; the file system simply stores one copy. Links are peers, so
+	 * deleting one bundle after import leaves every other bundle intact.
+	 */
+	private final Map<String, Path> componentsOnDisk = new HashMap<>();
+
+	/**
+	 * How often the spool is measured, in bundles written.
+	 *
+	 * <p>Measuring walks the whole spool, so doing it per bundle would put a
+	 * directory scan in front of every chunk. Capture is bounded to within this
+	 * many bundles of the limit, which at roughly a third of a megabyte each is
+	 * a rounding error against a budget measured in gigabytes.
+	 */
+	private static final int BUNDLES_BETWEEN_BUDGET_CHECKS = 32;
+
+	private final SpoolBudget budget;
+	private int bundlesSinceBudgetCheck = Integer.MAX_VALUE;
+	private SpoolBudget.Status lastBudgetStatus;
+
+	/**
+	 * Thrown instead of writing when the spool has reached its limit.
+	 *
+	 * <p>Distinct from an I/O failure because the response is different: a
+	 * failed write is worth retrying, and a full spool is worth telling
+	 * somebody about and then stopping.
+	 */
+	public static final class SpoolFullException extends IOException {
+		private static final long serialVersionUID = 1L;
+
+		public SpoolFullException(String message) {
+			super(message);
+		}
+	}
+
 	@FunctionalInterface
 	private interface IoOperation<T> {
 		T run() throws IOException;
 	}
 
 	public BundleSpoolWriter(Path spoolDirectory) {
+		this(spoolDirectory, SpoolBudget.withDefaults(spoolDirectory.toAbsolutePath().normalize()));
+	}
+
+	public BundleSpoolWriter(Path spoolDirectory, SpoolBudget budget) {
 		this.spoolDirectory = spoolDirectory.toAbsolutePath().normalize();
+		this.budget = Objects.requireNonNull(budget, "budget");
+	}
+
+	/** Where bundles are written, so a notice can tell someone what to import. */
+	public Path spoolDirectory() {
+		return spoolDirectory;
 	}
 
 	public Path write(CaptureJob job) throws IOException {
@@ -83,6 +142,7 @@ public final class BundleSpoolWriter {
 	}
 
 	private Path writeLocked(CaptureJob job) throws IOException {
+		requireBudget();
 		TreeMap<String, ComponentFile> components = encodeComponents(job);
 		byte[] manifest = buildManifest(job, components);
 		if (manifest.length > MAX_MANIFEST_BYTES) {
@@ -94,7 +154,7 @@ public final class BundleSpoolWriter {
 			for (ComponentFile component : components.values()) {
 				Path output = resolveComponentPath(temporary, component.relativePath());
 				Files.createDirectories(output.getParent());
-				writeSynced(output, component.data());
+				writeOrLink(component, output);
 			}
 			writeSynced(temporary.resolve("bundle.json"), manifest);
 			manifestWritten = true;
@@ -102,12 +162,68 @@ public final class BundleSpoolWriter {
 			Path ready = readyPath(job.sessionId(), job.sequence());
 			moveWithoutReplace(temporary, ready);
 			syncDirectory(spoolDirectory);
+			rememberComponents(components, ready);
 			return ready;
 		} catch (IOException | RuntimeException exception) {
 			if (manifestWritten) {
 				syncDirectoryBestEffort(temporary);
 			}
 			throw exception;
+		}
+	}
+
+	/**
+	 * Refuses to write once the spool is full or the disk is nearly so.
+	 *
+	 * <p>Nothing already spooled is deleted to make room. A contributor's
+	 * observations are the only copy of what they saw, and discarding them to
+	 * keep collecting more would trade evidence for the appearance of working.
+	 */
+	private void requireBudget() throws IOException {
+		if (bundlesSinceBudgetCheck >= BUNDLES_BETWEEN_BUDGET_CHECKS) {
+			lastBudgetStatus = budget.check();
+			bundlesSinceBudgetCheck = 0;
+		}
+		bundlesSinceBudgetCheck++;
+		if (lastBudgetStatus != null && !lastBudgetStatus.allowsCapture()) {
+			throw new SpoolFullException(lastBudgetStatus.detail());
+		}
+	}
+
+	/**
+	 * Writes the component, or links it to an identical file already spooled.
+	 *
+	 * <p>A link that cannot be made is not a failure. File systems without hard
+	 * links exist, a link count can be exhausted, and a remembered file can
+	 * have been deleted by an import between one bundle and the next. In every
+	 * such case the bytes are written, which is what would have happened
+	 * anyway.
+	 */
+	private void writeOrLink(ComponentFile component, Path output) throws IOException {
+		Path existing = componentsOnDisk.get(component.sha256());
+		if (existing != null) {
+			if (Files.isRegularFile(existing)) {
+				try {
+					Files.createLink(output, existing);
+					return;
+				} catch (IOException | UnsupportedOperationException | SecurityException ignored) {
+					// Fall through and write the bytes.
+				}
+			}
+			componentsOnDisk.remove(component.sha256());
+		}
+		writeSynced(output, component.data());
+	}
+
+	/**
+	 * Records where each component ended up, once the bundle has its final
+	 * name. Remembering the temporary path would leave every entry pointing at
+	 * a directory that no longer exists.
+	 */
+	private void rememberComponents(Map<String, ComponentFile> components, Path ready) {
+		for (ComponentFile component : components.values()) {
+			componentsOnDisk.putIfAbsent(
+					component.sha256(), ready.resolve(component.relativePath()));
 		}
 	}
 
