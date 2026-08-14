@@ -1,6 +1,12 @@
 # WorldLedger
 
-WorldLedger is a community-maintained ledger of client-observable multiplayer Minecraft world state. It stores canonical component bytes in content-addressed storage and preserves each contributor's observation, including conflicting observations, as immutable evidence.
+WorldLedger saves the parts of a multiplayer Minecraft server you have actually seen while playing, and turns them back into a world you can open in single player.
+
+It is two pieces: a client-only Fabric mod for Minecraft 26.2 that records chunks as they arrive, and a `worldledger` command-line tool that assembles those recordings and writes Anvil region files.
+
+A world downloader keeps one snapshot and overwrites it. WorldLedger keeps every observation with the moment and the person it came from, so an archive can be read at a chosen point in time, and two players who explored the same server can merge what they saw without either one overwriting the other.
+
+Underneath, it stores canonical component bytes in content-addressed storage and preserves each contributor's observation, including conflicting observations, as immutable evidence.
 
 The repository contains two deliberately separate systems:
 

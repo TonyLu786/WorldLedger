@@ -1,0 +1,70 @@
+name: pages
+
+# A repository page is indexed as a repository. A site with its own title,
+# description, and canonical URL is indexed as a page about the thing, which is
+# what someone searching for a way to keep a server world they explored would
+# actually match against.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and a run already under way is allowed to finish
+# rather than being cancelled part-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish the site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A page that claims a canonical URL other than where it is served tells
+      # search engines to index somewhere else, which is worse than having no
+      # canonical at all.
+      - name: Check the declared URLs match where this will be served
+        run: |
+          expected="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/"
+          echo "serving from ${expected}"
+          for file in site/index.html site/sitemap.xml site/robots.txt; do
+            if ! grep -qF -- "${expected}" "$file"; then
+              echo "${file} does not reference ${expected}" >&2
+              exit 1
+            fi
+          done
+          if ! grep -q '<title>' site/index.html; then
+            echo "site/index.html has no title" >&2
+            exit 1
+          fi
+          if ! grep -q 'name="description"' site/index.html; then
+            echo "site/index.html has no meta description" >&2
+            exit 1
+          fi
+          echo "canonical, sitemap, robots, title and description all agree"
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        with:
+          path: site
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tonylu786.github.io/WorldLedger/sitemap.xml

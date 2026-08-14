@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorldLedger - save and rebuild a multiplayer Minecraft world you explored</title>
+<meta name="description" content="A client-only Fabric mod for Minecraft 26.2 that records the chunks you actually see on a multiplayer server, and a command-line tool that turns those recordings into a world you can open in single player. Keeps every observation with its time and contributor instead of overwriting.">
+<link rel="canonical" href="https://tonylu786.github.io/WorldLedger/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="WorldLedger">
+<meta property="og:title" content="WorldLedger - save and rebuild a multiplayer Minecraft world you explored">
+<meta property="og:description" content="Record the chunks you see on a Minecraft multiplayer server and rebuild them as a single-player world. Keeps every observation with its time and contributor instead of overwriting.">
+<meta property="og:url" content="https://tonylu786.github.io/WorldLedger/">
+<meta name="twitter:card" content="summary">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "WorldLedger",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Windows, macOS, Linux",
+  "description": "A client-only Fabric mod for Minecraft 26.2 that records observed chunks on a multiplayer server, and a command-line tool that rebuilds them into a single-player world.",
+  "url": "https://tonylu786.github.io/WorldLedger/",
+  "codeRepository": "https://github.com/TonyLu786/WorldLedger",
+  "programmingLanguage": ["Go", "Java"],
+  "license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "isAccessibleForFree": true
+}
+</script>
+
+<style>
+:root {
+  color-scheme: light dark;
+  --ink: #14181d;
+  --muted: #55606c;
+  --line: #d9dee4;
+  --bg: #ffffff;
+  --panel: #f5f7f9;
+  --link: #16507d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e6e9ed;
+    --muted: #9aa5b1;
+    --line: #2b3239;
+    --bg: #0e1216;
+    --panel: #161c22;
+    --link: #7fb6e6;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 46rem; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .5rem; letter-spacing: -.02em; }
+h2 { font-size: 1.2rem; margin: 2.75rem 0 .75rem; letter-spacing: -.01em; }
+p { margin: 0 0 1rem; }
+.lede { font-size: 1.12rem; color: var(--ink); }
+.sub { color: var(--muted); margin-bottom: 2rem; }
+a { color: var(--link); }
+ul { padding-left: 1.15rem; margin: 0 0 1rem; }
+li { margin-bottom: .4rem; }
+pre {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: .85rem 1rem;
+  overflow-x: auto;
+  font-size: .875rem;
+  margin: 0 0 1rem;
+}
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.note {
+  border-left: 3px solid var(--line);
+  padding: .1rem 0 .1rem 1rem;
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+.actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.5rem 0 0; }
+.actions a {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: .5rem .9rem;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--panel);
+}
+footer { border-top: 1px solid var(--line); margin-top: 3.5rem; padding-top: 1.25rem; color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>WorldLedger</h1>
+  <p class="lede">Save the parts of a multiplayer Minecraft server you actually explored, and open them later as a single-player world.</p>
+  <p class="sub">A client-only Fabric mod for Minecraft 26.2, plus a command-line tool. Apache-2.0.</p>
+
+  <div class="actions">
+    <a href="https://github.com/TonyLu786/WorldLedger">Source on GitHub</a>
+    <a href="https://github.com/TonyLu786/WorldLedger/releases">Downloads</a>
+    <a href="https://github.com/TonyLu786/WorldLedger/blob/main/docs/status.md">What is verified</a>
+  </div>
+
+  <h2>How it is different from a world downloader</h2>
+  <p>A world downloader keeps one snapshot of what a player could see and overwrites it the next time. WorldLedger keeps every observation along with the moment it was made and the person who made it.</p>
+  <ul>
+    <li><strong>Time.</strong> An archive can be read at a chosen point in time, not only at its most recent state.</li>
+    <li><strong>More than one explorer.</strong> Two players who visited the same server can merge what they saw. When their recordings disagree, both are kept and labelled rather than one silently winning.</li>
+    <li><strong>Honest gaps.</strong> A chunk nobody observed is left out of the exported world, not filled with air. Missing is recorded as missing.</li>
+  </ul>
+
+  <h2>What it does</h2>
+  <ul>
+    <li>Records chunks, biomes and block entities as an ordinary Minecraft client receives them, on a background thread, into a crash-safe folder.</li>
+    <li>Imports those recordings into a content-addressed archive where nothing is ever overwritten.</li>
+    <li>Writes Anvil region files that an unmodified Minecraft client opens.</li>
+    <li>Converts an archive toward an older release, into a separate world, with the losses declared rather than hidden.</li>
+    <li>Signs contributions, withholds or removes them on request, and lets two archives merge over a plain folder with no server in between.</li>
+  </ul>
+
+  <h2>Using it</h2>
+  <pre><code>worldledger init ./archive
+worldledger ingest-bundle --archive ./archive ./spool/ready-session-sequence
+worldledger export --archive ./archive --server example.org --into /path/to/world</code></pre>
+  <p>The mod writes its recordings while you play; the tool assembles them afterwards. The export is written into a world the game itself created, because the world file that records the version and generator is not something this project should invent.</p>
+
+  <h2>Where it stands</h2>
+  <p>Rebuilding has been checked in a real Minecraft 26.2 client: an exported chunk loads and renders correctly, including sections below y=0 and block state properties, confirmed both in game and by an independently written reader of the file format.</p>
+  <p class="note">Builds are pre-releases. One check the project considers necessary has not been done: the same world state captured on two different platforms has never been compared digest for digest. Every claim and its evidence is listed in <a href="https://github.com/TonyLu786/WorldLedger/blob/main/docs/status.md">status.md</a>, including what is not verified.</p>
+
+  <h2>Before you use it</h2>
+  <p>This records data a normal client receives, on servers whose operators and players may not know an archive exists. Accumulated coverage of a server can reveal more than any single recording does, which is why the tool requires an explicit, attributed decision before it will build anything shareable. The reasoning is in the <a href="https://github.com/TonyLu786/WorldLedger/blob/main/docs/trust-model.md">trust model</a>.</p>
+  <p>Technical ability to perform an operation is not permission to perform it. Responsibility for use rests with the user, including complying with the terms of any server involved.</p>
+
+  <footer>
+    <p>Apache-2.0. Minecraft is a trademark of Microsoft Corporation. This independent project is not affiliated with Mojang Studios or Microsoft.</p>
+  </footer>
+</main>
+</body>
+</html>
