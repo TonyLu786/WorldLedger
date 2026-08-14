@@ -1,5 +1,6 @@
 package org.worldledger.fabric;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -61,14 +62,22 @@ final class CaptureCoordinator {
 	}
 
 	private final CaptureConfiguration configuration;
+	private final Path configurationFile;
 	private final DirtyChunkTracker dirtyChunks;
 	private final BlockEntityNetworkCache blockEntities = new BlockEntityNetworkCache();
 	private final BoundedCaptureQueue queue;
 	private ActiveSession session;
 	private long tick;
+	/**
+	 * Held until the next join. A disconnect leaves no screen to write to, so
+	 * the one number a contributor actually wants would otherwise only ever
+	 * reach the log.
+	 */
+	private String previousSessionNotice;
 
-	CaptureCoordinator(CaptureConfiguration configuration, BundleSpoolWriter writer) {
+	CaptureCoordinator(CaptureConfiguration configuration, Path configurationFile, BundleSpoolWriter writer) {
 		this.configuration = configuration;
+		this.configurationFile = configurationFile;
 		this.dirtyChunks = new DirtyChunkTracker(
 				configuration.coalesceTicks(), Math.max(20L, configuration.coalesceTicks() * 10L));
 		this.queue = new BoundedCaptureQueue(
@@ -89,16 +98,20 @@ final class CaptureCoordinator {
 		if (session != null) {
 			onDisconnect();
 		}
-		if (!configuration.enabled()) {
+		if (client.hasSingleplayerServer()) {
+			// Single-player is out of scope by design and is a normal thing to
+			// do, so saying so every time would be noise rather than news.
+			LOGGER.info("Single-player session ignored; multiplayer capture only");
 			return;
 		}
-		if (client.hasSingleplayerServer()) {
-			LOGGER.info("Single-player session ignored; multiplayer capture only");
+		if (!configuration.enabled()) {
+			CaptureNotifier.warn(client, CaptureNotices.captureDisabled(configurationFile));
 			return;
 		}
 		ServerData server = client.getCurrentServer();
 		if (server == null || server.ip == null || !ServerAddress.isValidAddress(server.ip)) {
 			LOGGER.warn("Capture disabled for this connection because its server address is unavailable");
+			CaptureNotifier.warn(client, CaptureNotices.serverAddressUnavailable());
 			return;
 		}
 		String normalizedAddress = normalizeServerAddress(server.ip);
@@ -108,6 +121,11 @@ final class CaptureCoordinator {
 		this.blockEntities.clear();
 		this.session = new ActiveSession(serverId, server.ip.trim(), configuration.contributor(), client.level);
 		LOGGER.info("Capture session {} started for {}", session.id, serverId);
+		CaptureNotifier.info(client, CaptureNotices.sessionStarted(configuration.contributor(), serverId));
+		if (previousSessionNotice != null) {
+			CaptureNotifier.info(client, previousSessionNotice);
+			previousSessionNotice = null;
+		}
 	}
 
 	void onLevelChange(ClientLevel level) {
@@ -257,6 +275,9 @@ final class CaptureCoordinator {
 		if (session.backpressureEvents > 0) {
 			LOGGER.warn("Capture session encountered {} bounded-queue backpressure event(s)", session.backpressureEvents);
 		}
+		previousSessionNotice = session.enqueued == 0
+				? CaptureNotices.previousSessionEmpty()
+				: CaptureNotices.previousSession(session.enqueued, session.droppedCoverage, session.snapshotFailures);
 		dirtyChunks.clear();
 		blockEntities.clear();
 		session = null;

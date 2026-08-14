@@ -9,7 +9,7 @@ The repository contains two deliberately separate systems:
 
 The Fabric process never opens or mutates an archive. The Go importer is the only boundary that turns a capture bundle into archive objects, observation records, and chunk indexes.
 
-> **Development status.** The archive core, canonical encoders and decoders, epoch selection, Anvil export, release profiles, and publication policy are implemented and automatically tested. Reconstruction has been verified end to end against an unmodified Minecraft 26.2 client: an exported chunk loads and renders correctly, including negative sections and block state properties. Capture has been exercised against a real 26.2 client as well, and the client game test runs headless in Linux CI on every push. What has not been done is a digest comparison between captures taken on different platforms, so the Fabric adapter remains `0.1.0-dev`. See [`docs/status.md`](docs/status.md).
+> **Development status.** The archive core, canonical encoders and decoders, epoch selection, Anvil export, release profiles, and publication policy are implemented and automatically tested. Reconstruction has been verified end to end against an unmodified Minecraft 26.2 client: an exported chunk loads and renders correctly, including negative sections and block state properties. Capture has been exercised against a real 26.2 client as well, and the client game test runs headless in Linux CI on every push. What has not been done is a digest comparison between captures taken on different platforms, which is why builds are published as pre-releases. See [`docs/status.md`](docs/status.md) for every claim and the evidence behind it, and [`CHANGELOG.md`](CHANGELOG.md) for what a given build contains.
 
 ## What makes this different from a world downloader
 
@@ -29,7 +29,11 @@ A world downloader saves what one player can see, once, overwriting whatever it 
 6. Capture adapters never write archive internals.
 7. Normal client visibility is the collection boundary.
 
-## Install and build
+## Install
+
+Prebuilt archives for Windows, Linux, and macOS are on the [releases page](https://github.com/TonyLu786/WorldLedger/releases), each carrying the `worldledger` binary, the committed release profiles, and the documents describing what is and is not verified. The Fabric mod JAR is published alongside them. Every archive has a `.sha256` beside it.
+
+## Build from source
 
 The archive core requires Go 1.23 or newer.
 
@@ -81,6 +85,8 @@ max_snapshots_per_tick=1
 ```
 
 Set a non-blank contributor and restart the client. Leaving `server_id` blank uses the normalized multiplayer server address; leaving `contributor` blank disables capture. Ready bundles appear under `<minecraft-config>/worldledger/spool/ready-<session-uuid>-<sequence>`.
+
+The adapter says what it is doing in chat when you join a multiplayer server: that capture is off and which file to edit, or that it is running and under whose name. The next join reports what the previous session captured, including anything dropped, because a disconnect leaves no screen to write to. Single-player is ignored silently, since it is out of scope and saying so every time would be noise.
 
 The adapter is client-only, has no server entrypoint, and does not capture single-player worlds. See [`adapters/fabric/README.md`](adapters/fabric/README.md).
 

@@ -14,6 +14,8 @@ Gradle         9.7.0
 Names          native Mojang names used by 26.2
 ```
 
+On joining a multiplayer server the adapter reports its state in chat: off with the file to edit, or running with the contributor and server it is recording under. The following join reports the previous session's totals, including dropped coverage, which a disconnect has no screen left to show.
+
 The Gradle wrapper distribution is checksum-pinned. Dependency versions are fixed in [`gradle.properties`](gradle.properties); do not replace them with ranges or snapshots in a release build.
 
 ## Build

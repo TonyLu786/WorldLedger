@@ -132,7 +132,8 @@ public final class WorldLedgerRuntime {
 			paths.ensureDirectories();
 			CaptureConfiguration configuration = CaptureConfiguration.loadOrCreate(paths.configDirectory());
 			BundleSpoolWriter writer = new BundleSpoolWriter(paths.spoolDirectory());
-			CaptureCoordinator coordinator = new CaptureCoordinator(configuration, writer);
+			CaptureCoordinator coordinator = new CaptureCoordinator(
+					configuration, paths.configDirectory().resolve("capture.properties"), writer);
 			COORDINATOR.set(coordinator);
 			PendingJoin pendingJoin = PENDING_JOIN.getAndSet(null);
 			if (pendingJoin != null) {
