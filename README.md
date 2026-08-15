@@ -101,8 +101,10 @@ The adapter is client-only, has no server entrypoint, and does not capture singl
 ```sh
 worldledger init ./archive
 worldledger ingest-spool --archive ./archive <minecraft-config>/worldledger/spool
-worldledger fsck --archive ./archive
+worldledger status --archive ./archive
 ```
+
+`status` answers what the archive holds and what has to happen next: how much was captured, which servers have a publication decision and which do not, and what to run about it. Pass `--spool` as well and it reports how many bundles are still waiting to be taken in.
 
 `ingest-spool` takes in every ready bundle and removes each one once the archive has it on disk, because a spool nothing empties grows until the disk does. Pass `--keep` to leave them, or `--dry-run` to see what would happen. Entries still being written and entries the adapter quarantined are left alone and reported: the first means a client is running, the second is a failure worth looking at.
 

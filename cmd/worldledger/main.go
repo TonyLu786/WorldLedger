@@ -74,6 +74,8 @@ func run(args []string) error {
 		return cmdSend(args[1:])
 	case "receive":
 		return cmdReceive(args[1:])
+	case "status":
+		return cmdStatus(args[1:])
 	case "fsck":
 		return cmdFsck(args[1:])
 	case "help", "--help", "-h":
@@ -279,29 +281,41 @@ func parseChunkSelector(name string, args []string) (archive.Archive, model.Chun
 }
 
 func usage(w io.Writer) {
+	// Grouped by what someone is trying to do. Twenty-one commands in one list
+	// tells a newcomer nothing about which of them they need first, and the
+	// first four are the whole path from an empty directory to a world.
 	lines := []string{
 		"WorldLedger - community world observation archive",
 		"",
-		"Usage:",
+		"From a capture to a world:",
 		"  worldledger init <archive-dir>",
-		"  worldledger ingest [flags] <payload-file>",
-		"  worldledger ingest-bundle --archive <archive-dir> [flags] <bundle-dir>",
 		"  worldledger ingest-spool --archive <archive-dir> [--keep] [--dry-run] <spool-dir>",
+		"  worldledger status --archive <archive-dir> [--spool <spool-dir>]",
+		"  worldledger export --archive <archive-dir> --server <id> --into <world-dir> [flags]",
+		"",
+		"Reading an archive:",
+		"  worldledger coverage --archive <archive-dir> --server <id> [flags]",
 		"  worldledger inspect [flags]",
 		"  worldledger verify [flags]",
-		"  worldledger coverage --archive <archive-dir> --server <id> [flags]",
-		"  worldledger export --archive <archive-dir> --server <id> --into <world-dir> [flags]",
-		"  worldledger convert --archive <archive-dir> --server <id> --into <world-dir> --target-profile <file> [flags]",
+		"  worldledger fsck --archive <archive-dir>",
+		"",
+		"Deciding what may be shared:",
 		"  worldledger policy <show|set|list> --archive <archive-dir> [flags]",
-		"  worldledger seed --observations <file> --operator <name> --accept-terms [flags]",
+		"  worldledger redact <set|list|withdraw|purge> --archive <archive-dir> [flags]",
+		"",
+		"Exchanging with another archive:",
 		"  worldledger manifest --archive <archive-dir> [--out <file>] [--compare <file>]",
 		"  worldledger fingerprint (--archive <archive-dir> | --file <file>) [--out <file>] [--compare <file>]",
-		"  worldledger redact <set|list|withdraw|purge> --archive <archive-dir> [flags]",
-		"  worldledger identity <create|register|list|remove> --archive <archive-dir> [flags]",
-		"  worldledger attest <sign|verify> --archive <archive-dir> [flags]",
 		"  worldledger send --archive <archive-dir> --to <fingerprint-file> --out <bundle-dir>",
 		"  worldledger receive --archive <archive-dir> <bundle-dir>",
-		"  worldledger fsck --archive <archive-dir>",
+		"  worldledger identity <create|register|list|remove> --archive <archive-dir> [flags]",
+		"  worldledger attest <sign|verify> --archive <archive-dir> [flags]",
+		"",
+		"Less often:",
+		"  worldledger convert --archive <archive-dir> --server <id> --into <world-dir> --target-profile <file> [flags]",
+		"  worldledger ingest-bundle --archive <archive-dir> [flags] <bundle-dir>",
+		"  worldledger ingest [flags] <payload-file>",
+		"  worldledger seed --observations <file> --operator <name> --accept-terms [flags]",
 		"  worldledger version",
 		"",
 		"Run a command with no arguments to see what it needs.",

@@ -129,6 +129,53 @@ func cmdCoverage(args []string) error {
 	return nil
 }
 
+// emptySelectionError says which of several quite different situations
+// produced no chunks. A timestamp on its own is accurate and tells nobody
+// whether they mistyped a server, picked a moment before they played, or have
+// simply not imported anything yet.
+func emptySelectionError(a archive.Archive, server, dimension string, at time.Time) error {
+	servers, err := a.Servers()
+	if err != nil {
+		return err
+	}
+	if len(servers) == 0 {
+		return errors.New("this archive holds no observations at all; import a capture spool first:\n" +
+			"  worldledger ingest-spool --archive <archive> <minecraft-config>/worldledger/spool")
+	}
+
+	known := false
+	for _, candidate := range servers {
+		if candidate == server {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return fmt.Errorf("this archive holds nothing for server %q; it knows about %s",
+			server, strings.Join(servers, ", "))
+	}
+
+	dimensions, err := a.Dimensions(server)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, candidate := range dimensions {
+		if candidate == dimension {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("server %q has no observations in %s; it has %s",
+			server, dimension, strings.Join(dimensions, ", "))
+	}
+
+	return fmt.Errorf("server %q was observed in %s, but nothing at or before %s; "+
+		"pass --at with a later moment, or omit it to use the newest state",
+		server, dimension, at.Format(time.RFC3339))
+}
+
 type worldRequest struct {
 	archivePath string
 	server      string
@@ -156,7 +203,7 @@ func (r worldRequest) plan() (archive.Archive, epoch.Snapshot, []anvil.PreparedC
 		sources = append(sources, anvil.ChunkSource{Chunk: selection.Chunk, Observation: *selection.Selected})
 	}
 	if len(sources) == 0 {
-		return archive.Archive{}, epoch.Snapshot{}, nil, fmt.Errorf("no chunk has an observation at or before %s", snapshot.At.Format(time.RFC3339Nano))
+		return archive.Archive{}, epoch.Snapshot{}, nil, emptySelectionError(a, r.server, r.dimension, snapshot.At)
 	}
 
 	prepared, err := anvil.Prepare(a.CAS, sources)
