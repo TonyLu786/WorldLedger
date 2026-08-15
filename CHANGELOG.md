@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### `diff` says what changed between two moments, and what it cannot say
+
+`coverage` reports the world at one moment. The new `diff` command reports the
+interval between two, and keeps apart two things that look identical in any
+comparison of exported worlds:
+
+- **`unchanged`** means somebody observed the chunk again during the interval
+  and found the same state. That is a claim about the world.
+- **`not revisited`** means the state is the same only because it was carried
+  forward from before the interval began. Nobody looked. That is a claim about
+  the archive, and reporting it as unchanged would let an archive that stopped
+  being updated read as a world that stopped changing.
+
+Chunks first observed during the interval, and chunks observed only after it,
+are counted separately again, so the summary never implies a comparison it did
+not make. The output states plainly how many of the chunks it can speak for.
+
+Each changed chunk is listed with the contributors who observed the new state
+and when, most recent first, and a chunk whose contributors disagree about the
+resulting state is marked rather than quietly resolved. `--json` carries the
+whole comparison, including every observation made inside the interval.
+
+Intervals come from `--from`/`--to` or from `--since 24h`. A comparison that
+could not compare anything reports the range that was actually observed and the
+command that would work, rather than printing zeroes.
+
+Withheld observations are filtered out on the way in, on the same path `export`
+and `coverage` already use.
+
 ### Importing a session is about six times faster
 
 A 158-bundle session took 2 minutes 25 seconds to import. It now takes 23 to 25

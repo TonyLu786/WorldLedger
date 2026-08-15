@@ -122,6 +122,30 @@ Disagreement is split in two, because a Minecraft world is mutable and treating 
 
 Add `--map coverage.png` to draw it, one pixel per chunk. Chunks with nothing observed are left as background rather than given a colour, so gaps read as absence instead of as another kind of data.
 
+### See what changed between two moments
+
+```sh
+worldledger diff --archive ./archive --server example.org --since 24h
+```
+
+`coverage` answers what the world looked like at one moment. `diff` answers what happened between two, and separates the chunks it can speak for from the ones it cannot:
+
+| | |
+|---|---|
+| `changed` | observed on both sides, and the state differs |
+| `unchanged` | observed again during the interval, and the state was the same |
+| `not revisited` | nobody looked while the interval ran |
+| `first seen` | nothing was observed here before the interval |
+| `never seen` | observed only after the interval ended |
+
+The distinction between `unchanged` and `not revisited` is the point. A chunk observed once keeps reporting that state forever, so comparing two exports would call it unchanged when what actually happened is that nobody went back. Only the first is a claim about the world; the second is a claim about the archive. A world export cannot express the difference at all, because it has to write some block into every position.
+
+Each changed chunk is listed with who observed the new state and when, and a chunk whose contributors disagree is marked rather than quietly resolved.
+
+Pass `--from` and `--to` for an explicit interval, or `--since 30m` to measure back from the end. With no interval at all the comparison starts at the first observation, which leaves almost everything `first seen`; when nothing could be compared the output says so and prints the range that was actually observed.
+
+Add `--json` for the whole comparison, including every observation made during the interval.
+
 ### Compare two archives
 
 ```sh

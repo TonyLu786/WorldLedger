@@ -18,31 +18,23 @@ import (
 	"github.com/worldledger/worldledger-mc/internal/translate"
 )
 
-func snapshotAt(a archive.Archive, server, dimension, moment string) (epoch.Snapshot, error) {
-	at := time.Now().UTC()
-	if moment != "" {
-		parsed, err := time.Parse(time.RFC3339Nano, moment)
-		if err != nil {
-			return epoch.Snapshot{}, fmt.Errorf("--at must be an RFC3339 timestamp: %w", err)
-		}
-		at = parsed.UTC()
-	}
+// dimensionInputs reads a dimension once and drops what may not be shared.
+//
+// Every command that builds something shareable reaches the archive through
+// here, so this is where withheld observations are dropped. Applying it in each
+// command instead would put the burden on whoever adds the next one.
+//
+// inspect, fsck, and fingerprint deliberately still see everything. An operator
+// examining their own archive is not the risk this guards, and a diagnostic that
+// hides data is a diagnostic that lies. Removing data is what purge is for.
+func dimensionInputs(a archive.Archive, server, dimension string) ([]epoch.ChunkInput, error) {
 	gathered, err := a.DimensionObservations(server, dimension)
 	if err != nil {
-		return epoch.Snapshot{}, err
+		return nil, err
 	}
-
-	// Every command that builds something shareable reaches the archive through
-	// here, so this is where withheld observations are dropped. Applying it in
-	// each command instead would put the burden on whoever adds the next one.
-	//
-	// inspect, fsck, and fingerprint deliberately still see everything. An
-	// operator examining their own archive is not the risk this guards, and a
-	// diagnostic that hides data is a diagnostic that lies. Removing data is
-	// what purge is for.
 	redactions, err := redact.NewStore(a.Root).List()
 	if err != nil {
-		return epoch.Snapshot{}, fmt.Errorf("read redactions: %w", err)
+		return nil, fmt.Errorf("read redactions: %w", err)
 	}
 
 	inputs := make([]epoch.ChunkInput, 0, len(gathered))
@@ -57,6 +49,22 @@ func snapshotAt(a archive.Archive, server, dimension, moment string) (epoch.Snap
 	}
 	if withheld > 0 {
 		fmt.Fprintf(os.Stderr, "withholding %d observation(s) under %d declared redaction(s)\n", withheld, len(redactions))
+	}
+	return inputs, nil
+}
+
+func snapshotAt(a archive.Archive, server, dimension, moment string) (epoch.Snapshot, error) {
+	at := time.Now().UTC()
+	if moment != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, moment)
+		if err != nil {
+			return epoch.Snapshot{}, fmt.Errorf("--at must be an RFC3339 timestamp: %w", err)
+		}
+		at = parsed.UTC()
+	}
+	inputs, err := dimensionInputs(a, server, dimension)
+	if err != nil {
+		return epoch.Snapshot{}, err
 	}
 	return epoch.BuildSnapshot(server, dimension, at, inputs), nil
 }
