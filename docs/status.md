@@ -80,17 +80,21 @@ decode a block section              ~12 us          8-17 allocations
 decode a high-palette section      ~592 us       12,293 allocations
 encode a block section         ~354-448 us        4,121 allocations
 encode a full-height chunk        ~10.6 ms       98,823 allocations
-import one bundle, fresh archive    ~37 ms        2,023 allocations
-import one bundle, already held     ~24 ms        2,047 allocations
+import one bundle, fresh archive ~32-53 ms        1,742 allocations
+import one bundle, already held  ~15-20 ms        1,700 allocations
 ```
 
 The import figures above use the committed capture bundle, which carries four components. A bundle from a real session carries about fifty.
 
-Importing 158 of those measured 2 minutes 25 seconds, or roughly 918 ms each. Most of that was not durability. Every component's path was resolved from the volume root, opening a handle per element, and every component in a bundle shares nearly all of that walk: fifty components spent 98 ms repeating it against 8 ms of actually opening the files. Resolving each directory once per bundle brought the same 158 bundles to 36 to 45 seconds, or 228 to 285 ms each.
+Importing 158 of those measured 2 minutes 25 seconds, or roughly 918 ms each. Almost none of that was the durability it looked like.
 
-What remains is durability, and it is the larger half now. A benchmark of the object store alone puts fifty writes at roughly 225 ms, which is the floor an import cannot go below without changing what it means for an observation to be on disk.
+Every component's path was resolved from the volume root, opening a handle per element, and every component in a bundle shares nearly all of that walk: fifty components spent 98 ms repeating it against 8 ms of actually opening the files. Resolving each directory once per bundle brought the same 158 bundles to 36 to 45 seconds.
 
-Two of these are worth reading carefully. Encoding costs roughly thirty times what decoding does and allocates about once per block state; the reference encoder is used by the fixture tooling rather than on any path a player waits on, so this is a known cost rather than a problem to date. Import spends its time in durability, not computation: two thousand allocations against thirty-seven milliseconds is the signature of the fsync calls that put an observation on disk before the import is acknowledged. Reimporting an observation already held still costs most of that, because it verifies rather than assuming.
+What was left did look like durability, and the object store did fsync once per component. But it fsynced before checking whether the object was already there, so it was making an object durable and then deleting it. That session held 7,900 components and 52 distinct objects: 99% of those fsyncs were for bytes already on disk. Checking first brought the same import to 23 to 25 seconds, and a second import of the same session to the same figure rather than to the 38 seconds it cost before.
+
+The remaining floor is genuine. An object the archive has never seen must be written and forced to disk before the import is acknowledged, and no amount of ordering avoids that. What the archive no longer pays is the same cost for bytes it already has.
+
+Two of these are worth reading carefully. Encoding costs roughly thirty times what decoding does and allocates about once per block state; the reference encoder is used by the fixture tooling rather than on any path a player waits on, so this is a known cost rather than a problem to date. Import spends its time in durability, not computation: seventeen hundred allocations against tens of milliseconds is the signature of the fsync calls that put an observation on disk before the import is acknowledged. Reimporting an observation already held is cheaper but not free, because it still reads and hashes every component rather than trusting the digest the bundle declares.
 
 **Race detection on Windows.** The race gate needs cgo and is run in Linux CI only.
 

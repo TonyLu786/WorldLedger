@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### Importing a session is about six times faster
+
+A 158-bundle session took 2 minutes 25 seconds to import. It now takes 23 to 25
+seconds, and importing the same session a second time costs the same rather than
+most of the original.
+
+Neither of the two costs was where it appeared to be. Both were found by
+measuring before changing anything, and the benchmarks that found them are
+committed alongside the fixes.
+
+- **Each bundle directory is resolved once instead of once per component.** The
+  check that keeps a component from escaping its bundle resolved every path from
+  the volume root, opening a handle per element, and fifty components in one
+  bundle repeat nearly all of that walk. It cost 98 ms per bundle against 8 ms of
+  actually opening the files. The check itself is unchanged: the final element is
+  already proven not to be a symlink, so resolving it is resolving its parent
+  with the name appended.
+- **A component the archive already holds is no longer written again.** The
+  object store wrote each component to a temporary file and forced it to disk
+  before checking whether that object was already there, then deleted what it had
+  just made durable. In the measured session 7,848 of 7,900 components were
+  already stored. The incoming bytes are still read and hashed and still have to
+  match the digest the bundle declares, so a bundle whose component file
+  disagrees with its own manifest is rejected exactly as before, including when
+  some other bundle already contributed the real object.
+
 ## v0.1.0
 
 The verification the earlier builds were waiting on has been done. Both

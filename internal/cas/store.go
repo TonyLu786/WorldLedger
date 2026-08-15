@@ -44,6 +44,25 @@ func (s Store) PutVerified(r io.Reader, expected model.BlobRef) (model.BlobRef, 
 }
 
 func (s Store) put(r io.Reader, expected *model.BlobRef) (model.BlobRef, error) {
+	// When the caller already knows the digest and the store already holds it,
+	// there is nothing to write. The old order wrote the whole object to a
+	// temporary file and forced it to disk before discovering that, and then
+	// deleted what it had just made durable. On a real import that is one fsync
+	// per component for objects that were already there: 7,848 of 7,900
+	// components in a measured session, and about 36 of its 38 seconds.
+	//
+	// The stream is still read and hashed. Skipping that would accept a bundle
+	// whose component file does not match the digest it declares, whenever some
+	// other bundle had already contributed the real object, and rejecting that
+	// is a property this package is supposed to have.
+	if expected != nil {
+		if _, err := os.Stat(s.Path(*expected)); err == nil {
+			return s.putAlreadyStored(r, *expected)
+		} else if !os.IsNotExist(err) {
+			return model.BlobRef{}, err
+		}
+	}
+
 	tmpDir := filepath.Join(s.root, "tmp")
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return model.BlobRef{}, err
@@ -103,6 +122,30 @@ func (s Store) put(r io.Reader, expected *model.BlobRef) (model.BlobRef, error) 
 			}
 		}
 		return model.BlobRef{}, fmt.Errorf("commit object: %w", err)
+	}
+	return ref, nil
+}
+
+// putAlreadyStored handles an object the store already holds. It performs
+// exactly the checks the writing path performs, minus the writing: the incoming
+// bytes are read and hashed and must match what was promised, and the stored
+// object is verified before it is handed back as the answer.
+func (s Store) putAlreadyStored(r io.Reader, expected model.BlobRef) (model.BlobRef, error) {
+	h := sha256.New()
+	n, err := io.Copy(h, io.LimitReader(r, expected.Size+1))
+	if err != nil {
+		return model.BlobRef{}, err
+	}
+	ref := model.BlobRef{Algorithm: "sha256", Digest: hex.EncodeToString(h.Sum(nil)), Size: n}
+	if ref != expected {
+		return model.BlobRef{}, fmt.Errorf(
+			"%w: have sha256:%s size %d, want sha256:%s size %d",
+			ErrObjectMismatch,
+			ref.Digest, ref.Size, expected.Digest, expected.Size,
+		)
+	}
+	if err := s.Verify(ref); err != nil {
+		return model.BlobRef{}, fmt.Errorf("existing object is corrupt: %w", err)
 	}
 	return ref, nil
 }
