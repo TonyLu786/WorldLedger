@@ -64,7 +64,19 @@ Those sessions shared a world, so they say nothing about worlds generated indepe
 
 **Cross-release conversion.** Translation has unit tests and an end-to-end run against a synthetic target profile, but no converted world has been opened in an older release. There is no committed profile for any release other than 26.2, because building one requires that release's own artifact.
 
-**Performance on the client.** The adapter now measures what capture costs the client thread and the game test prints it, so every CI run leaves the figure in its log. What is still missing is a figure from a real session rather than a scripted one: the game test loads a small pinned area, and a player exploring loads far more. Read the CI number as a floor, not as the answer.
+**Performance on the client, in a real session.** The cost is now measured rather than assumed, and the first figure is not comfortable. A game test run on a Windows client reported:
+
+```text
+169 ticks, mean 1080.1 us, max 15216.3 us (30.433% of a 50 ms tick)
+```
+
+The same session enqueued 158 chunks, dropped none, and failed on none.
+
+The mean is unremarkable: a millisecond on the ticks that did work. The maximum is not. A frame at 60 fps has 16.7 ms, and the worst tick spent 15.2 ms copying one chunk's state on the thread that draws. That is a dropped frame, and calling it 30% of a tick understates it, because a tick is not the budget a player perceives.
+
+What it is bounded by is already right: `max_snapshots_per_tick` is 1, so the worst case is one full-height chunk, which is 24 sections of 4,096 block states. What it is not is free. Reducing it means either copying a chunk across several ticks, which needs a consistency guarantee a torn copy would break, or copying less than a chunk. Neither is a change to make in a hurry.
+
+This is one machine, one scripted world, and a small pinned area. A player exploring loads far more chunks, so this is a floor for how often the cost is paid, though not for how large any single payment is.
 
 The Go core now has benchmarks over the committed fixtures and the committed capture bundle, covering the two halves [`test-strategy.md`](test-strategy.md) asks for. Measured on one Windows machine, so they are indicative rather than guarantees:
 
