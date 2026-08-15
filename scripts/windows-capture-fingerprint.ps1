@@ -18,7 +18,13 @@ Where to write the fingerprint. Defaults to the repository root.
 
 .PARAMETER SkipGameTest
 Fingerprint whatever is already in the spool without running the game test
-again. A run takes several minutes; this is for when one has just finished.
+again.
+
+Only use this when a run has just finished with the current code. A spool left
+by an older build was captured from a different world: the game test pins the
+seed and generator so two platforms observe the same thing, and a spool from
+before that pinning cannot be compared against anything. The comparison would
+report differences that are the world's rather than the encoder's.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File scripts\windows-capture-fingerprint.ps1
@@ -64,6 +70,10 @@ if (-not $SkipGameTest) {
     }
 } else {
     Step 'Skipping the game test; using the spool already on disk.'
+    Write-Host '    This is only comparable if that spool came from a run of the current'
+    Write-Host '    code. The game test pins the world seed and generator so two platforms'
+    Write-Host '    observe the same thing; a spool from before that pinning describes a'
+    Write-Host '    different world, and comparing it would report the world as a defect.'
 }
 
 if (-not (Test-Path -LiteralPath $spool)) { Fail "no spool at $spool" }

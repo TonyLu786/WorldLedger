@@ -14,6 +14,11 @@
 *.key
 *.pem
 
+# Produced by scripts/windows-capture-fingerprint.ps1. A measurement of one
+# machine at one moment; the reference that CI compares against is committed
+# deliberately under testdata/ when both halves agree, not swept up from here.
+*-capture-fingerprint.txt
+
 *.tmp
 *.log
 hs_err_pid*
