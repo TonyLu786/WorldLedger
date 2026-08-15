@@ -1,3 +1,14 @@
+# Crawlers read robots.txt only from the root of a host. This file is served
+# from https://tonylu786.github.io/WorldLedger/robots.txt, which is a path on
+# that host rather than its root, so no search engine reads it. It is kept
+# because it becomes effective if this site is ever served from a domain of its
+# own, and because a file that looks like it does something should say when it
+# does not.
+#
+# Nothing here is blocked in any case, so the absence changes no crawling.
+# The sitemap has to be submitted directly instead, through Google Search
+# Console or the equivalent, because the line below is not seen either.
+
 User-agent: *
 Allow: /
 

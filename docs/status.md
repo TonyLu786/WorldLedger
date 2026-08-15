@@ -64,7 +64,7 @@ Those sessions shared a world, so they say nothing about worlds generated indepe
 
 **Cross-release conversion.** Translation has unit tests and an end-to-end run against a synthetic target profile, but no converted world has been opened in an older release. There is no committed profile for any release other than 26.2, because building one requires that release's own artifact.
 
-**Performance on the client.** Nothing has measured the adapter's cost on the client frame budget. That work happens in Java on a live client, and the numbers below say nothing about it.
+**Performance on the client.** The adapter now measures what capture costs the client thread and the game test prints it, so every CI run leaves the figure in its log. What is still missing is a figure from a real session rather than a scripted one: the game test loads a small pinned area, and a player exploring loads far more. Read the CI number as a floor, not as the answer.
 
 The Go core now has benchmarks over the committed fixtures and the committed capture bundle, covering the two halves [`test-strategy.md`](test-strategy.md) asks for. Measured on one Windows machine, so they are indicative rather than guarantees:
 

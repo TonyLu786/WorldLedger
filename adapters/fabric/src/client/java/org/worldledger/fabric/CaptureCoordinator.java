@@ -50,6 +50,22 @@ final class CaptureCoordinator {
 		private long droppedCoverage;
 		private long backpressureEvents;
 		private long snapshotFailures;
+		/**
+		 * Only ticks that did work are counted. Averaging over idle ticks would
+		 * divide the cost by however long someone stood still, which flatters
+		 * the number without telling anyone anything.
+		 */
+		private long measuredTicks;
+		private long totalTickNanos;
+		private long maxTickNanos;
+
+		private void recordTickCost(long nanos) {
+			measuredTicks++;
+			totalTickNanos += nanos;
+			if (nanos > maxTickNanos) {
+				maxTickNanos = nanos;
+			}
+		}
 
 		private ActiveSession(
 				String serverId, String serverAddress, String contributor, ClientLevel level) {
@@ -194,8 +210,16 @@ final class CaptureCoordinator {
 		if (session == null || session.level == null) {
 			return;
 		}
-		for (DirtyChunkTracker.Claim claim :
-				dirtyChunks.claimDue(tick, configuration.maxSnapshotsPerTick())) {
+		List<DirtyChunkTracker.Claim> due =
+				dirtyChunks.claimDue(tick, configuration.maxSnapshotsPerTick());
+		if (due.isEmpty()) {
+			return;
+		}
+		// Timed from here rather than from the top of the method, so the number
+		// describes the work capture actually did and not the cost of deciding
+		// there was none.
+		long started = System.nanoTime();
+		for (DirtyChunkTracker.Claim claim : due) {
 			LevelChunk chunk = session.level.getChunkSource().getChunkNow(claim.chunk().x(), claim.chunk().z());
 			if (chunk == null) {
 				dirtyChunks.forget(claim.chunk());
@@ -204,6 +228,7 @@ final class CaptureCoordinator {
 			}
 			capture(claim, chunk, "dirty-flush", true);
 		}
+		session.recordTickCost(System.nanoTime() - started);
 	}
 
 	void onFullChunkPacket(ClientboundLevelChunkWithLightPacket packet) {
@@ -306,6 +331,10 @@ final class CaptureCoordinator {
 		if (session.backpressureEvents > 0) {
 			LOGGER.warn("Capture session encountered {} bounded-queue backpressure event(s)", session.backpressureEvents);
 		}
+		CaptureTiming.Snapshot timing =
+				new CaptureTiming.Snapshot(session.measuredTicks, session.totalTickNanos, session.maxTickNanos);
+		CaptureTiming.publish(timing);
+		LOGGER.info("Client-thread capture cost: {}", timing.describe());
 		previousSessionNotice = session.enqueued == 0
 				? CaptureNotices.previousSessionEmpty()
 				: CaptureNotices.previousSession(session.enqueued, session.droppedCoverage, session.snapshotFailures);

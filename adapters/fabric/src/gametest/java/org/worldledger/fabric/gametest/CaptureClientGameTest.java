@@ -24,6 +24,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerCon
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
 import net.fabricmc.loader.api.FabricLoader;
 import org.worldledger.fabric.CapturePaths;
+import org.worldledger.fabric.CaptureTiming;
 
 /**
  * Drives a real client through a real multiplayer session and checks what the
@@ -101,6 +102,31 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 		verifyBundles(readySpoolEntries(paths.spoolDirectory()), before);
 		if (published.isEmpty()) {
 			throw new AssertionError("no bundle was published");
+		}
+		reportClientThreadCost();
+	}
+
+	/**
+	 * Prints what capture cost the client thread, so every run leaves the number
+	 * in the build log rather than leaving the question open.
+	 *
+	 * <p>The assertion is deliberately far above anything a healthy run
+	 * approaches. A shared build machine can stall a thread for reasons that
+	 * have nothing to do with this code, so a tight bound here would fail for
+	 * the wrong reasons; what it catches is capture doing something structurally
+	 * wrong on the thread that draws frames.
+	 */
+	private static void reportClientThreadCost() {
+		CaptureTiming.Snapshot timing = CaptureTiming.lastSession();
+		System.out.println("[worldledger] client-thread capture cost: " + timing.describe());
+		if (!timing.measured()) {
+			throw new AssertionError("the session captured chunks but recorded no client-thread work");
+		}
+		if (timing.maxMicroseconds() > 500_000.0) {
+			throw new AssertionError(
+					"one tick spent " + timing.maxMicroseconds()
+							+ " us in capture, which is ten whole ticks; something is being done on the "
+							+ "client thread that should not be");
 		}
 	}
 
