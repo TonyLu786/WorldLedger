@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.1.0
+
+The verification the earlier builds were waiting on has been done. Both
+pre-releases said so plainly; this one says it is finished.
+
+### The thing that was outstanding
+
+The same observed world state, captured by a Windows client and by a Linux
+client in CI, canonicalizes to identical bytes. The two fingerprints agree on
+all 157 chunks both captures observed, and the two files are byte-identical.
+The game test pins the world seed, generator and view distance, so a difference
+between the two could only have come from the encoder.
+
+That reference is now committed. CI compares every Linux capture against it and
+fails on a disagreement rather than reporting one after the fact.
+
+### Also in this release
+
+- **A whole spool imports in one command.** `ingest-spool` takes in every ready
+  bundle and clears them once the archive has them, because a spool nothing
+  empties grows until the disk does.
+- **The spool stops growing without a limit.** It refuses to write past its
+  budget and never deletes what it already holds to make room, and identical
+  component bytes are stored once instead of once per bundle.
+- **`status` says what an archive holds and what to do next**, including which
+  servers still have no publication decision.
+- **Errors say what to do.** An empty selection used to give one timestamp
+  whether the archive was empty, the server name wrong, the dimension wrong, or
+  the moment too early. Those read differently now.
+- **The adapter reports itself in game.** Whether capture is on, under whose
+  name, and what the previous session captured including anything dropped.
+
+### Measured, and not comfortable
+
+Capture costs the client thread a mean of 1.08 ms on the ticks that do work,
+and 15.2 ms on the worst one. A frame at 60 fps has 16.7 ms. The worst case is
+one full-height chunk and it is bounded, but it can cost a frame, and
+`docs/status.md` says so rather than reporting the mean and stopping.
+
+### Still not verified
+
+No converted world has been opened in an older release, and there is no
+committed profile for any release other than 26.2, because building one
+requires that release's own artifact.
+
 ## v0.1.0-alpha.2
 
 Fixes what the first build got wrong about presenting itself. No change to how

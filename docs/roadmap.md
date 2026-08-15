@@ -36,11 +36,13 @@ Exit criterion: the same fixture ingested on different machines produces identic
 - [x] crash-safe spool using capture-bundle v1
 - [x] controlled vanilla integration fixture
 - [x] Linux client record
-- [ ] cross-platform digest comparison
+- [x] cross-platform digest comparison
 
-The integration fixture is now an automated client game test rather than only a written procedure. It passed against a real 26.2 client on Windows: 158 ready bundles, none dropped, all imported, idempotent on repeat, `fsck` clean. The same test runs headless in Linux CI on every push. What remains is comparing the two: CI does not publish the bundles it produces, so no run has yet shown that the same world state yields identical digests on both platforms.
+The integration fixture is now an automated client game test rather than only a written procedure. It passed against a real 26.2 client on Windows: 158 ready bundles, none dropped, all imported, idempotent on repeat, `fsck` clean. The same test runs headless in Linux CI on every push.
 
-Exit criterion: **met on Windows.** A live multiplayer session produced a deterministic local archive that then exported to a playable world. See [`status.md`](status.md).
+The two have now been compared. A Windows capture and a Linux capture of the same pinned world produced byte-identical fingerprints across all 157 chunks both observed. The reference is committed, so a future divergence fails the build instead of waiting to be noticed.
+
+Exit criterion: **met.** A live multiplayer session produced a deterministic local archive that then exported to a playable world, and two platforms canonicalized the same observed state identically. See [`status.md`](status.md).
 
 ## Phase 2 — playable reconstruction
 
