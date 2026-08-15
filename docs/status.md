@@ -83,7 +83,17 @@ allocation      1,185 KB     233 KB    5.1x less
 
 The mix is a model rather than a measurement, so the real gain depends on how much of a real chunk is uniform. The canonical bytes are unchanged by construction, and were checked against the shipped algorithm on uniform sections of five different states, on a section made uniform by writing rather than by its palette, and on states that differ only by a block property.
 
-**What this does not yet show.** The mean should fall with the work, and it is the maximum that drops frames. The 15.2 ms tick is fourteen times the mean, which is not the shape of steady-state cost; the client thread was producing 23 MB/s of short-lived garbage at one chunk per tick, and a young-generation collection landing inside the timed region would look exactly like this. Cutting allocation by five times should make such a collection five times rarer, but no run has yet been observed doing so. That needs another game test, which is also what re-checks the capture fingerprint end to end.
+A game test on the same machine afterwards reported:
+
+```text
+177 ticks, mean 195.7 us, max 7570.6 us (15.141% of a 50 ms tick)
+```
+
+The fingerprint from that run is byte-identical to the committed reference, so nothing about what was captured changed.
+
+The mean fell by 5.5 times, more than the 3.7 measured outside the game, because a real chunk is more uniform than the model.
+
+**The maximum is the part still not explained.** It halved rather than falling with the mean, and it is now 38 times its own mean where it was 14. Steady-state work would have scaled with the mean; something that does not is most of that tick. Less garbage makes a young-generation collection rarer without making one shorter, which fits a maximum that improves by less than the mean. At 7.6 ms against a 16.7 ms frame it is no longer a dropped frame at 60 fps, but one tick still holds 22% of everything the session spent, and whether that is a once-per-session cost such as JIT warmup or something that recurs is not known: the figure reported is a maximum, and a maximum cannot answer it. A distribution would.
 
 This is one machine, one scripted world, and a small pinned area. A player exploring loads far more chunks, so this is a floor for how often the cost is paid, though not for how large any single payment is.
 

@@ -8,6 +8,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 final class CaptureTimingTest {
+
+	// One slow tick as a session warms up is paid once. The same figure every few
+	// seconds is a stutter. A maximum is identical in both cases, so the position
+	// of the worst tick and the count of slow ones have to survive to the report.
+
+	@Test
+	void aSingleSlowTickAtTheStartIsDistinguishableFromARecurringOne() {
+		CaptureTiming.Snapshot warmup = new CaptureTiming.Snapshot(100, 100 * 200_000L, 8_000_000L, 0, 1);
+		CaptureTiming.Snapshot stutter = new CaptureTiming.Snapshot(100, 100 * 200_000L, 8_000_000L, 61, 14);
+
+		assertEquals(warmup.maxNanos(), stutter.maxNanos());
+		assertEquals(warmup.meanMicroseconds(), stutter.meanMicroseconds(), 0.0001);
+
+		assertTrue(warmup.describe().contains("worst was tick 1 of 100"), warmup.describe());
+		assertTrue(warmup.describe().contains("1 tick(s) over 5 ms"), warmup.describe());
+		assertTrue(stutter.describe().contains("worst was tick 62 of 100"), stutter.describe());
+		assertTrue(stutter.describe().contains("14 tick(s) over 5 ms"), stutter.describe());
+	}
+
+	@Test
+	void aSessionMeasuredBeforeThesePositionsExistedDoesNotClaimOne() {
+		CaptureTiming.Snapshot old = new CaptureTiming.Snapshot(10, 10 * 100_000L, 500_000L);
+		assertEquals(-1, old.worstTickIndex());
+		assertFalse(old.describe().contains("worst was tick"), old.describe());
+	}
+
+	@Test
+	void countsThatContradictTheSessionAreRefused() {
+		// More slow ticks than ticks, or a worst tick after the session ended,
+		// mean the counters were not kept together and the report would mislead.
+		assertThrows(IllegalArgumentException.class,
+				() -> new CaptureTiming.Snapshot(5, 1_000_000L, 500_000L, 0, 6));
+		assertThrows(IllegalArgumentException.class,
+				() -> new CaptureTiming.Snapshot(5, 1_000_000L, 500_000L, 5, 1));
+		assertThrows(IllegalArgumentException.class,
+				() -> new CaptureTiming.Snapshot(5, 1_000_000L, 500_000L, 0, -1));
+	}
+
 	@Test
 	void aSessionThatDidNoWorkSaysSoRatherThanReportingZero() {
 		CaptureTiming.Snapshot nothing = new CaptureTiming.Snapshot(0, 0, 0);

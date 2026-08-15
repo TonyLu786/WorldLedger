@@ -24,13 +24,17 @@ wrongly keyed cache would otherwise pass unnoticed. `hasOnlyAir` would have been
 the obvious test and is the wrong one: `cave_air` and `void_air` report as air
 and canonicalize to different strings.
 
-The worst tick in the measured session was 15.2 ms against a 16.7 ms frame,
-fourteen times its own mean, which is not the shape of steady-state cost. At one
-chunk per tick the client thread was producing 23 MB/s of short-lived garbage,
-and a young-generation collection inside the measured window would look like
-that. Five times less garbage should make it five times rarer. No session has
-been observed since the change, so that remains the expectation rather than the
-result.
+A game test afterwards reported `177 ticks, mean 195.7 us, max 7570.6 us`
+against `169 ticks, mean 1080.1 us, max 15216.3 us` before, and produced a
+capture fingerprint byte-identical to the committed reference.
+
+The mean fell by 5.5 times. The worst tick only halved, and now stands at 38
+times its own mean where it stood at 14, so most of it was never the per-block
+work: less garbage makes a collection rarer without making one shorter. At
+7.6 ms against a 16.7 ms frame it is no longer a dropped frame at 60 fps, but
+one tick still accounts for 22% of everything the session spent on capture.
+Whether that is a once-per-session cost or something that recurs is not
+something a maximum can answer.
 
 ### `diff` says what changed between two moments, and what it cannot say
 

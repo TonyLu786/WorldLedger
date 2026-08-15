@@ -21,12 +21,40 @@ import java.util.concurrent.atomic.AtomicReference;
  * measurement is not worth an interface between them.
  */
 public final class CaptureTiming {
-	/** A finished session's client-thread cost. All times are nanoseconds. */
-	public record Snapshot(long ticks, long totalNanos, long maxNanos) {
+	/**
+	 * A tick costing more than this is counted separately. It is a third of a
+	 * 60 fps frame: below it a tick cannot have cost a frame on its own, and
+	 * above it the question is how often rather than how much.
+	 */
+	public static final long SLOW_TICK_NANOS = 5_000_000L;
+
+	/**
+	 * A finished session's client-thread cost. All times are nanoseconds.
+	 *
+	 * <p>A maximum on its own says how bad the worst tick was and not whether it
+	 * matters. One slow tick as a session warms up is a cost paid once; the same
+	 * figure recurring every few seconds is a stutter. Those are different
+	 * problems and a maximum cannot tell them apart, so the position of the worst
+	 * tick and the number of slow ones are carried with it. Both are counters
+	 * rather than retained samples, because this is filled in on the thread the
+	 * measurement is about.
+	 */
+	public record Snapshot(long ticks, long totalNanos, long maxNanos, long worstTickIndex, long slowTicks) {
 		public Snapshot {
-			if (ticks < 0 || totalNanos < 0 || maxNanos < 0) {
+			if (ticks < 0 || totalNanos < 0 || maxNanos < 0 || slowTicks < 0) {
 				throw new IllegalArgumentException("capture timing cannot be negative");
 			}
+			if (slowTicks > ticks) {
+				throw new IllegalArgumentException("more slow ticks than ticks");
+			}
+			if (worstTickIndex >= ticks) {
+				throw new IllegalArgumentException("worst tick is outside the session");
+			}
+		}
+
+		/** A session measured before the position and slow-tick counts existed. */
+		public Snapshot(long ticks, long totalNanos, long maxNanos) {
+			this(ticks, totalNanos, maxNanos, -1L, 0L);
 		}
 
 		public boolean measured() {
@@ -54,13 +82,23 @@ public final class CaptureTiming {
 			if (!measured()) {
 				return "no ticks measured";
 			}
-			return String.format(
+			String base = String.format(
 					java.util.Locale.ROOT,
 					"%d ticks, mean %.1f us, max %.1f us (%.3f%% of a 50 ms tick)",
 					ticks,
 					meanMicroseconds(),
 					maxMicroseconds(),
 					worstTickShareOfBudget() * 100.0);
+			if (worstTickIndex < 0) {
+				return base;
+			}
+			return base + String.format(
+					java.util.Locale.ROOT,
+					"; worst was tick %d of %d, %d tick(s) over %.0f ms",
+					worstTickIndex + 1,
+					ticks,
+					slowTicks,
+					SLOW_TICK_NANOS / 1_000_000.0);
 		}
 	}
 

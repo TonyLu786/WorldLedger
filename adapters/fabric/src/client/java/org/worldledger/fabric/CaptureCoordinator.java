@@ -58,12 +58,22 @@ final class CaptureCoordinator {
 		private long measuredTicks;
 		private long totalTickNanos;
 		private long maxTickNanos;
+		/**
+		 * Where the worst tick fell and how many were slow, so that one expensive
+		 * tick as the session warms up is not read as a recurring stutter.
+		 */
+		private long worstTickIndex = -1;
+		private long slowTicks;
 
 		private void recordTickCost(long nanos) {
 			measuredTicks++;
 			totalTickNanos += nanos;
 			if (nanos > maxTickNanos) {
 				maxTickNanos = nanos;
+				worstTickIndex = measuredTicks - 1;
+			}
+			if (nanos > CaptureTiming.SLOW_TICK_NANOS) {
+				slowTicks++;
 			}
 		}
 
@@ -331,8 +341,12 @@ final class CaptureCoordinator {
 		if (session.backpressureEvents > 0) {
 			LOGGER.warn("Capture session encountered {} bounded-queue backpressure event(s)", session.backpressureEvents);
 		}
-		CaptureTiming.Snapshot timing =
-				new CaptureTiming.Snapshot(session.measuredTicks, session.totalTickNanos, session.maxTickNanos);
+		CaptureTiming.Snapshot timing = new CaptureTiming.Snapshot(
+				session.measuredTicks,
+				session.totalTickNanos,
+				session.maxTickNanos,
+				session.worstTickIndex,
+				session.slowTicks);
 		CaptureTiming.publish(timing);
 		LOGGER.info("Client-thread capture cost: {}", timing.describe());
 		previousSessionNotice = session.enqueued == 0
