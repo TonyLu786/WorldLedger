@@ -84,7 +84,11 @@ import one bundle, fresh archive    ~37 ms        2,023 allocations
 import one bundle, already held     ~24 ms        2,047 allocations
 ```
 
-The import figures use the committed capture bundle, which carries four components. A bundle from a real session carries about fifty, and importing 158 of them measured 2 minutes 25 seconds, or roughly 918 ms each. Import cost tracks component count rather than bundle count, because each component is made durable before the import is acknowledged.
+The import figures above use the committed capture bundle, which carries four components. A bundle from a real session carries about fifty.
+
+Importing 158 of those measured 2 minutes 25 seconds, or roughly 918 ms each. Most of that was not durability. Every component's path was resolved from the volume root, opening a handle per element, and every component in a bundle shares nearly all of that walk: fifty components spent 98 ms repeating it against 8 ms of actually opening the files. Resolving each directory once per bundle brought the same 158 bundles to 36 to 45 seconds, or 228 to 285 ms each.
+
+What remains is durability, and it is the larger half now. A benchmark of the object store alone puts fifty writes at roughly 225 ms, which is the floor an import cannot go below without changing what it means for an observation to be on disk.
 
 Two of these are worth reading carefully. Encoding costs roughly thirty times what decoding does and allocates about once per block state; the reference encoder is used by the fixture tooling rather than on any path a player waits on, so this is a known cost rather than a problem to date. Import spends its time in durability, not computation: two thousand allocations against thirty-seven milliseconds is the signature of the fsync calls that put an observation on disk before the import is acknowledged. Reimporting an observation already held still costs most of that, because it verifies rather than assuming.
 
