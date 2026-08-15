@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Capture asks the client thread for far less
+
+A section where every block is the same is stored by Minecraft with a
+single-value palette, and the client can recognise that in constant time.
+Capture was reading all 4,096 positions anyway and being told the same thing
+4,096 times. Most of a chunk is like this: everything above the terrain is air,
+and a chunk carries 24 sections.
+
+Measured outside the game on real containers, over a chunk of 24 sections
+modelled as 20 uniform and 4 mixed: 830 us to 222 us, and 1,185 KB of
+allocation to 233 KB. The mix is a model, so the real gain depends on how much
+of a real chunk is uniform.
+
+The captured bytes do not change. The encoder's output depends only on the
+section index and the 4,096 values in order, and it is handed the same values
+either way; this was checked against the previous algorithm on uniform sections
+of five different states, on a section made uniform by writing rather than by
+its palette, and on states differing only by a block property, which is where a
+wrongly keyed cache would otherwise pass unnoticed. `hasOnlyAir` would have been
+the obvious test and is the wrong one: `cave_air` and `void_air` report as air
+and canonicalize to different strings.
+
+The worst tick in the measured session was 15.2 ms against a 16.7 ms frame,
+fourteen times its own mean, which is not the shape of steady-state cost. At one
+chunk per tick the client thread was producing 23 MB/s of short-lived garbage,
+and a young-generation collection inside the measured window would look like
+that. Five times less garbage should make it five times rarer. No session has
+been observed since the change, so that remains the expectation rather than the
+result.
+
 ### `diff` says what changed between two moments, and what it cannot say
 
 `coverage` reports the world at one moment. The new `diff` command reports the

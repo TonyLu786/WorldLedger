@@ -69,7 +69,21 @@ The same session enqueued 158 chunks, dropped none, and failed on none.
 
 The mean is unremarkable: a millisecond on the ticks that did work. The maximum is not. A frame at 60 fps has 16.7 ms, and the worst tick spent 15.2 ms copying one chunk's state on the thread that draws. That is a dropped frame, and calling it 30% of a tick understates it, because a tick is not the budget a player perceives.
 
-What it is bounded by is already right: `max_snapshots_per_tick` is 1, so the worst case is one full-height chunk, which is 24 sections of 4,096 block states. What it is not is free. Reducing it means either copying a chunk across several ticks, which needs a consistency guarantee a torn copy would break, or copying less than a chunk. Neither is a change to make in a hurry.
+What it is bounded by is already right: `max_snapshots_per_tick` is 1, so the worst case is one full-height chunk, which is 24 sections of 4,096 block states.
+
+There turned out to be a third option besides spreading a chunk over several ticks, which a torn copy would break, and capturing less than a chunk, which loses coverage: ask fewer questions for the same answer. Most of a chunk is one state repeated, and Minecraft stores such a section with a single-value palette, which the client can recognise in constant time. Reading 4,096 positions to be told the same thing 4,096 times is work with no result.
+
+Measured outside the game on real `PalettedContainer`s, over a chunk of 24 sections modelled as 20 uniform and 4 mixed:
+
+```text
+                 before      after
+time            830.1 us   221.8 us    3.7x
+allocation      1,185 KB     233 KB    5.1x less
+```
+
+The mix is a model rather than a measurement, so the real gain depends on how much of a real chunk is uniform. The canonical bytes are unchanged by construction, and were checked against the shipped algorithm on uniform sections of five different states, on a section made uniform by writing rather than by its palette, and on states that differ only by a block property.
+
+**What this does not yet show.** The mean should fall with the work, and it is the maximum that drops frames. The 15.2 ms tick is fourteen times the mean, which is not the shape of steady-state cost; the client thread was producing 23 MB/s of short-lived garbage at one chunk per tick, and a young-generation collection landing inside the timed region would look exactly like this. Cutting allocation by five times should make such a collection five times rarer, but no run has yet been observed doing so. That needs another game test, which is also what re-checks the capture fingerprint end to end.
 
 This is one machine, one scripted world, and a small pinned area. A player exploring loads far more chunks, so this is a floor for how often the cost is paid, though not for how large any single payment is.
 
