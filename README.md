@@ -223,7 +223,9 @@ worldledger receive --archive ./their-archive ./outbound
 
 A transfer bundle is an ordinary directory: copy it however you like. The receiver verifies every object against the digest the bundle declares and recomputes every observation's identity, so a bundle from an untrusted peer cannot introduce anything the archive would not have accepted from its own adapter. Importing the same bundle twice changes nothing.
 
-One bundle moves data one way. Two archives converge once each has sent to the other, at which point their manifest roots are equal. See [`spec/transfer-bundle-v1.md`](spec/transfer-bundle-v1.md).
+**One bundle moves data one way**, so between the two directions the archives are deliberately unequal and comparing them lists every chunk the other has not got yet. That is the working midpoint, not a fault. Each command says which one comes next, and `manifest --compare` says which direction would settle what it found.
+
+Two real archives, of 158 and 40 observations, converged this way: after both directions each held 198 and their manifest roots were equal. The second direction moved 40 observations in zero objects, because content addressing had already put the component bytes on both sides. See [`spec/transfer-bundle-v1.md`](spec/transfer-bundle-v1.md).
 
 ### Withhold observations
 

@@ -78,6 +78,7 @@ func cmdFingerprint(args []string) error {
 	fmt.Printf("root       %s\n", fingerprint.Root)
 	fmt.Printf("states     %d\n", len(fingerprint.States))
 	fmt.Printf("components %d\n", len(fingerprint.Components))
+	printHandOff("fingerprint", *out)
 	return nil
 }
 

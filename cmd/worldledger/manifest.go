@@ -34,7 +34,7 @@ func cmdManifest(args []string) error {
 	}
 
 	if *compareWith != "" {
-		return reportComparison(manifest, *compareWith)
+		return reportComparison(manifest, *compareWith, *archivePath)
 	}
 	if *out == "" {
 		// The manifest is the output here, so it goes to stdout alone and stays
@@ -52,12 +52,13 @@ func cmdManifest(args []string) error {
 	fmt.Printf("observations %d across %d server(s)\n", manifest.Observations, len(manifest.Servers))
 	fmt.Printf("objects      %d (%s)\n", manifest.Objects, humanBytes(manifest.ObjectBytes))
 	fmt.Printf("generated    %s\n", manifest.GeneratedAt.Format(time.RFC3339))
+	printHandOff("manifest", *out)
 	return nil
 }
 
 // reportComparison localises where two archives differ without either side
 // transferring its contents.
-func reportComparison(local archive.Manifest, path string) error {
+func reportComparison(local archive.Manifest, path, archivePath string) error {
 	remote, err := archive.LoadManifest(path)
 	if err != nil {
 		return err
@@ -87,6 +88,13 @@ func reportComparison(local archive.Manifest, path string) error {
 		}
 		fmt.Printf("  %-52s %s\n", location, difference.Detail)
 	}
+
+	// A list of chunks reads as damage. It is not: two people who explored the
+	// same server are supposed to differ, and the list is the work a transfer
+	// would do. Saying which direction settles it is the difference between a
+	// report and an instruction.
+	fmt.Println()
+	printLines(classifyDifferences(differences).explain(archivePath))
 	return nil
 }
 

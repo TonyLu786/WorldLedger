@@ -224,6 +224,15 @@ func LoadManifest(path string) (Manifest, error) {
 	return manifest, nil
 }
 
+// The two details that say which side is ahead. They are constants because a
+// caller has to be able to tell a difference that one transfer would settle
+// from one that needs both directions, and matching on prose written for a
+// person is the wrong way to find that out.
+const (
+	DetailOnlyLocal  = "only in the local archive"
+	DetailOnlyRemote = "only in the remote archive"
+)
+
 // Difference is one place two archives disagree.
 type Difference struct {
 	Server    string          `json:"server,omitempty"`
@@ -231,6 +240,12 @@ type Difference struct {
 	Chunk     *model.ChunkRef `json:"chunk,omitempty"`
 	Detail    string          `json:"detail"`
 }
+
+// OnlyLocal reports a difference the remote archive would resolve by receiving.
+func (d Difference) OnlyLocal() bool { return d.Detail == DetailOnlyLocal }
+
+// OnlyRemote reports a difference this archive would resolve by receiving.
+func (d Difference) OnlyRemote() bool { return d.Detail == DetailOnlyRemote }
 
 // Compare localises where two manifests disagree, without needing either
 // archive. An empty result means the two hold the same observations.
@@ -248,10 +263,10 @@ func Compare(local, remote Manifest) []Difference {
 		theirs, hasTheirs := remoteServers[name]
 		switch {
 		case !hasTheirs:
-			differences = append(differences, Difference{Server: name, Detail: "only in the local archive"})
+			differences = append(differences, Difference{Server: name, Detail: DetailOnlyLocal})
 			continue
 		case !hasMine:
-			differences = append(differences, Difference{Server: name, Detail: "only in the remote archive"})
+			differences = append(differences, Difference{Server: name, Detail: DetailOnlyRemote})
 			continue
 		case mine.Digest == theirs.Digest:
 			continue
@@ -271,10 +286,10 @@ func compareDimensions(server string, local, remote ServerManifest) []Difference
 		theirs, hasTheirs := remoteDimensions[name]
 		switch {
 		case !hasTheirs:
-			differences = append(differences, Difference{Server: server, Dimension: name, Detail: "only in the local archive"})
+			differences = append(differences, Difference{Server: server, Dimension: name, Detail: DetailOnlyLocal})
 			continue
 		case !hasMine:
-			differences = append(differences, Difference{Server: server, Dimension: name, Detail: "only in the remote archive"})
+			differences = append(differences, Difference{Server: server, Dimension: name, Detail: DetailOnlyRemote})
 			continue
 		case mine.Digest == theirs.Digest:
 			continue
@@ -319,9 +334,9 @@ func compareChunks(server, dimension string, local, remote DimensionManifest) []
 		chunk := model.ChunkRef{ServerID: server, Dimension: dimension, X: k.x, Z: k.z}
 		switch {
 		case !hasTheirs:
-			differences = append(differences, Difference{Server: server, Dimension: dimension, Chunk: &chunk, Detail: "only in the local archive"})
+			differences = append(differences, Difference{Server: server, Dimension: dimension, Chunk: &chunk, Detail: DetailOnlyLocal})
 		case !hasMine:
-			differences = append(differences, Difference{Server: server, Dimension: dimension, Chunk: &chunk, Detail: "only in the remote archive"})
+			differences = append(differences, Difference{Server: server, Dimension: dimension, Chunk: &chunk, Detail: DetailOnlyRemote})
 		case mine.Digest != theirs.Digest:
 			differences = append(differences, Difference{
 				Server: server, Dimension: dimension, Chunk: &chunk,
