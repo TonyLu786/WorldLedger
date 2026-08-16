@@ -13,41 +13,36 @@ import (
 // can ever be the machine running the test.
 
 func TestEachPlatformLooksWhereItsLauncherPutsMinecraft(t *testing.T) {
+	// The roots are given as components rather than as written-out paths. A
+	// literal like `C:\Users\alice\.minecraft` composes correctly only on the
+	// platform whose separator it used, and these run on whichever machine the
+	// suite happens to be on: this test failed in Linux CI for exactly that
+	// reason while passing on Windows. Which roots are chosen and in what order
+	// is the platform knowledge worth checking. How they are joined is
+	// filepath's job.
+	const appData = "APPDATA"
+	const home = "HOME"
+
 	for _, test := range []struct {
-		goos    string
-		appData string
-		home    string
-		want    []string
+		goos  string
+		roots [][]string
 	}{
-		{
-			goos:    "windows",
-			appData: `C:\Users\alice\AppData\Roaming`,
-			home:    `C:\Users\alice`,
-			want:    []string{`C:\Users\alice\AppData\Roaming\.minecraft`},
-		},
-		{
-			goos: "darwin",
-			home: "/Users/alice",
-			want: []string{
-				"/Users/alice/Library/Application Support/minecraft",
-				"/Users/alice/.minecraft",
-			},
-		},
-		{
-			goos: "linux",
-			home: "/home/alice",
-			want: []string{"/home/alice/.minecraft"},
-		},
+		{goos: "windows", roots: [][]string{{appData, ".minecraft"}}},
+		{goos: "darwin", roots: [][]string{
+			{home, "Library", "Application Support", "minecraft"},
+			{home, ".minecraft"},
+		}},
+		{goos: "linux", roots: [][]string{{home, ".minecraft"}}},
 	} {
-		got := spoolCandidatesFor(test.goos, test.appData, test.home)
-		if len(got) != len(test.want) {
-			t.Errorf("%s: got %d candidate(s) %v, want %d", test.goos, len(got), got, len(test.want))
+		got := spoolCandidatesFor(test.goos, appData, home)
+		if len(got) != len(test.roots) {
+			t.Errorf("%s: got %d candidate(s) %v, want %d", test.goos, len(got), got, len(test.roots))
 			continue
 		}
-		for index, want := range test.want {
-			expected := filepath.Join(want, filepath.FromSlash(spoolSuffix))
-			if got[index] != expected {
-				t.Errorf("%s candidate %d = %q, want %q", test.goos, index, got[index], expected)
+		for index, parts := range test.roots {
+			want := filepath.Join(append(parts, filepath.FromSlash(spoolSuffix))...)
+			if got[index] != want {
+				t.Errorf("%s candidate %d = %q, want %q", test.goos, index, got[index], want)
 			}
 		}
 	}
