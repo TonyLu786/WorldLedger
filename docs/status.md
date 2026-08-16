@@ -129,7 +129,13 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 
 ## Not verified
 
-**Cross-release conversion.** Translation has unit tests and an end-to-end run against a synthetic target profile, but no converted world has been opened in an older release. There is no committed profile for any release other than 26.2, because building one requires that release's own artifact.
+**Cross-release conversion, the last step.** A real older release now exists to convert against. `profiles/minecraft-java-1.21.11.json` was extracted by `cmd/mcprofile` from Mojang's own 1.21.11 client jar, whose SHA-1 matched the one their version manifest publishes, so the profile describes a release rather than a guess. Against 26.2 it is genuinely smaller: 1,168 blocks to 1,198 and 65 biomes to 66, missing the cinnabar and sulfur families and `minecraft:sulfur_caves`, and holding nothing 26.2 does not.
+
+Converting the 158-observation capture to it writes 157 chunks into four region files and reports no loss, which is the truth for that world: it is superflat and uses none of the thirty blocks 1.21.11 lacks. An independently written reader, which never touches the Go writer, confirms the faithful export carries data version 4903 and the converted copy carries 4671.
+
+The loss path is now exercised against that profile rather than a synthetic one: a block 1.21.11 cannot represent is named in the report under every policy, the default policy leaves the chunk unwritten rather than substituting for it, the report policy refuses outright, and a chunk of blocks the release does have passes through unchanged.
+
+**What is still not verified is the last step: no converted world has been opened by a 1.21.11 client or server.** Everything above says the bytes claim to be 1.21.11. Whether Minecraft agrees is a different question and needs Minecraft to answer it.
 
 **Race detection on Windows.** The race gate needs cgo and is run in Linux CI only.
 

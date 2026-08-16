@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### A real older release to convert against
+
+`convert` has always had a target profile to translate into, and until now
+every one of them described either the release the archive came from or a
+synthetic target written for a test. Both prove the mechanism and neither
+proves the rules describe a real downgrade.
+
+`profiles/minecraft-java-1.21.11.json` is extracted by `cmd/mcprofile` from
+Mojang's own 1.21.11 client jar, whose SHA-1 matched the one their version
+manifest publishes. Against 26.2 it is genuinely smaller: 1,168 blocks to
+1,198, 65 biomes to 66, missing the cinnabar and sulfur families and
+`minecraft:sulfur_caves`, and holding nothing 26.2 does not.
+
+Converting the 158-observation capture to it writes 157 chunks into four
+region files with no loss, which is true for that world rather than
+convenient: it is superflat and uses none of the thirty blocks 1.21.11
+lacks. A reader that never touches the writer confirms the faithful export
+carries data version 4903 and the converted copy carries 4671.
+
+Six tests now exercise the loss path against that profile instead of a
+synthetic one. They name blocks taken from the real difference, so a future
+release that adds them back fails them loudly rather than passing on a name
+nobody ships.
+
+**Still not verified: no converted world has been opened by a 1.21.11 client
+or server.** Everything above says the bytes claim to be 1.21.11; whether
+Minecraft agrees needs Minecraft.
+
 ## v0.2.0
 
 v0.1.0 proved the thing works: a live multiplayer session becomes an archive,
