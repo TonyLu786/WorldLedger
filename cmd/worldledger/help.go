@@ -82,8 +82,17 @@ func helpRequest(args []string) (string, bool) {
 	if len(args) == 0 {
 		return "", false
 	}
-	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		return strings.Join(args[1:], " "), true
+	if isHelpFlag(args[0]) {
+		// "help --help" asks about help, not about a command called "--help".
+		// Dropping the spellings rather than joining them blindly is what keeps
+		// every combination of the three from being an unknown command.
+		var name []string
+		for _, arg := range args[1:] {
+			if !isHelpFlag(arg) {
+				name = append(name, arg)
+			}
+		}
+		return strings.Join(name, " "), true
 	}
 	for _, arg := range args[1:] {
 		// Stop at "--": everything after it is an operand, and a file genuinely
@@ -91,11 +100,15 @@ func helpRequest(args []string) (string, bool) {
 		if arg == "--" {
 			break
 		}
-		if arg == "--help" || arg == "-h" {
+		if isHelpFlag(arg) {
 			return commandPath(args), true
 		}
 	}
 	return "", false
+}
+
+func isHelpFlag(arg string) bool {
+	return arg == "help" || arg == "--help" || arg == "-h"
 }
 
 // commandPath is the longest known command the arguments name, so that

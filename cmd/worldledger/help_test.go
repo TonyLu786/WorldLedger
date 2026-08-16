@@ -145,6 +145,67 @@ func TestSomethingUnlikeAnyCommandGetsNoGuess(t *testing.T) {
 	}
 }
 
+// Every command and subcommand, through the routing and the printing together.
+//
+// The unit tests above check helpRequest and printHelp separately, and a sweep
+// over the built binary found a case they both passed: "worldledger help
+// --help" routed to a command named "--help", which is not one, and exited 1.
+// Composing them here is what would have caught it.
+func TestEverySpellingOfHelpForEveryCommandPrintsUsage(t *testing.T) {
+	var names []string
+	for name := range commandUsage {
+		// "help --help" is about the tool rather than about a command, and
+		// answering it with the whole listing is right. It has its own test.
+		if name == "help" {
+			continue
+		}
+		names = append(names, name)
+	}
+	for _, name := range names {
+		args := append(strings.Split(name, " "), "--help")
+		requested, ok := helpRequest(args)
+		if !ok {
+			t.Errorf("%v was not read as a request for help", args)
+			continue
+		}
+		var out strings.Builder
+		if err := printHelp(&out, requested); err != nil {
+			t.Errorf("%v: %v", args, err)
+			continue
+		}
+		if !strings.HasPrefix(out.String(), "usage: worldledger ") {
+			t.Errorf("%v printed %q", args, out.String())
+		}
+	}
+}
+
+// The three spellings combine, and none of the combinations may be read as a
+// command. Each of these has to end at the whole-tool usage.
+func TestHelpAboutHelpIsNotAnUnknownCommand(t *testing.T) {
+	for _, args := range [][]string{
+		{"help"},
+		{"--help"},
+		{"-h"},
+		{"help", "--help"},
+		{"help", "-h"},
+		{"--help", "help"},
+	} {
+		requested, ok := helpRequest(args)
+		if !ok {
+			t.Errorf("%v was not read as a request for help", args)
+			continue
+		}
+		if requested != "" {
+			t.Errorf("%v asked about %q; want the whole tool", args, requested)
+			continue
+		}
+		var out strings.Builder
+		if err := printHelp(&out, requested); err != nil {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+}
+
 func TestUsageErrorUsesTheSharedText(t *testing.T) {
 	err := usageError("export")
 	if err == nil || err.Error() != "usage: worldledger "+commandUsage["export"] {

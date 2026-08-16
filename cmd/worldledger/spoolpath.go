@@ -21,24 +21,38 @@ import (
 
 const spoolSuffix = "config/worldledger/spool"
 
-// spoolCandidates lists where an unmodified launcher puts Minecraft, most
-// likely first. The environment variables are read rather than assumed so a
-// test can point them somewhere harmless.
+// spoolCandidates lists where an unmodified launcher puts Minecraft on this
+// machine, most likely first.
 func spoolCandidates() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = ""
+	}
+	return spoolCandidatesFor(runtime.GOOS, os.Getenv("APPDATA"), home)
+}
+
+// spoolCandidatesFor is the platform knowledge on its own, with the two values
+// it needs passed in.
+//
+// Reading the environment inside would leave two of the three branches
+// untestable anywhere: a test on Windows could never check what a macOS user
+// gets. Getting one of them wrong means telling somebody their captures are
+// missing while they are sitting in a directory nobody looked in.
+func spoolCandidatesFor(goos, appData, home string) []string {
 	var roots []string
-	switch runtime.GOOS {
+	switch goos {
 	case "windows":
-		if appData := os.Getenv("APPDATA"); appData != "" {
+		if appData != "" {
 			roots = append(roots, filepath.Join(appData, ".minecraft"))
 		}
 	case "darwin":
-		if home, err := os.UserHomeDir(); err == nil {
+		if home != "" {
 			roots = append(roots,
 				filepath.Join(home, "Library", "Application Support", "minecraft"),
 				filepath.Join(home, ".minecraft"))
 		}
 	default:
-		if home, err := os.UserHomeDir(); err == nil {
+		if home != "" {
 			roots = append(roots, filepath.Join(home, ".minecraft"))
 		}
 	}

@@ -375,7 +375,7 @@ func usage(w io.Writer) {
 		"  worldledger seed --observations <file> --operator <name> --accept-terms [flags]",
 		"  worldledger version",
 		"",
-		"Run a command with no arguments to see what it needs.",
+		"Add --help to any command to see what it takes.",
 		"README.md alongside this binary explains what each one is for.",
 	}
 	fmt.Fprintln(w, strings.Join(lines, "\n"))
