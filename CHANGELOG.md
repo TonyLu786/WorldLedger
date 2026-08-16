@@ -12,8 +12,9 @@ proves the rules describe a real downgrade.
 `profiles/minecraft-java-1.21.11.json` is extracted by `cmd/mcprofile` from
 Mojang's own 1.21.11 client jar, whose SHA-1 matched the one their version
 manifest publishes. Against 26.2 it is genuinely smaller: 1,168 blocks to
-1,198, 65 biomes to 66, missing the cinnabar and sulfur families and
-`minecraft:sulfur_caves`, and holding nothing 26.2 does not.
+1,198 and 65 biomes to 66. The thirty blocks it lacks are the cinnabar
+family, the sulfur family, and the golden dandelion planted and potted; the
+biome is `minecraft:sulfur_caves`. It holds nothing 26.2 does not.
 
 Converting the 158-observation capture to it writes 157 chunks into four
 region files with no loss, which is true for that world rather than

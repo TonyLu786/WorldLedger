@@ -58,6 +58,70 @@ func TestTheOlderProfileIsGenuinelyOlderAndSmaller(t *testing.T) {
 	}
 }
 
+// The documents state the size of the gap between the two releases and describe
+// what is in it. Both were copied by hand once and one of them drifted: the
+// prose said the missing blocks were the cinnabar and sulfur families, and two
+// of them are the golden dandelion. Asserting the figures here means a profile
+// that changes fails the build rather than quietly making a document wrong.
+func TestTheGapMatchesWhatTheDocumentsSayItIs(t *testing.T) {
+	older := olderTarget(t)
+	current, err := mcprofile.Load(filepath.Join("..", "..", "profiles", "minecraft-java-26.2.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Named in docs/status.md, CHANGELOG.md and internal/translate's own
+	// comments. Changing any of these means changing those.
+	const (
+		currentBlocks = 1198
+		olderBlocks   = 1168
+		currentBiomes = 66
+		olderBiomes   = 65
+	)
+	for _, c := range []struct {
+		what string
+		got  int
+		want int
+	}{
+		{"26.2 blocks", len(current.Blocks), currentBlocks},
+		{"1.21.11 blocks", len(older.Blocks), olderBlocks},
+		{"26.2 biomes", len(current.Biomes), currentBiomes},
+		{"1.21.11 biomes", len(older.Biomes), olderBiomes},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s = %d, but the documents say %d", c.what, c.got, c.want)
+		}
+	}
+
+	// Every block in the gap should belong to a family the documents name. A
+	// block that belongs to none of them is one the prose does not account for.
+	families := []string{"cinnabar", "sulfur", "golden_dandelion"}
+	var unaccounted []string
+	for _, name := range current.Blocks {
+		if older.HasBlock(name) {
+			continue
+		}
+		described := false
+		for _, family := range families {
+			if strings.Contains(name, family) {
+				described = true
+			}
+		}
+		if !described {
+			unaccounted = append(unaccounted, name)
+		}
+	}
+	if len(unaccounted) > 0 {
+		t.Errorf("blocks 1.21.11 lacks that the documents do not describe: %v", unaccounted)
+	}
+
+	for _, name := range current.Biomes {
+		if !older.HasBiome(name) && name != "minecraft:sulfur_caves" {
+			t.Errorf("1.21.11 also lacks biome %s, which the documents do not mention", name)
+		}
+	}
+}
+
 // A block the older release cannot represent has to be reported, whatever the
 // policy does about it. A silent downgrade is the failure this whole path
 // exists to prevent: the world would look plausible and be wrong.
