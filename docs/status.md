@@ -122,6 +122,18 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 
 **Race detection on Windows.** The race gate needs cgo and is run in Linux CI only.
 
+**Running the client game test without Gradle.** Gradle's launcher talks to its workers over a loopback socket, and in an environment where that is blocked every task fails with `Unable to establish loopback connection` before any build logic runs. The client game test is the only end-to-end exercise of capture and the only thing that re-checks the capture fingerprint, so losing it to that would mean losing the gate.
+
+[`scripts/run-client-gametest.sh`](../scripts/run-client-gametest.sh) runs it anyway. Loom writes the whole launch specification to `adapters/fabric/.gradle/loom-cache/launch.cfg` during a normal build, and it stays valid afterwards, so the script compiles the four source sets with `javac` into the directories that file names, prepares the run directory exactly as `prepareClientGametest` does, and launches the same client through dev-launch-injector.
+
+It does not accept Mojang's EULA. `build.gradle` deliberately refuses to make that decision for an operator, and the script refuses in the same way: the run directory has to carry an `eula.txt` from a run someone authorised. `--build-only` compiles and prepares without opening a window.
+
+**The Gradle failure and the game test failure have one cause, and the script cannot remove it.** The game test starts a Minecraft dedicated server; its networking is Netty; a Netty event loop is a `java.nio` Selector; and on Windows a Selector is built from a loopback self-connect. Where that pattern is blocked, plain sockets still work, `Pipe.open()` still works, and `Selector.open()` fails with the same `Unable to establish loopback connection` that Gradle reports. Minecraft reaches it several minutes into startup and calls it `failed to create a child event loop`.
+
+So the script checks for it first and stops in under a second with that explanation, rather than after a long start and an unrecognisable message. Everything before the launch — compiling all four source sets, expanding the manifest, preparing the run directory — works regardless, which is what `--build-only` is for.
+
+This is a fallback, not a replacement. Gradle remains what CI uses and what produces a release JAR.
+
 ## Known gaps that are not defects
 
 - `level.dat` is never generated. Exports are written into a world the target client created.
