@@ -55,6 +55,8 @@ go run ./cmd/mcprofile --jar <client.jar> --out profiles/minecraft-java-<version
 
 This is how "any version" is honestly delivered. No table of releases is hard-coded, because a hard-coded table would be unverifiable and would go stale. Whoever holds a release's jar can produce its profile.
 
+Two profiles can be compared, which is what tells you whether a new release changed anything that bears on observations already captured. See [`upgrading-minecraft.md`](upgrading-minecraft.md).
+
 Rules are declared data, validated against the target profile when loaded, so a rule pointing at a block the target does not have fails immediately rather than producing an unreadable chunk:
 
 ```json

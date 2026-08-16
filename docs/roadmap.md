@@ -59,10 +59,13 @@ Exit criterion: **met.** A live multiplayer session produced a deterministic loc
 - [x] cross-release translation with declared, auditable loss
 - [ ] regression worlds for Minecraft upgrades
 - [x] converted world opened in an older release
+- [x] an upgrade procedure that separates a game change from a regression
 
 `level.dat` is deliberately not generated. It carries the data version, generator, and build height, so an export is written into a world the target client created rather than into one this project invented. This is a decision, not a missing feature.
 
 The older release is real and so is the run against it. `profiles/minecraft-java-1.21.11.json` is extracted from Mojang's 1.21.11 jar, the loss rules are tested against a registry that is genuinely smaller rather than a synthetic one, and a converted world has been opened by a 1.21.11 server, which answered `execute if block` correctly at five coordinates and rewrote the chunks from its own world model. See [`status.md`](status.md).
+
+The regression box stays open, and it is worth saying what it is still missing rather than letting the neighbouring tick imply it. The pinned world, the committed fingerprint, and the golden vectors exist; `mcprofile --from/--to` and [`upgrading-minecraft.md`](upgrading-minecraft.md) now say what to run when a release lands and how to read the two results together. What does not exist is a corpus of worlds chosen to cover the cases an upgrade breaks — a world with block entities of every kind, one at each end of the build range, one holding states whose properties changed. Today there is one fixture world, and it is the one the game test happens to build.
 
 Exit criterion: **met for the faithful export path, and for conversion on a server.** An exported chunk loads and renders correctly in an unmodified Minecraft 26.2 client, including negative sections and block state properties, verified in game and by an independent reader. A converted chunk survives a round trip through a 1.21.11 server with its blocks at the same coordinates. What conversion still lacks is a client: nothing has looked at one.
 

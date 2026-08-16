@@ -369,7 +369,15 @@ go run ./cmd/mcprofile --jar <client.jar> --out profiles/minecraft-java-<version
 go run ./cmd/dfurenames --jar <mojang-mapped.jar> --source <version> --out profiles/renames-<version>.json
 ```
 
-The committed profile for 26.2 is `profiles/minecraft-java-26.2.json`. `dfurenames` additionally extracts Mojang's own rename tables from the compiled data fixers, reporting which fixers it could not read rather than implying full coverage.
+Two are committed, `profiles/minecraft-java-26.2.json` and `profiles/minecraft-java-1.21.11.json`, so the conversion path is exercised against a release that is genuinely smaller rather than a synthetic one. `dfurenames` additionally extracts Mojang's own rename tables from the compiled data fixers, reporting which fixers it could not read rather than implying full coverage.
+
+Two profiles can be compared, which is what a Minecraft upgrade needs. The comparison separates what a release merely adds from what it stops representing, moves, or re-salts, because only the second kind bears on observations already captured:
+
+```sh
+go run ./cmd/mcprofile --from profiles/minecraft-java-1.21.11.json --to profiles/minecraft-java-26.2.json
+```
+
+See [`docs/upgrading-minecraft.md`](docs/upgrading-minecraft.md) for what to run when a release lands and how to tell a game change from a regression.
 
 ## Architecture
 

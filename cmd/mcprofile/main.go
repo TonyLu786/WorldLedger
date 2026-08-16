@@ -1,10 +1,18 @@
-// Command mcprofile extracts a Minecraft release profile from a client jar.
+// Command mcprofile extracts a Minecraft release profile from a client jar, and
+// compares two of them.
 //
 // The profile records what the release can represent: its data version, the
 // build range of each dimension, and its block and biome registries. Nothing is
 // hand-written, so any release can be profiled by whoever holds its jar.
 //
 //	mcprofile --jar <client.jar> --out profiles/minecraft-java-26.2.json
+//	mcprofile --from profiles/minecraft-java-1.21.11.json --to profiles/minecraft-java-26.2.json
+//
+// The second form is for a Minecraft upgrade. The capture fingerprint is
+// committed, so a release that changes what the game reports fails the build,
+// but the failure only says something moved. Comparing the two releases says
+// what, and separates what the new release merely adds from what bears on
+// observations already captured.
 //
 // Block identifiers come from the names of the blockstate definition files.
 // Their contents are not read: those files enumerate the properties that change
@@ -40,15 +48,54 @@ func main() {
 	}
 }
 
+const usage = `usage:
+  mcprofile --jar <client.jar> --out <profile.json>   extract a profile from a release
+  mcprofile --from <a.json> --to <b.json>             report what changed between two`
+
 func run() error {
-	jarPath := flag.String("jar", "", "Minecraft client jar")
-	outPath := flag.String("out", "", "profile output path")
-	flag.Parse()
-	if *jarPath == "" || *outPath == "" {
-		return errors.New("usage: mcprofile --jar <client.jar> --out <profile.json>")
+	// The flag package's own error output names the binary by its path, which
+	// under go run is a temporary build directory, and prints a bare list of
+	// flags. Discarding it and answering here keeps the two modes visible, the
+	// same way every worldledger command does.
+	fs := flag.NewFlagSet("mcprofile", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	jarPath := fs.String("jar", "", "Minecraft client jar")
+	outPath := fs.String("out", "", "profile output path")
+	fromPath := fs.String("from", "", "profile to compare from")
+	toPath := fs.String("to", "", "profile to compare to")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		// Being asked for help is not a failure, so it answers on stdout and
+		// exits zero. An unknown flag is, and it names the flag before the usage
+		// rather than only listing what was allowed.
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Println(usage)
+			return nil
+		}
+		return fmt.Errorf("%w\n\n%s", err, usage)
 	}
 
-	reader, err := zip.OpenReader(*jarPath)
+	switch {
+	case *fromPath != "" && *toPath != "":
+		if *jarPath != "" || *outPath != "" {
+			return errors.New("--from/--to compares existing profiles and does not read a jar")
+		}
+		return compare(*fromPath, *toPath)
+	case *fromPath != "" || *toPath != "":
+		return errors.New("comparing needs both --from and --to")
+	case *jarPath == "" && *outPath == "" && fs.NFlag() == 0:
+		// Being asked how to use it is not a failure, so this goes to stdout and
+		// exits zero, the same rule the worldledger command follows.
+		fmt.Println(usage)
+		return nil
+	case *jarPath == "" || *outPath == "":
+		return errors.New("extracting needs both --jar and --out\n\n" + usage)
+	}
+
+	return extract(*jarPath, *outPath)
+}
+
+func extract(jarPath, outPath string) error {
+	reader, err := zip.OpenReader(jarPath)
 	if err != nil {
 		return err
 	}
@@ -109,14 +156,110 @@ func run() error {
 	profile.Blocks = sortedKeys(blocks)
 	profile.Biomes = sortedKeys(biomes)
 
-	if err := profile.Save(*outPath); err != nil {
+	if err := profile.Save(outPath); err != nil {
 		return err
 	}
 	fmt.Printf("%s data version %d\n", profile.Version, profile.DataVersion)
 	fmt.Printf("dimensions %d  blocks %d  biomes %d\n",
 		len(profile.Dimensions), len(profile.Blocks), len(profile.Biomes))
-	fmt.Println("wrote", *outPath)
+	fmt.Println("wrote", outPath)
 	return nil
+}
+
+func compare(fromPath, toPath string) error {
+	from, err := mcprofile.Load(fromPath)
+	if err != nil {
+		return err
+	}
+	to, err := mcprofile.Load(toPath)
+	if err != nil {
+		return err
+	}
+	printDelta(mcprofile.Compare(from, to))
+	return nil
+}
+
+func printDelta(delta mcprofile.Delta) {
+	direction := "going backwards"
+	if delta.Forward() {
+		direction = "an upgrade"
+	}
+	if delta.FromDataVersion == delta.ToDataVersion {
+		direction = "the same data version"
+	}
+	fmt.Printf("%s (data version %d) to %s (data version %d), %s\n\n",
+		delta.From, delta.FromDataVersion, delta.To, delta.ToDataVersion, direction)
+
+	if delta.Empty() {
+		fmt.Println("The two releases represent exactly the same things.")
+		return
+	}
+
+	// What bears on data that already exists comes first, because it is the part
+	// somebody has to act on.
+	if delta.TouchesExistingArchives() {
+		fmt.Println("Bears on observations already captured")
+		printNames("  blocks the target cannot place", delta.BlocksRemoved)
+		printNames("  biomes the target cannot place", delta.BiomesRemoved)
+		printNames("  dimensions that are gone", delta.DimensionsRemoved)
+		for _, change := range delta.DimensionsChanged {
+			if change.Narrowed() {
+				fmt.Printf("  build range narrowed  %s  %s -> %s\n", change.ID, change.From.Describe(), change.To.Describe())
+			}
+		}
+		printNames("  structure sets that are gone", delta.StructureSetsRemoved)
+		for _, change := range delta.StructureSetsChanged {
+			fmt.Printf("  structure placement changed  %s\n", change.ID)
+			printStructureSet("    from", change.From)
+			printStructureSet("    to  ", change.To)
+		}
+		fmt.Println()
+	} else {
+		fmt.Println("Nothing changed that bears on observations already captured.")
+		fmt.Println()
+	}
+
+	added := len(delta.BlocksAdded) + len(delta.BiomesAdded) +
+		len(delta.DimensionsAdded) + len(delta.StructureSetsAdded)
+	for _, change := range delta.DimensionsChanged {
+		if !change.Narrowed() {
+			added++
+		}
+	}
+	// Said rather than left to inference. A report that simply stops is one the
+	// reader has to guess the end of.
+	if added == 0 {
+		fmt.Println("The target represents nothing the source did not.")
+		return
+	}
+
+	printNames("Newly representable blocks", delta.BlocksAdded)
+	printNames("Newly representable biomes", delta.BiomesAdded)
+	printNames("New dimensions", delta.DimensionsAdded)
+	printNames("New structure sets", delta.StructureSetsAdded)
+	for _, change := range delta.DimensionsChanged {
+		if !change.Narrowed() {
+			fmt.Printf("Build range widened  %s  %s -> %s\n", change.ID, change.From.Describe(), change.To.Describe())
+		}
+	}
+}
+
+func printNames(heading string, names []string) {
+	if len(names) == 0 {
+		return
+	}
+	fmt.Printf("%s (%d)\n", heading, len(names))
+	for _, name := range names {
+		fmt.Println("   ", name)
+	}
+}
+
+func printStructureSet(label string, set mcprofile.StructureSet) {
+	if set.RandomSpread {
+		fmt.Printf("%s %s spacing %d separation %d salt %d\n", label, set.Type, set.Spacing, set.Separation, set.Salt)
+		return
+	}
+	fmt.Printf("%s %s salt %d\n", label, set.Type, set.Salt)
 }
 
 func sortedKeys(values map[string]struct{}) []string {
