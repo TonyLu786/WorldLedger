@@ -23,6 +23,7 @@ var commandUsage = map[string]string{
 	"inspect":       "inspect --archive DIR --server ID --dimension DIM --x X --z Z",
 	"verify":        "verify --archive DIR --server ID --dimension DIM --x X --z Z [--window 10s]",
 	"coverage":      "coverage --archive DIR --server ID --dimension DIM [--at TIME] [--json] [--map FILE]",
+	"epoch":         "epoch --archive DIR --server ID --dimension DIM [--at TIME] [--out FILE] [--compare FILE] [--json]",
 	"diff":          "diff --archive DIR --server ID --dimension DIM [--from TIME] [--to TIME] [--since DUR] [--json]",
 	"export":        "export --archive DIR --server ID --dimension DIM --into WORLD_DIR [--at TIME] [--overwrite]",
 	"convert":       "convert --archive DIR --server ID --dimension DIM --into WORLD_DIR --target-profile FILE [--rules FILE] [--on-unrepresentable POLICY]",

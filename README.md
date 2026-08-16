@@ -150,6 +150,20 @@ Pass `--from` and `--to` for an explicit interval, or `--since 30m` to measure b
 
 Add `--json` for the whole comparison, including every observation made during the interval.
 
+### Record what a moment looked like
+
+```sh
+worldledger epoch --archive ./archive --server example.org --at 2026-08-16T12:00:00Z --out epoch.json
+```
+
+An exported world carries no record of where it came from. Two people can export the same server at the same instant from archives holding different observations, get different worlds, and have no way to find out short of comparing region files.
+
+An epoch manifest is that record: every chunk position, the state chosen there, and a root digest over the two. Hand it to anyone exporting the same moment and they run `--compare` against it.
+
+The root covers the positions and the states, and deliberately nothing else. Two archives that selected the same state through different contributors export the same world, so they agree on the root; an archive holding two agreeing observations where another holds one calls the chunk `corroborated` rather than `single-source`, exports the same blocks, and agrees on the root. Those confidence differences are reported separately, because they are worth knowing and are not what makes a world.
+
+`--compare` exits non-zero when the worlds differ, so it can gate a publication step.
+
 ### Compare two archives
 
 ```sh

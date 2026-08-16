@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### `epoch` records what an archive says a moment looked like
+
+An exported world carries no record of where it came from. Two people can
+export the same server at the same instant, from archives holding different
+observations, get different worlds, and have no way to find that out short of
+comparing region files.
+
+`worldledger epoch` writes the document that answers it: every chunk position,
+the state chosen there, and a root digest over the two. `--compare` puts two of
+them side by side and exits non-zero when the worlds differ, so it can gate a
+publication step.
+
+What the root covers is the whole design, and it covers positions and states
+and nothing else:
+
+- **Not contributors.** Two archives that selected the same state through
+  different people export the same world. Digesting who provided it would report
+  agreement as disagreement.
+- **Not confidence.** An archive holding two agreeing observations calls a chunk
+  corroborated where one holding a single observation calls it single-source,
+  and both export the same blocks.
+- **Not when the manifest was written**, which is not a fact about the world.
+
+Confidence differences are reported separately, because they are worth knowing
+and are not what makes a world. On two real archives differing by a second
+contributor, the roots matched and forty chunks were listed as corroborated on
+one side and single-source on the other.
+
+A manifest whose recorded root disagrees with its own entries is refused rather
+than recomputed, because comparing against an edited file compares against
+something that never existed.
+
 ### The mod tells you what it is doing
 
 Everything the adapter did was reported in one chat line on join and then never

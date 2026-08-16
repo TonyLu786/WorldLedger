@@ -62,6 +62,8 @@ func run(args []string) error {
 		return cmdVerify(args[1:])
 	case "coverage":
 		return cmdCoverage(args[1:])
+	case "epoch":
+		return cmdEpoch(args[1:])
 	case "diff":
 		return cmdDiff(args[1:])
 	case "export":
@@ -352,6 +354,7 @@ func usage(w io.Writer) {
 		"Reading an archive:",
 		"  worldledger coverage --archive <archive-dir> --server <id> [flags]",
 		"  worldledger diff --archive <archive-dir> --server <id> [--since <dur>] [flags]",
+		"  worldledger epoch --archive <archive-dir> --server <id> [--at <time>] [--out <file>]",
 		"  worldledger inspect [flags]",
 		"  worldledger verify [flags]",
 		"  worldledger fsck --archive <archive-dir>",
