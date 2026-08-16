@@ -122,7 +122,10 @@ On chunk unload, dimension transition, disconnect, and client stop, the adapter 
 
 ## Collection boundary
 
-Version `0.1.0-dev` captures only normal multiplayer client visibility:
+The adapter captures only normal multiplayer client visibility. This is a design
+rule rather than a property of any one release, so it is stated without a version
+attached: widening it would be a change to what the project is for, not a
+feature added in a build.
 
 - block states;
 - biome samples;

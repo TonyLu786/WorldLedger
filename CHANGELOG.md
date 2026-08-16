@@ -1,6 +1,23 @@
 # Changelog
 
-## Unreleased
+## v0.2.0
+
+v0.1.0 proved the thing works: a live multiplayer session becomes an archive,
+and the archive becomes a world you can walk around in. What it did not do was
+make that pleasant, or fast, or possible to check against somebody else's copy.
+
+This release is mostly about the second of those. Importing a session went from
+two and a half minutes to under half; capture asks the client thread for about a
+fifth of what it did; and the path from an empty directory to a world now names
+its own next step at every stage instead of leaving you to find it. Walking that
+path from the beginning turned up defects rather than only rough edges, and two
+commands could not have worked as documented.
+
+It also adds the two documents that let people compare what they hold. `epoch`
+says what an archive believes a moment looked like, with a root digest, so two
+contributors can find out whether they would export the same world without
+sending each other one. `diff` says what changed between two moments, and keeps
+apart what changed from what nobody went back to look at.
 
 ### `landmark` gives places names, so coverage can use them
 

@@ -135,7 +135,7 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 
 **Running the client game test without Gradle.** Gradle can fail to start, with `Unable to establish loopback connection` from every task before any build logic runs. The client game test is the only end-to-end exercise of capture and the only thing that re-checks the capture fingerprint, so losing it to that would mean losing the gate.
 
-[`scripts/run-client-gametest.ps1`](../scripts/run-client-gametest.ps1) runs it anyway. Loom writes the whole launch specification to `adapters/fabric/.gradle/loom-cache/launch.cfg` during a normal build, and it stays valid afterwards, so the script compiles the four source sets with `javac` into the directories that file names, prepares the run directory exactly as `prepareClientGametest` does, and launches the same client through dev-launch-injector.
+`scripts/run-client-gametest.ps1` in the repository runs it anyway. Loom writes the whole launch specification to `adapters/fabric/.gradle/loom-cache/launch.cfg` during a normal build, and it stays valid afterwards, so the script compiles the four source sets with `javac` into the directories that file names, prepares the run directory exactly as `prepareClientGametest` does, and launches the same client through dev-launch-injector.
 
 It does not accept Mojang's EULA. `build.gradle` deliberately refuses to make that decision for an operator, and the script refuses in the same way: the run directory has to carry an `eula.txt` from a run someone authorised. `-BuildOnly` compiles and prepares without opening a window.
 
