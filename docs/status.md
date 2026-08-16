@@ -35,6 +35,7 @@ The capture game test is the standing form of this check. It passes from a clean
 - **Cross-platform digest agreement.** The same observed world state, captured by a Windows client here and by a Linux client in CI, canonicalized to identical bytes. The two fingerprints agree on all 157 chunks both observed, with no chunk seen by only one side and no state either could not account for, and the two files are byte-identical at 24,677 bytes. The game test pins the world seed, generator and view distance so that a difference between the two could only have come from the encoder. That reference is committed, so every CI run now compares against it and fails on a disagreement rather than reporting one.
 - **Spool storage.** Identical component bytes are stored once. Twenty bundles declaring 199,671 bytes occupied 36,879 on disk, identical components resolved to a single file, and deleting one bundle after import left a bundle sharing its bytes readable. A 40 KB budget stopped capture after 32 bundles and left all 32 in place; the same writer with a large budget kept going.
 - **Player-facing notices.** The text shown in game is built with no Minecraft type in it and is asserted directly: the disabled notice names the file and the setting, a clean session does not mention drops, a lossy one names them separately from the total, and a session that captured nothing does not read like capture being switched off. The class that draws them holds no logic.
+- **In-game commands.** The client game test parses `/worldledger`, `/worldledger status`, `/worldledger spool` and `/worldledger reload` against the live client dispatcher and requires each to reach something executable, then sends one through the client's own command path the way a keystroke would. Registering without throwing is not the same as a command a player can type, and the two fail separately: a tree of the wrong shape parses nothing, and a tree of the right shape can still have a handler that throws on its first line.
 - **Redaction.** Contributor and region scopes withhold matching observations from everything the archive builds for sharing. Purging removes observation records, removes objects nothing else references, and reports every object it kept along with the surviving contributor that still needs it. An interrupted purge is journalled and finished when the archive is next opened, because either half-done order leaves a state the integrity check rejects.
 
 CI runs the Go gates on Linux and separately tests, vets, and builds the Windows-specific filesystem and locking paths. The Fabric build runs in Linux CI.
@@ -93,7 +94,15 @@ The fingerprint from that run is byte-identical to the committed reference, so n
 
 The mean fell by 5.5 times, more than the 3.7 measured outside the game, because a real chunk is more uniform than the model.
 
-**The maximum is the part still not explained.** It halved rather than falling with the mean, and it is now 38 times its own mean where it was 14. Steady-state work would have scaled with the mean; something that does not is most of that tick. Less garbage makes a young-generation collection rarer without making one shorter, which fits a maximum that improves by less than the mean. At 7.6 ms against a 16.7 ms frame it is no longer a dropped frame at 60 fps, but one tick still holds 22% of everything the session spent, and whether that is a once-per-session cost such as JIT warmup or something that recurs is not known: the figure reported is a maximum, and a maximum cannot answer it. A distribution would.
+**The maximum did not fall with the mean.** It halved where the mean fell by more than five, so most of that tick was never the per-block work: less garbage makes a young-generation collection rarer without making one shorter.
+
+Reporting where the worst tick fell settled what it was. A later run:
+
+```text
+191 ticks, mean 373.0 us, max 7895.8 us (15.792% of a 50 ms tick); worst was tick 1 of 191, 4 tick(s) over 5 ms
+```
+
+The worst tick is the **first** one, which is a cost paid once as a session warms up rather than a stutter that recurs, and four of 191 ticks exceeded 5 ms. At 7.9 ms against a 16.7 ms frame none of them is a dropped frame at 60 fps. A maximum alone could not have told these apart from a session stuttering every few seconds, which is why the position and the slow-tick count are reported with it.
 
 This is one machine, one scripted world, and a small pinned area. A player exploring loads far more chunks, so this is a floor for how often the cost is paid, though not for how large any single payment is.
 
@@ -122,15 +131,17 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 
 **Race detection on Windows.** The race gate needs cgo and is run in Linux CI only.
 
-**Running the client game test without Gradle.** Gradle's launcher talks to its workers over a loopback socket, and in an environment where that is blocked every task fails with `Unable to establish loopback connection` before any build logic runs. The client game test is the only end-to-end exercise of capture and the only thing that re-checks the capture fingerprint, so losing it to that would mean losing the gate.
+**Running the client game test without Gradle.** Gradle can fail to start, with `Unable to establish loopback connection` from every task before any build logic runs. The client game test is the only end-to-end exercise of capture and the only thing that re-checks the capture fingerprint, so losing it to that would mean losing the gate.
 
 [`scripts/run-client-gametest.ps1`](../scripts/run-client-gametest.ps1) runs it anyway. Loom writes the whole launch specification to `adapters/fabric/.gradle/loom-cache/launch.cfg` during a normal build, and it stays valid afterwards, so the script compiles the four source sets with `javac` into the directories that file names, prepares the run directory exactly as `prepareClientGametest` does, and launches the same client through dev-launch-injector.
 
 It does not accept Mojang's EULA. `build.gradle` deliberately refuses to make that decision for an operator, and the script refuses in the same way: the run directory has to carry an `eula.txt` from a run someone authorised. `-BuildOnly` compiles and prepares without opening a window.
 
-**The Gradle failure and the game test failure have one cause, and the script cannot remove it.** The game test starts a Minecraft dedicated server; its networking is Netty; a Netty event loop is a `java.nio` Selector; and on Windows a Selector is built from a loopback self-connect. Where that pattern is blocked, plain sockets still work, `Pipe.open()` still works, and `Selector.open()` fails with the same `Unable to establish loopback connection` that Gradle reports. Minecraft reaches it several minutes into startup and calls it `failed to create a child event loop`.
+**The Gradle failure and the game test failure have one cause, and it is a directory.** The game test starts a Minecraft dedicated server; its networking is Netty; a Netty event loop is a `java.nio` Selector. On Windows a Selector's wakeup pipe is a pair of AF_UNIX sockets — `WEPollSelectorImpl` constructs a `PipeImpl` with `preferAfUnix` set — and the socket file is created in `%TEMP%`. Where an AF_UNIX `connect()` to that directory is refused, the JDK reports `Unable to establish loopback connection`, naming a mechanism it did not use. That is why TCP loopback working proves nothing, why `Pipe.open()` still works (it asks for TCP), and why Gradle prints the same words from the same cause: its daemon connector opens a Selector too. Minecraft reaches it several minutes into startup and calls it `failed to create a child event loop`.
 
-So the script checks for it first and stops in under a second with that explanation, rather than after a long start and an unrecognisable message. Everything before the launch — compiling all four source sets, expanding the manifest, preparing the run directory — works regardless, which is what `-BuildOnly` is for.
+Where this was diagnosed, AF_UNIX `connect()` failed with `WSAEINVAL` for every path under `%USERPROFILE%\AppData` — which is where `%TEMP%` lives — while `C:\Windows\Temp` and the checkout itself both worked. `jdk.net.unixdomain.tmpdir` decides where the socket file goes. Setting it in the JDK's own `conf/net.properties` fixes every JVM started from that JDK at once, including the Gradle daemon, which nothing in this repository launches. With that set, Gradle runs normally and this script stops being the only way in.
+
+The script no longer stops at the check. Its preflight opens a Selector the way the JDK would, and only if that fails looks for a directory where one can be opened and passes it to the client, so a machine that has not had `net.properties` set still runs the game test. Everything before the launch — compiling all four source sets, expanding the manifest, preparing the run directory — works regardless, which is what `-BuildOnly` is for.
 
 This is a fallback, not a replacement. Gradle remains what CI uses and what produces a release JAR.
 

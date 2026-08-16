@@ -18,11 +18,16 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
+
+import com.mojang.brigadier.ParseResults;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerConnection;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Minecraft;
 import org.worldledger.fabric.CapturePaths;
 import org.worldledger.fabric.CaptureTiming;
 
@@ -88,6 +93,7 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 		try (TestDedicatedServerContext server = context.worldBuilder().createServer(deterministicServerProperties())) {
 			try (TestDedicatedServerConnection connection = server.connect()) {
 				connection.waitForChunksDownload();
+				verifyClientCommands(context);
 				placeFixture(server);
 				connection.waitForClientboundPackets();
 				// Let the dirty-chunk coalescing window close before disconnecting.
@@ -104,6 +110,46 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 			throw new AssertionError("no bundle was published");
 		}
 		reportClientThreadCost();
+	}
+
+	/**
+	 * Checks that /worldledger is registered and that running it does something.
+	 *
+	 * <p>The command is the only way a player can ask whether capture is working,
+	 * and until this ran nothing had ever executed it: the classes compiled, the
+	 * strings had unit tests, and registration threw no exception, none of which
+	 * is the same as a command a player can type.
+	 *
+	 * <p>Both halves are checked because either can fail alone. A tree with the
+	 * wrong shape parses nothing; a tree with the right shape can still have a
+	 * handler that throws on its first line. Sending it the way a player does,
+	 * through the client's own command path, is what proves it was claimed by the
+	 * client rather than passed to a server that has never heard of it.
+	 */
+	private static void verifyClientCommands(ClientGameTestContext context) {
+		for (String path : new String[] {"", "status", "spool", "reload"}) {
+			String command = path.isEmpty() ? "worldledger" : "worldledger " + path;
+			ParseResults<FabricClientCommandSource> parsed = context.computeOnClient(client ->
+					ClientCommands.getActiveDispatcher().parse(command, clientCommandSource(client)));
+			if (!parsed.getExceptions().isEmpty()) {
+				throw new AssertionError("/" + command + " does not parse: " + parsed.getExceptions());
+			}
+			if (parsed.getContext().build(command).getCommand() == null) {
+				throw new AssertionError("/" + command + " parses but runs nothing");
+			}
+		}
+
+		// Through the client's own path, which is what a player's keystrokes reach.
+		// A throw here fails the test; the feedback itself is asserted by the unit
+		// tests over CaptureStatus, which is where the wording lives.
+		context.runOnClient(client -> client.getConnection().sendCommand("worldledger status"));
+		context.waitTicks(2);
+	}
+
+	private static FabricClientCommandSource clientCommandSource(Minecraft client) {
+		// Minecraft's own client suggestion source is what Fabric hands to client
+		// commands, and it implements the Fabric interface by mixin.
+		return (FabricClientCommandSource) client.getConnection().getSuggestionsProvider();
 	}
 
 	/**

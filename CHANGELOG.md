@@ -50,13 +50,13 @@ A game test afterwards reported `177 ticks, mean 195.7 us, max 7570.6 us`
 against `169 ticks, mean 1080.1 us, max 15216.3 us` before, and produced a
 capture fingerprint byte-identical to the committed reference.
 
-The mean fell by 5.5 times. The worst tick only halved, and now stands at 38
-times its own mean where it stood at 14, so most of it was never the per-block
-work: less garbage makes a collection rarer without making one shorter. At
-7.6 ms against a 16.7 ms frame it is no longer a dropped frame at 60 fps, but
-one tick still accounts for 22% of everything the session spent on capture.
-Whether that is a once-per-session cost or something that recurs is not
-something a maximum can answer.
+The mean fell by 5.5 times. The worst tick only halved, so most of it was never
+the per-block work: less garbage makes a collection rarer without making one
+shorter. Reporting where that tick fell settled what it is. A later run gave
+`191 ticks, mean 373.0 us, max 7895.8 us; worst was tick 1 of 191, 4 tick(s)
+over 5 ms`: the worst tick is the first one, which is a session warming up
+rather than a stutter, and none of the four slow ticks is a dropped frame at
+60 fps.
 
 ### The command line answers the questions people actually ask
 
