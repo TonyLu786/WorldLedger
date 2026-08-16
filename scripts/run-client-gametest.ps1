@@ -3,11 +3,12 @@
 Runs the Fabric client game test without Gradle.
 
 .DESCRIPTION
-Gradle cannot start in some environments: its launcher talks to its workers over
-a loopback socket, and where that is blocked every task fails with "Unable to
-establish loopback connection" before any build logic runs. The client game test
-is the only end-to-end exercise of capture and the only thing that re-checks the
-capture fingerprint, so losing it to that is losing the gate.
+Gradle cannot start in some environments: every task fails with "Unable to
+establish loopback connection" before any build logic runs. That message names
+the wrong thing -- see the preflight below, which finds the usual cause and works
+around it -- but where it cannot be cleared, the client game test is the only
+end-to-end exercise of capture and the only thing that re-checks the capture
+fingerprint, so losing it to Gradle is losing the gate.
 
 Everything Gradle does here is mechanical, and Loom has already written the hard
 part down. .gradle\loom-cache\launch.cfg holds the launch specification, the
@@ -209,12 +210,14 @@ if ($BuildOnly) {
 }
 
 # The game test starts a Minecraft dedicated server, whose networking is Netty,
-# whose event loop is a java.nio Selector. On Windows a Selector is built from a
-# loopback self-connect, and an environment that blocks that pattern fails here
-# rather than anywhere informative: Minecraft reports "failed to create a child
-# event loop" several minutes into startup, and Gradle reports "Unable to
-# establish loopback connection" before running any build logic. The same
-# restriction, two unrecognisable messages. Checking costs a second.
+# whose event loop is a java.nio Selector. On Windows a Selector's wakeup pipe is
+# a pair of AF_UNIX sockets (WEPollSelectorImpl -> PipeImpl with preferAfUnix),
+# and the socket file is created in %TEMP%. Where an AF_UNIX connect() to that
+# directory is refused, the JDK wraps the failure as "Unable to establish loopback
+# connection" -- naming a mechanism it did not use, which is why TCP loopback
+# working proves nothing, and why Gradle's identical message has this same cause.
+# Minecraft reaches it minutes into startup and calls it "failed to create a child
+# event loop". Two unrecognisable messages, one directory.
 $preflight = Join-Path $work 'Preflight.java'
 WriteLines $preflight @(
     'import java.nio.channels.Selector;',
@@ -222,23 +225,50 @@ WriteLines $preflight @(
     '    public static void main(String[] args) throws Exception { Selector.open().close(); }',
     '}'
 )
+
 # Through Start-Process with the streams sent to files. Calling java directly
 # would let Windows PowerShell wrap its stderr in a NativeCommandError, which
 # ErrorActionPreference='Stop' turns into a terminating error, and the
 # explanation below would never be reached.
 $preflightLog = Join-Path $work 'preflight.log'
-$probe = Start-Process -FilePath "$jdk\bin\java.exe" -ArgumentList "`"$preflight`"" `
-    -NoNewWindow -Wait -PassThru `
-    -RedirectStandardOutput $preflightLog -RedirectStandardError "$preflightLog.err"
-if ($probe.ExitCode -ne 0) {
-    Fail @"
-this environment cannot open a java.nio Selector, so the Minecraft dedicated server
-    the game test needs cannot start. Nothing in this repository can work around it:
-    the same restriction is why Gradle reports "Unable to establish loopback
-    connection". Run this where a Selector can be opened; everything else is ready.
-    Check with:
-      & "$jdk\bin\java.exe" "$preflight"
+function CanOpenSelector($socketDir) {
+    $argLine = if ($socketDir) {
+        "`"-Djdk.net.unixdomain.tmpdir=$(J $socketDir)`" `"$preflight`""
+    } else {
+        "`"$preflight`""
+    }
+    $probe = Start-Process -FilePath "$jdk\bin\java.exe" -ArgumentList $argLine `
+        -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput $preflightLog -RedirectStandardError "$preflightLog.err"
+    return $probe.ExitCode -eq 0
+}
+
+# $null means "wherever the JDK would put it anyway", which is what a healthy
+# machine uses and what leaves the launch below unchanged.
+$socketDir = $null
+if (-not (CanOpenSelector $null)) {
+    Step 'Selector.open() fails where the JDK puts its sockets; looking for a directory that works'
+    # Shortest first: an AF_UNIX path has 108 bytes to fit into, so a deep
+    # checkout is a real way for the second candidate to fail.
+    foreach ($candidate in @((Join-Path $env:SystemRoot 'Temp'), (Join-Path $fabric 'build\uds'))) {
+        New-Item -ItemType Directory -Force -Path $candidate -ErrorAction SilentlyContinue | Out-Null
+        if (-not (Test-Path -LiteralPath $candidate)) { continue }
+        if (CanOpenSelector $candidate) { $socketDir = $candidate; break }
+        Detail "no: $candidate"
+    }
+    if (-not $socketDir) {
+        Fail @"
+this environment cannot open a java.nio Selector from any directory tried, so the
+    Minecraft dedicated server the game test needs cannot start. The same failure is
+    why Gradle reports "Unable to establish loopback connection". Find a directory
+    where this exits 0 and the rest follows:
+      & "$jdk\bin\java.exe" "-Djdk.net.unixdomain.tmpdir=<dir>" "$preflight"
 "@
+    }
+    Detail "sockets from $socketDir"
+    Detail 'To fix it for every JVM rather than only this run -- Gradle and its daemon'
+    Detail 'included -- set jdk.net.unixdomain.tmpdir to that in the JDK conf:'
+    Detail "  $jdk\conf\net.properties"
 }
 
 # ---- launch ---------------------------------------------------------------
@@ -246,7 +276,13 @@ $dli = JarsUnder (Join-Path $gradleHome 'caches\modules-2') 'dev-launch-injector
 if (-not $dli) { Fail 'dev-launch-injector is not in the Gradle cache' }
 
 $launchArgs = Join-Path $work 'launch-args.txt'
-WriteLines $launchArgs @(
+# Whatever the preflight had to do to open a Selector, the client has to do too.
+# Built by appending rather than by an if-expression: PowerShell unwraps a
+# one-element array returned from one, and a string here would concatenate itself
+# onto the first argument instead of becoming a line of its own.
+$socketOption = @()
+if ($socketDir) { $socketOption += "`"-Djdk.net.unixdomain.tmpdir=$(J $socketDir)`"" }
+WriteLines $launchArgs ($socketOption + @(
     '-cp',
     "`"$(J $dli);$runtimeCp`"",
     "`"-Dfabric.dli.config=$(J $launchCfg)`"",
@@ -255,7 +291,7 @@ WriteLines $launchArgs @(
     '-Dfabric.client.gametest=true',
     '-Dfabric.client.gametest.modid=worldledger-gametest',
     'net.fabricmc.devlaunchinjector.Main'
-)
+))
 
 $log = Join-Path $work 'gametest.log'
 $errLog = Join-Path $work 'gametest.err.log'
