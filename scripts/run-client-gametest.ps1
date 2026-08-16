@@ -302,6 +302,10 @@ Detail 'Milestones below. A gap of a minute or two is normal while the client lo
 $process = Start-Process -FilePath "$jdk\bin\java.exe" -ArgumentList "`"@$launchArgs`"" `
     -WorkingDirectory $runDir -RedirectStandardOutput $log -RedirectStandardError $errLog `
     -PassThru -NoNewWindow
+# Touching Handle caches it. Without that, a -PassThru process gives back an
+# empty ExitCode even after WaitForExit, and an empty status compares unequal to
+# zero: a passing game test was reported as one that had exited "".
+$null = $process.Handle
 
 # Follow the log while it runs. Sending nothing to the terminal for the length
 # of a Minecraft start is what makes a working run and a hung one look the same.
@@ -324,7 +328,13 @@ while (-not $process.HasExited) {
     }
     $shown = $lines.Count
 }
+# HasExited going true is not enough to read ExitCode from a -PassThru process:
+# without a WaitForExit the property comes back empty, and an empty status
+# compares unequal to 0, so a passing run was reported as a failure that had
+# exited "". Waiting on an already-exited process returns at once.
+$process.WaitForExit()
 $status = $process.ExitCode
+if ($null -eq $status) { Fail "could not read the exit status; log: $log" }
 
 # ---- report ---------------------------------------------------------------
 $cost = Select-String -LiteralPath $log -Pattern 'client-thread capture cost' -ErrorAction SilentlyContinue |
