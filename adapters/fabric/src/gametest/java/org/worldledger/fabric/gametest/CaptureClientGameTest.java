@@ -49,6 +49,12 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 	private static final int SETTLE_TICKS = 200;
 	/** The spool is written off the client thread, so publication lags the tick. */
 	private static final int SPOOL_TIMEOUT_TICKS = 600;
+	/**
+	 * The adapter publishes a session's timing while handling the disconnect, on
+	 * a different thread from this one, so there is a gap between the connection
+	 * closing and the figures existing.
+	 */
+	private static final int TIMING_TIMEOUT_TICKS = 200;
 
 	private static final String BUNDLE_SCHEMA = "worldledger.capture-bundle/v1";
 	private static final String SHAPE_COMPONENT = "mcjava.shape";
@@ -109,7 +115,7 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 		if (published.isEmpty()) {
 			throw new AssertionError("no bundle was published");
 		}
-		reportClientThreadCost();
+		reportClientThreadCost(context);
 	}
 
 	/**
@@ -162,7 +168,15 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 	 * the wrong reasons; what it catches is capture doing something structurally
 	 * wrong on the thread that draws frames.
 	 */
-	private static void reportClientThreadCost() {
+	private static void reportClientThreadCost(ClientGameTestContext context) {
+		// The session's figures are published when the adapter handles the
+		// disconnect, which happens on the client or network thread rather than on
+		// this one. Reading them the moment the connection closes is a race that a
+		// slow spool happened to lose to and a fast one wins: a run that published
+		// fewer bundles settles sooner, arrives here sooner, and finds nothing.
+		// Waiting for the end of the session is what the assertion is about anyway.
+		context.waitFor(client -> CaptureTiming.lastSession().measured(), TIMING_TIMEOUT_TICKS);
+
 		CaptureTiming.Snapshot timing = CaptureTiming.lastSession();
 		System.out.println("[worldledger] client-thread capture cost: " + timing.describe());
 		if (!timing.measured()) {
