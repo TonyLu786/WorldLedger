@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -21,7 +20,7 @@ func cmdSend(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *peerFingerprint == "" || *out == "" {
-		return errors.New("usage: worldledger send --archive DIR --to FINGERPRINT --out DIR [--their-manifest FILE]")
+		return usageError("send")
 	}
 
 	a, err := archive.Open(*archivePath)
@@ -66,7 +65,7 @@ func cmdReceive(args []string) error {
 		return err
 	}
 	if *archivePath == "" || fs.NArg() != 1 {
-		return errors.New("usage: worldledger receive --archive DIR <bundle-dir>")
+		return usageError("receive")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {

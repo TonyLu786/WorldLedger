@@ -71,10 +71,22 @@ func Init(root string) (Archive, error) {
 	return Open(root)
 }
 
+// ErrNotAnArchive is returned for a directory that is missing, or that exists
+// and holds something other than an archive.
+var ErrNotAnArchive = errors.New("not a WorldLedger archive")
+
 func Open(root string) (Archive, error) {
 	b, err := os.ReadFile(filepath.Join(root, "VERSION"))
 	if err != nil {
-		return Archive{}, fmt.Errorf("open archive: %w", err)
+		// The raw error names VERSION, which is an internal file nobody was told
+		// about, and reads as a missing file rather than as the two things that
+		// actually happened: the wrong directory, or one that was never
+		// initialised. Both have the same fix and it is worth naming.
+		if os.IsNotExist(err) {
+			return Archive{}, fmt.Errorf(
+				"%w: %s\ncreate one with: worldledger init %s", ErrNotAnArchive, root, root)
+		}
+		return Archive{}, fmt.Errorf("open archive %s: %w", root, err)
 	}
 	if strings.TrimSpace(string(b)) != FormatVersion {
 		return Archive{}, fmt.Errorf("unsupported archive format %q", strings.TrimSpace(string(b)))

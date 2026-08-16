@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -22,7 +21,7 @@ func cmdManifest(args []string) error {
 		return err
 	}
 	if *archivePath == "" {
-		return errors.New("usage: worldledger manifest --archive DIR [--out FILE] [--compare FILE]")
+		return usageError("manifest")
 	}
 
 	a, err := archive.Open(*archivePath)

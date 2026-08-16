@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -24,10 +23,18 @@ func cmdIngestSpool(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *archivePath == "" || fs.NArg() != 1 {
-		return errors.New("usage: worldledger ingest-spool --archive DIR [--keep] [--dry-run] <spool-dir>")
+	if *archivePath == "" || fs.NArg() > 1 {
+		return usageError("ingest-spool")
 	}
 	spool := fs.Arg(0)
+	if spool == "" {
+		found, err := findSpool()
+		if err != nil {
+			return err
+		}
+		spool = found
+		fmt.Printf("spool         %s  (found automatically)\n", spool)
+	}
 
 	ready, leftovers, err := readSpool(spool)
 	if err != nil {
@@ -84,7 +91,33 @@ func cmdIngestSpool(args []string) error {
 		}
 		return fmt.Errorf("%d bundle(s) did not import", len(failures))
 	}
+	if imported > 0 {
+		printNextStepAfterImport(a, *archivePath)
+	}
 	return nil
+}
+
+// printNextStepAfterImport names the one command that has to come next.
+//
+// An import leaves a person holding an archive and no world, and the step
+// between them is a publication decision they were never told to expect.
+// status already answers this when asked; the point here is not having to know
+// to ask.
+func printNextStepAfterImport(a archive.Archive, archivePath string) {
+	servers, err := a.Servers()
+	if err != nil || len(servers) == 0 {
+		return
+	}
+	undeclared := undeclaredServers(a, servers)
+	fmt.Println()
+	if len(undeclared) > 0 {
+		fmt.Println("Next: export refuses a server nobody has decided about. Declare one:")
+		fmt.Printf("  worldledger policy set --archive %s --server %s \\\n"+
+			"      --disposition private --declared-by your-name\n", archivePath, undeclared[0])
+		return
+	}
+	fmt.Println("Next: write a world you can open in single player:")
+	fmt.Printf("  worldledger export --archive %s --server %s --into ./world\n", archivePath, servers[0])
 }
 
 // readSpool lists the bundles ready to import, in the order the adapter wrote

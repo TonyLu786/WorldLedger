@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -21,9 +22,10 @@ const defaultChangeListing = 20
 
 func cmdDiff(args []string) error {
 	fs := flag.NewFlagSet("diff", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	archiveDir := fs.String("archive", "", "archive directory")
 	server := fs.String("server", "", "server id")
-	dimension := fs.String("dimension", "minecraft:overworld", "dimension id")
+	dimension := fs.String("dimension", defaultDimension, "dimension id")
 	fromFlag := fs.String("from", "", "start of the interval, RFC3339; defaults to the first observation")
 	toFlag := fs.String("to", "", "end of the interval, RFC3339; defaults to now")
 	since := fs.String("since", "", "start the interval this long before --to, for example 24h")
@@ -33,8 +35,7 @@ func cmdDiff(args []string) error {
 		return err
 	}
 	if *archiveDir == "" || *server == "" || *dimension == "" {
-		return errors.New(
-			"usage: worldledger diff --archive DIR --server ID --dimension DIM [--from TIME] [--to TIME] [--since DUR] [--json]")
+		return usageError("diff")
 	}
 	if *fromFlag != "" && *since != "" {
 		return errors.New("pass either --from or --since, not both")

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,7 +13,7 @@ import (
 
 func cmdPolicy(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: worldledger policy <show|set|list> --archive DIR [flags]")
+		return usageError("policy")
 	}
 	switch args[0] {
 	case "show":
@@ -41,7 +40,7 @@ func cmdPolicySet(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *server == "" || *disposition == "" || *declaredBy == "" {
-		return errors.New("usage: worldledger policy set --archive DIR --server ID --disposition D --declared-by NAME [--until TIME] [--note TEXT]")
+		return usageError("policy set")
 	}
 
 	parsed, err := policy.ParseDisposition(*disposition)
@@ -72,6 +71,12 @@ func cmdPolicySet(args []string) error {
 		return err
 	}
 	fmt.Printf("declared %s for %s by %s\n", parsed, model.NormalizeToken(*server), *declaredBy)
+	// The declaration was almost certainly made in order to export, and this is
+	// the last place the path forks without saying so.
+	fmt.Println("\nNext: create an empty single-player world in Minecraft, quit to the title")
+	fmt.Println("      screen, then write the observed chunks into it:")
+	fmt.Printf("  worldledger export --archive %s --server %s \\\n"+
+		"      --into .minecraft/saves/<your-new-world>\n", *archivePath, model.NormalizeToken(*server))
 	return nil
 }
 
@@ -84,7 +89,7 @@ func cmdPolicyShow(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *server == "" {
-		return errors.New("usage: worldledger policy show --archive DIR --server ID")
+		return usageError("policy show")
 	}
 
 	a, err := archive.Open(*archivePath)
@@ -107,7 +112,7 @@ func cmdPolicyList(args []string) error {
 		return err
 	}
 	if *archivePath == "" {
-		return errors.New("usage: worldledger policy list --archive DIR")
+		return usageError("policy list")
 	}
 
 	a, err := archive.Open(*archivePath)

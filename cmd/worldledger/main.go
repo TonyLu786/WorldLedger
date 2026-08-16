@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,10 +28,21 @@ func main() {
 	}
 }
 
+// defaultDimension is what a client reports and what an archive stores. A bare
+// "overworld" is a different string that matches nothing, so every command that
+// defaults this has to default it the same way.
+const defaultDimension = "minecraft:overworld"
+
 func run(args []string) error {
 	if len(args) == 0 {
-		usage(os.Stderr)
+		usage(os.Stdout)
 		return nil
+	}
+	// Answered before dispatch so that every command supports it identically,
+	// and on stdout with a zero exit, because being asked for help is not a
+	// failure and the answer is what the caller wanted.
+	if name, ok := helpRequest(args); ok {
+		return printHelp(os.Stdout, name)
 	}
 	switch args[0] {
 	case "version", "--version", "-v":
@@ -80,12 +90,10 @@ func run(args []string) error {
 		return cmdStatus(args[1:])
 	case "fsck":
 		return cmdFsck(args[1:])
-	case "help", "--help", "-h":
-		usage(os.Stdout)
-		return nil
 	default:
-		usage(os.Stderr)
-		return fmt.Errorf("unknown command %q", args[0])
+		// The suggestion comes first and alone. Printing twenty-five lines of
+		// usage above it buried the one line that says what went wrong.
+		return unknownCommandError(args[0])
 	}
 }
 
@@ -103,7 +111,7 @@ func cmdIngestBundle(args []string) error {
 		return err
 	}
 	if *archivePath == "" || fs.NArg() != 1 {
-		return errors.New("usage: worldledger ingest-bundle --archive DIR [--delete-on-success] <bundle-dir>")
+		return usageError("ingest-bundle")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {
@@ -130,12 +138,17 @@ func cmdInit(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: worldledger init <archive-dir>")
+		return usageError("init")
 	}
 	if _, err := archive.Init(fs.Arg(0)); err != nil {
 		return err
 	}
 	fmt.Println("initialized", fs.Arg(0))
+	// An empty archive is not the goal, and the command that fills it takes a
+	// directory most people have never been told about. Naming it here means
+	// the next step never has to be looked up.
+	fmt.Println("\nNext: import what the mod captured. With Minecraft in its usual place,")
+	fmt.Printf("      the spool is found for you:\n  worldledger ingest-spool --archive %s\n", fs.Arg(0))
 	return nil
 }
 
@@ -144,7 +157,7 @@ func cmdIngest(args []string) error {
 	fs.SetOutput(io.Discard)
 	archivePath := fs.String("archive", "", "archive directory")
 	server := fs.String("server", "", "stable server id")
-	dimension := fs.String("dimension", "overworld", "dimension id")
+	dimension := fs.String("dimension", defaultDimension, "dimension id")
 	x := fs.Int("x", 0, "chunk x")
 	z := fs.Int("z", 0, "chunk z")
 	observedAt := fs.String("observed-at", "", "RFC3339 timestamp")
@@ -156,7 +169,7 @@ func cmdIngest(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *server == "" || *contributor == "" || *observedAt == "" || fs.NArg() != 1 {
-		return errors.New("usage: worldledger ingest --archive DIR --server ID --dimension DIM --x X --z Z --observed-at TIME --contributor ID [options] <payload-file>")
+		return usageError("ingest")
 	}
 	t, err := time.Parse(time.RFC3339Nano, *observedAt)
 	if err != nil {
@@ -201,9 +214,47 @@ func cmdInspect(args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(obs) == 0 {
+		// Encoding an empty result gave a bare "null", which reads as a broken
+		// command rather than as an answer. The chunk selector defaults to 0,0,
+		// so the commonest way to get here is accepting defaults that were never
+		// meant to be a query.
+		return emptyChunkError(a, chunk)
+	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(obs)
+}
+
+// emptyChunkError says which of several situations produced no observations,
+// in the manner emptySelectionError already does for a whole dimension.
+func emptyChunkError(a archive.Archive, chunk model.ChunkRef) error {
+	servers, err := a.Servers()
+	if err != nil || len(servers) == 0 {
+		return fmt.Errorf("this archive holds no observations yet; import a capture with: %s",
+			usageLine("ingest-spool"))
+	}
+	if !contains(servers, model.NormalizeToken(chunk.ServerID)) {
+		return fmt.Errorf("this archive holds nothing for server %q; it knows about %s",
+			chunk.ServerID, strings.Join(servers, ", "))
+	}
+	dimensions, err := a.Dimensions(chunk.ServerID)
+	if err == nil && len(dimensions) > 0 && !contains(dimensions, model.NormalizeToken(chunk.Dimension)) {
+		return fmt.Errorf("server %s has no dimension %q; it has %s",
+			chunk.ServerID, chunk.Dimension, strings.Join(dimensions, ", "))
+	}
+	return fmt.Errorf(
+		"no observations for chunk %d,%d in %s on %s; coverage lists the chunks that were observed:\n  %s",
+		chunk.X, chunk.Z, chunk.Dimension, chunk.ServerID, usageLine("coverage"))
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func cmdVerify(args []string) error {
@@ -211,7 +262,7 @@ func cmdVerify(args []string) error {
 	fs.SetOutput(io.Discard)
 	archivePath := fs.String("archive", "", "archive directory")
 	server := fs.String("server", "", "stable server id")
-	dimension := fs.String("dimension", "overworld", "dimension id")
+	dimension := fs.String("dimension", defaultDimension, "dimension id")
 	x := fs.Int("x", 0, "chunk x")
 	z := fs.Int("z", 0, "chunk z")
 	window := fs.Duration("window", 10*time.Second, "observation comparison window")
@@ -219,7 +270,7 @@ func cmdVerify(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *server == "" {
-		return errors.New("usage: worldledger verify --archive DIR --server ID --dimension DIM --x X --z Z [--window 10s]")
+		return usageError("verify")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {
@@ -243,7 +294,7 @@ func cmdFsck(args []string) error {
 		return err
 	}
 	if *archivePath == "" {
-		return errors.New("usage: worldledger fsck --archive DIR")
+		return usageError("fsck")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {
@@ -266,14 +317,17 @@ func parseChunkSelector(name string, args []string) (archive.Archive, model.Chun
 	fs.SetOutput(io.Discard)
 	archivePath := fs.String("archive", "", "archive directory")
 	server := fs.String("server", "", "stable server id")
-	dimension := fs.String("dimension", "overworld", "dimension id")
+	// Archives store the namespaced identifier a client reports. A bare
+	// "overworld" is a different string and matches nothing, so this default
+	// used to guarantee an empty answer for anyone who accepted it.
+	dimension := fs.String("dimension", defaultDimension, "dimension id")
 	x := fs.Int("x", 0, "chunk x")
 	z := fs.Int("z", 0, "chunk z")
 	if err := fs.Parse(args); err != nil {
 		return archive.Archive{}, model.ChunkRef{}, err
 	}
 	if *archivePath == "" || *server == "" {
-		return archive.Archive{}, model.ChunkRef{}, fmt.Errorf("usage: worldledger %s --archive DIR --server ID --dimension DIM --x X --z Z", name)
+		return archive.Archive{}, model.ChunkRef{}, usageError(name)
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {

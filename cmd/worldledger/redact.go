@@ -14,7 +14,7 @@ import (
 
 func cmdRedact(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: worldledger redact <set|list|withdraw|purge> --archive DIR [flags]")
+		return usageError("redact")
 	}
 	switch args[0] {
 	case "set":
@@ -74,7 +74,7 @@ func cmdRedactSet(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *server == "" {
-		return errors.New("usage: worldledger redact set --archive DIR --server ID --reason TEXT --declared-by NAME [--contributor NAME] [--dimension ID] [--region minX,minZ,maxX,maxZ]")
+		return usageError("redact set")
 	}
 
 	a, err := archive.Open(*archivePath)
@@ -113,7 +113,7 @@ func cmdRedactList(args []string) error {
 		return err
 	}
 	if *archivePath == "" {
-		return errors.New("usage: worldledger redact list --archive DIR")
+		return usageError("redact list")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {
@@ -149,7 +149,7 @@ func cmdRedactWithdraw(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *id == "" {
-		return errors.New("usage: worldledger redact withdraw --archive DIR --id ID")
+		return usageError("redact withdraw")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {
@@ -181,7 +181,7 @@ func cmdRedactPurge(args []string) error {
 		return err
 	}
 	if *archivePath == "" {
-		return errors.New("usage: worldledger redact purge --archive DIR [--yes]")
+		return usageError("redact purge")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {

@@ -24,7 +24,7 @@ func cmdFingerprint(args []string) error {
 	}
 	switch {
 	case *archivePath == "" && *file == "":
-		return errors.New("usage: worldledger fingerprint (--archive DIR | --file FILE) [--server ID] [--out FILE] [--compare FILE]")
+		return usageError("fingerprint")
 	case *archivePath != "" && *file != "":
 		return errors.New("give either --archive or --file, not both")
 	}

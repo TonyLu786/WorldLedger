@@ -15,7 +15,7 @@ import (
 
 func cmdIdentity(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: worldledger identity <create|list|remove> --archive DIR [flags]")
+		return usageError("identity")
 	}
 	switch args[0] {
 	case "create":
@@ -43,7 +43,7 @@ func cmdIdentityCreate(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *label == "" || *keyOut == "" || *declaredBy == "" {
-		return errors.New("usage: worldledger identity create --archive DIR --label NAME --declared-by NAME --key-out FILE")
+		return usageError("identity create")
 	}
 
 	// A key file that already exists is somebody's identity. Overwriting it
@@ -104,7 +104,7 @@ func cmdIdentityRegister(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *label == "" || *publicKey == "" || *declaredBy == "" {
-		return errors.New("usage: worldledger identity register --archive DIR --label NAME --public-key HEX --declared-by NAME [--note TEXT]")
+		return usageError("identity register")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {
@@ -137,7 +137,7 @@ func cmdIdentityList(args []string) error {
 		return err
 	}
 	if *archivePath == "" {
-		return errors.New("usage: worldledger identity list --archive DIR")
+		return usageError("identity list")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {
@@ -170,7 +170,7 @@ func cmdIdentityRemove(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *fingerprint == "" {
-		return errors.New("usage: worldledger identity remove --archive DIR --fingerprint FP")
+		return usageError("identity remove")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {
@@ -208,7 +208,7 @@ func cmdIdentityRemove(args []string) error {
 
 func cmdAttest(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: worldledger attest <sign|verify> --archive DIR [flags]")
+		return usageError("attest")
 	}
 	switch args[0] {
 	case "sign":
@@ -229,7 +229,7 @@ func cmdAttestSign(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *keyPath == "" {
-		return errors.New("usage: worldledger attest sign --archive DIR --key FILE")
+		return usageError("attest sign")
 	}
 
 	a, err := archive.Open(*archivePath)
@@ -299,7 +299,7 @@ func cmdAttestVerify(args []string) error {
 		return err
 	}
 	if *archivePath == "" {
-		return errors.New("usage: worldledger attest verify --archive DIR")
+		return usageError("attest verify")
 	}
 	a, err := archive.Open(*archivePath)
 	if err != nil {

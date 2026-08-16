@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -32,7 +31,7 @@ func cmdStatus(args []string) error {
 		return err
 	}
 	if *archivePath == "" {
-		return errors.New("usage: worldledger status --archive DIR [--spool DIR]")
+		return usageError("status")
 	}
 
 	a, err := archive.Open(*archivePath)

@@ -47,7 +47,7 @@ func cmdSeed(args []string) error {
 		return err
 	}
 	if *observations == "" {
-		return errors.New("usage: worldledger seed --observations FILE --operator NAME --accept-terms [--seed N | --from A --to B] [--out FILE]")
+		return usageError("seed")
 	}
 
 	input, err := seed.LoadInput(*observations)

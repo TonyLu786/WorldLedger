@@ -74,7 +74,7 @@ func cmdCoverage(args []string) error {
 	fs.SetOutput(io.Discard)
 	archivePath := fs.String("archive", "", "archive directory")
 	server := fs.String("server", "", "stable server id")
-	dimension := fs.String("dimension", "minecraft:overworld", "dimension id")
+	dimension := fs.String("dimension", defaultDimension, "dimension id")
 	moment := fs.String("at", "", "RFC3339 reconstruction time (default now)")
 	asJSON := fs.Bool("json", false, "emit the full per-chunk snapshot as JSON")
 	mapPath := fs.String("map", "", "write a PNG coverage map, one pixel per chunk")
@@ -83,7 +83,7 @@ func cmdCoverage(args []string) error {
 		return err
 	}
 	if *archivePath == "" || *server == "" {
-		return errors.New("usage: worldledger coverage --archive DIR --server ID --dimension DIM [--at TIME] [--json] [--map FILE]")
+		return usageError("coverage")
 	}
 
 	a, err := archive.Open(*archivePath)
@@ -93,6 +93,13 @@ func cmdCoverage(args []string) error {
 	snapshot, err := snapshotAt(a, *server, *dimension, *moment)
 	if err != nil {
 		return err
+	}
+	// Without this, a mistyped server name produced a full report reading
+	// "chunks 0" and exited successfully, which looks like an answer about the
+	// world rather than about the arguments. export and diff already say which
+	// of the four situations this is; there is no reason coverage should not.
+	if snapshot.Summary.Chunks == 0 {
+		return emptySelectionError(a, *server, *dimension, snapshot.At)
 	}
 
 	if *asJSON {
@@ -269,7 +276,7 @@ func cmdExport(args []string) error {
 		return err
 	}
 	if request.archivePath == "" || request.server == "" || request.into == "" {
-		return errors.New("usage: worldledger export --archive DIR --server ID --dimension DIM --into WORLD_DIR [--at TIME] [--overwrite]")
+		return usageError("export")
 	}
 
 	a, snapshot, prepared, err := request.plan()
@@ -301,7 +308,7 @@ func cmdConvert(args []string) error {
 		return err
 	}
 	if request.archivePath == "" || request.server == "" || request.into == "" || *targetProfile == "" {
-		return errors.New("usage: worldledger convert --archive DIR --server ID --dimension DIM --into WORLD_DIR --target-profile FILE [--rules FILE] [--on-unrepresentable POLICY]")
+		return usageError("convert")
 	}
 
 	a, snapshot, prepared, err := request.plan()

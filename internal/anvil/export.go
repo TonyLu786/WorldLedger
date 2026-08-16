@@ -200,16 +200,38 @@ func isDirectory(path string) bool {
 	return err == nil && info.IsDir()
 }
 
+// requireExistingWorld refuses to write into anything that is not already a
+// world.
+//
+// Export deliberately never generates level.dat: a world's seed, generator,
+// version and game rules are server state that was never observed, and writing
+// a plausible one would be inventing exactly the kind of data this project
+// refuses to invent. The consequence is that a target world has to exist first,
+// which is the last step of the path and the easiest place to be stranded, so
+// the message says what to do rather than naming an internal file.
 func requireExistingWorld(worldDir string) error {
 	if worldDir == "" {
 		return fmt.Errorf("a target world directory is required")
 	}
 	info, err := os.Stat(filepath.Join(worldDir, "level.dat"))
+	if os.IsNotExist(err) {
+		return fmt.Errorf(
+			"%s is not a Minecraft world yet, and export writes into one rather than creating it.\n\n"+
+				"WorldLedger never invents a world's seed, generator or game rules, because nobody\n"+
+				"observed them. So make the empty world first, then export into it:\n\n"+
+				"  1. In Minecraft: Singleplayer, Create New World, name it, Create.\n"+
+				"  2. Leave the world and quit to the title screen.\n"+
+				"  3. Point --into at that world's folder, which is\n"+
+				"     .minecraft/saves/<the name you chose>\n\n"+
+				"Observed chunks are written over the empty terrain; anything nobody saw is\n"+
+				"left untouched rather than filled in.",
+			worldDir)
+	}
 	if err != nil {
-		return fmt.Errorf("%s does not look like a Minecraft world: %w", worldDir, err)
+		return fmt.Errorf("cannot read the world at %s: %w", worldDir, err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("%s contains a level.dat directory", worldDir)
+		return fmt.Errorf("%s contains a level.dat directory rather than a level.dat file", worldDir)
 	}
 	return nil
 }
