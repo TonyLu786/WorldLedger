@@ -357,7 +357,13 @@ if ($ready -eq 0) {
     Fail "the run produced no bundles, so it proved nothing; log: $log"
 }
 
-Step "Passed. Log: $log"
-Write-Host ''
-Write-Host 'Now check the capture fingerprint has not moved:'
-Write-Host '  powershell -ExecutionPolicy Bypass -File scripts\windows-capture-fingerprint.ps1 -SkipGameTest'
+Step 'Game test passed; checking the capture fingerprint has not moved'
+
+# Printing the next command to run rather than running it left the one check
+# that matters outside the automation: whether what was captured still
+# canonicalizes to the committed bytes. The spool this just produced is exactly
+# what that check wants, so -SkipGameTest reuses it instead of playing again.
+& powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'windows-capture-fingerprint.ps1') -SkipGameTest
+if ($LASTEXITCODE -ne 0) { Fail "the capture fingerprint check failed; game test log: $log" }
+
+Step "Passed, fingerprint included. Log: $log"

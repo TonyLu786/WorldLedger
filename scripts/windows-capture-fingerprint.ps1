@@ -113,10 +113,33 @@ if ($LASTEXITCODE -ne 0) { Fail 'could not write the fingerprint' }
 
 Remove-Item -LiteralPath $archive -Recurse -Force -ErrorAction SilentlyContinue
 
+# The committed reference is the gate CI enforces on every push, and until now
+# running this by hand stopped one step short of it: it wrote a file and left
+# the comparison to whoever remembered. A capture that moved is exactly what
+# nobody notices by reading a digest.
+$reference = Join-Path $repository 'testdata\capture-fingerprint-reference.txt'
+if (Test-Path -LiteralPath $reference) {
+    Step 'Comparing against the committed reference.'
+    & $worldledger fingerprint --file $Out --compare $reference
+    if ($LASTEXITCODE -ne 0) {
+        Fail @"
+this capture does not match testdata\capture-fingerprint-reference.txt.
+
+    Either the encoder changed what it writes, which is a specification-level
+    decision and needs one, or the game test observed a different world. Do not
+    update the reference to make this pass without knowing which.
+"@
+    }
+    Write-Host ''
+    Write-Host "Fingerprint written to $Out and matches the committed reference."
+} else {
+    Write-Host ''
+    Write-Host "Fingerprint written to $Out"
+    Write-Host 'There is no committed reference to compare against yet.'
+}
+
 Write-Host ''
-Write-Host "Fingerprint written to $Out"
-Write-Host ''
-Write-Host 'Compare it against the Linux half, downloaded from the linux-capture-fingerprint'
-Write-Host 'artifact of any successful ci run:'
+Write-Host 'To compare against the Linux half instead, downloaded from the'
+Write-Host 'linux-capture-fingerprint artifact of any successful ci run:'
 Write-Host ''
 Write-Host "  bin\worldledger.exe fingerprint --file `"$Out`" --compare linux-capture-fingerprint.txt"
