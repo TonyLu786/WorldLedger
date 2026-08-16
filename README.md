@@ -17,6 +17,47 @@ The Fabric process never opens or mutates an archive. The Go importer is the onl
 
 > **Development status.** The archive core, canonical encoders and decoders, epoch selection, Anvil export, release profiles, and publication policy are implemented and automatically tested. Reconstruction has been verified end to end against an unmodified Minecraft 26.2 client: an exported chunk loads and renders correctly, including negative sections and block state properties. Capture has been exercised against a real 26.2 client as well, and the client game test runs headless in Linux CI on every push. A Windows capture and a Linux capture of the same pinned world have been compared and canonicalized to byte-identical results, so the encoding is platform independent by measurement rather than by construction; that reference is committed and CI fails on a future divergence. See [`docs/status.md`](docs/status.md) for every claim and the evidence behind it, and [`CHANGELOG.md`](CHANGELOG.md) for what a given build contains.
 
+## Quickstart
+
+Six steps from nothing to a world you can walk around in.
+
+**1. Install.** Fabric Loader 0.19.3 and Fabric API for Minecraft 26.2, then the mod JAR from the [releases page](https://github.com/TonyLu786/WorldLedger/releases) into `.minecraft/mods`. Take the `worldledger` archive for your platform from the same page and unpack it anywhere.
+
+**2. Turn capture on.** Start the client once, then open `.minecraft/config/worldledger/capture.properties` and put your name in:
+
+```properties
+contributor=alice
+```
+
+**3. Reload and play.** Back in the client, run `/worldledger reload`, then join a multiplayer server and play normally. `/worldledger status` says whether it is recording and how much it has. Capture never touches the server or the world; it records the chunks the server already sent you.
+
+**4. Import what you captured.** After you disconnect:
+
+```sh
+worldledger init ./archive
+worldledger ingest-spool --archive ./archive
+```
+
+The spool is found under your Minecraft directory automatically, and the command prints which one it used.
+
+**5. Decide what may be shared.** An archive holds where you went and when. Nothing can be exported until someone has said what may happen to it:
+
+```sh
+worldledger policy set --archive ./archive --server example.org \
+    --disposition private --declared-by alice
+```
+
+**6. Make a world.** In Minecraft, create a new empty single-player world and quit to the title screen. Then write your observations into it:
+
+```sh
+worldledger export --archive ./archive --server example.org \
+    --into .minecraft/saves/<the world you just made>
+```
+
+Open that world. The chunks you saw are there; the ones nobody saw are left as the empty world generated them, because an archive that guesses is not an archive.
+
+Every command answers `--help`, and each one ends by naming the next.
+
 ## What makes this different from a world downloader
 
 A world downloader saves what one player can see, once, overwriting whatever it saw before. WorldLedger keeps three things such a tool structurally cannot:
@@ -25,62 +66,13 @@ A world downloader saves what one player can see, once, overwriting whatever it 
 - **Provenance and disagreement.** Many contributors can cover one server. When they disagree, both states are kept and labelled, and the selection policy is explicit.
 - **Honest unknowns.** A component that was never observed is absent, not defaulted. An export leaves unobserved chunks unwritten instead of filling them with air.
 
-## Design rules
-
-1. Observed state is not authoritative server state.
-2. Unknown state is not a default value.
-3. Conflicts remain first-class data; the core does not vote them away.
-4. Canonical uncompressed bytes are hashed before any storage codec.
-5. Provenance remains attached to every observation.
-6. Capture adapters never write archive internals.
-7. Normal client visibility is the collection boundary.
-
 ## Install
 
 Prebuilt archives for Windows, Linux, and macOS are on the [releases page](https://github.com/TonyLu786/WorldLedger/releases). Each carries the `worldledger` binary, the committed release profiles, and every document this README links to, so the copy you download is readable offline and none of its links go nowhere. The Fabric mod JAR is published alongside them, and there is exactly one: installing a sources JAR by mistake fails silently. Every file has a `.sha256` beside it.
 
-## Build from source
-
-The archive core requires Go 1.23 or newer.
-
-```sh
-go test ./...
-go vet ./...
-go build -trimpath -o bin/worldledger ./cmd/worldledger
-```
-
-On Windows PowerShell:
-
-```powershell
-go build -trimpath -o .\bin\worldledger.exe .\cmd\worldledger
-```
-
-The Fabric adapter requires a Java 25 JDK:
-
-```sh
-cd adapters/fabric
-./gradlew clean build --warning-mode all
-```
-
-The installable mod JAR is written to `adapters/fabric/build/libs/worldledger-fabric-0.1.0-dev.jar`.
-
-### Supported Fabric baseline
-
-```text
-Minecraft      26.2          (data version 4903)
-Java           25
-Fabric Loader  0.19.3
-Fabric API     0.156.0+26.2
-Fabric Loom    1.17.17
-Gradle         9.7.0 (wrapper, checksum-pinned)
-Names          native Mojang names used by 26.2
-```
-
-All values are exact build inputs in [`adapters/fabric/gradle.properties`](adapters/fabric/gradle.properties) and the Gradle wrapper configuration.
-
 ## Capture
 
-Install the built mod with the exact Fabric Loader and Fabric API versions above. On first client start the adapter creates `<minecraft-config>/worldledger/capture.properties`:
+Install the mod with the exact Fabric Loader and Fabric API versions in [Supported Fabric baseline](#supported-fabric-baseline). On first client start the adapter creates `<minecraft-config>/worldledger/capture.properties`:
 
 ```properties
 contributor=alice
@@ -90,9 +82,19 @@ queue_capacity=32
 max_snapshots_per_tick=1
 ```
 
-Set a non-blank contributor and restart the client. Leaving `server_id` blank uses the normalized multiplayer server address; leaving `contributor` blank disables capture. Ready bundles appear under `<minecraft-config>/worldledger/spool/ready-<session-uuid>-<sequence>`.
+Set a non-blank contributor and run `/worldledger reload`. Leaving `server_id` blank uses the normalized multiplayer server address; leaving `contributor` blank disables capture. Ready bundles appear under `<minecraft-config>/worldledger/spool/ready-<session-uuid>-<sequence>`.
 
-The adapter says what it is doing in chat when you join a multiplayer server: that capture is off and which file to edit, or that it is running and under whose name. The next join reports what the previous session captured, including anything dropped, because a disconnect leaves no screen to write to. Single-player is ignored silently, since it is out of scope and saying so every time would be noise.
+`coalesce_ticks` and `queue_capacity` are read once when capture starts and are the two settings a reload cannot change; the reload notice says so rather than leaving you to discover it.
+
+| command | |
+|---|---|
+| `/worldledger` or `/worldledger status` | whether capture is on, under whose name, what this session has taken, and how many bundles are waiting |
+| `/worldledger spool` | where the captures are and the command that imports them |
+| `/worldledger reload` | re-read `capture.properties` without restarting |
+
+These are client commands. They are handled locally, work on any server including one that has never heard of this mod, and need no permission.
+
+The adapter also speaks up in chat when you join: that capture is off and which file to edit, or that it is running and under whose name. The next join reports what the previous session captured, including anything dropped and where it went, because a disconnect leaves no screen to write to. Single-player is ignored silently, since it is out of scope and saying so every time would be noise.
 
 The adapter is client-only, has no server entrypoint, and does not capture single-player worlds. See [`adapters/fabric/README.md`](adapters/fabric/README.md).
 
@@ -100,9 +102,11 @@ The adapter is client-only, has no server entrypoint, and does not capture singl
 
 ```sh
 worldledger init ./archive
-worldledger ingest-spool --archive ./archive <minecraft-config>/worldledger/spool
+worldledger ingest-spool --archive ./archive
 worldledger status --archive ./archive
 ```
+
+`ingest-spool` finds the spool under the usual Minecraft directory for your platform and prints which one it used. Pass a directory to override it, which is what a second Minecraft installation or a copied spool needs.
 
 `status` answers what the archive holds and what has to happen next: how much was captured, which servers have a publication decision and which do not, and what to run about it. Pass `--spool` as well and it reports how many bundles are still waiting to be taken in.
 
@@ -269,6 +273,55 @@ Writes an approximated copy into a separate world, leaving the faithful export u
 `worldledger seed` searches for structure placement parameters consistent with structures you supply. It prints a responsibility notice and refuses to run until someone accepts it by name, and that name is written into every result it produces.
 
 It models structure placement only, so what it reports are candidates and structure seeds rather than a world seed. Read [`docs/seed-recovery.md`](docs/seed-recovery.md) for what it does and does not do, and [`docs/trust-model.md`](docs/trust-model.md) for why the exposure this concerns comes from publishing observations at all, not from this tool existing.
+
+## Design rules
+
+1. Observed state is not authoritative server state.
+2. Unknown state is not a default value.
+3. Conflicts remain first-class data; the core does not vote them away.
+4. Canonical uncompressed bytes are hashed before any storage codec.
+5. Provenance remains attached to every observation.
+6. Capture adapters never write archive internals.
+7. Normal client visibility is the collection boundary.
+
+## Build from source
+
+The archive core requires Go 1.23 or newer.
+
+```sh
+go test ./...
+go vet ./...
+go build -trimpath -o bin/worldledger ./cmd/worldledger
+```
+
+On Windows PowerShell:
+
+```powershell
+go build -trimpath -o .\bin\worldledger.exe .\cmd\worldledger
+```
+
+The Fabric adapter requires a Java 25 JDK:
+
+```sh
+cd adapters/fabric
+./gradlew clean build --warning-mode all
+```
+
+The installable mod JAR is written to `adapters/fabric/build/libs/worldledger-fabric-0.1.0-dev.jar`.
+
+### Supported Fabric baseline
+
+```text
+Minecraft      26.2          (data version 4903)
+Java           25
+Fabric Loader  0.19.3
+Fabric API     0.156.0+26.2
+Fabric Loom    1.17.17
+Gradle         9.7.0 (wrapper, checksum-pinned)
+Names          native Mojang names used by 26.2
+```
+
+All values are exact build inputs in [`adapters/fabric/gradle.properties`](adapters/fabric/gradle.properties) and the Gradle wrapper configuration.
 
 ## Release profiles
 

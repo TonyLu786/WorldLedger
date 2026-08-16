@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### The mod tells you what it is doing
+
+Everything the adapter did was reported in one chat line on join and then never
+again, which is no use to someone who wants to know now. There are now client
+commands, handled locally, working on any server, needing no permission:
+
+- **`/worldledger`** or **`/worldledger status`** — whether capture is on and
+  under whose name, what this session has taken, how many bundles are waiting,
+  and where they are. When capture is off it names the file that turns it on.
+- **`/worldledger spool`** — the spool path and the command that imports it.
+- **`/worldledger reload`** — re-read `capture.properties` without restarting
+  the client, which used to be required for a one-word edit. `coalesce_ticks`
+  and `queue_capacity` are consumed when capture starts and are the two a
+  reload cannot change, so the notice names them instead of implying otherwise.
+
+A finished session now says where its chunks went. The spool path previously
+appeared only when the spool was full, so the ordinary outcome of a good session
+was a chunk count and no way to find the chunks.
+
+What a player is shown lives in `CaptureStatus` and `CaptureNotices`, which
+carry no Minecraft types and are tested without a client.
+
 ### Capture asks the client thread for far less
 
 A section where every block is the same is stored by Minecraft with a
@@ -35,6 +57,41 @@ work: less garbage makes a collection rarer without making one shorter. At
 one tick still accounts for 22% of everything the session spent on capture.
 Whether that is a once-per-session cost or something that recurs is not
 something a maximum can answer.
+
+### The command line answers the questions people actually ask
+
+Walking the path from an empty directory to a world turned up defects rather
+than only rough edges.
+
+- **Two commands could not work as documented.** `inspect` and `verify`
+  defaulted `--dimension` to `overworld`, and an archive stores the namespaced
+  `minecraft:overworld` a client reports, so accepting the default was
+  guaranteed to match nothing; `inspect` then printed a bare `null`. Every
+  command now defaults through one constant, checked by a test that reads the
+  sources.
+- **`coverage` reported a mistyped server name as `chunks 0` and exited
+  successfully**, which reads as an answer about the world rather than about the
+  arguments. It now names the servers the archive holds, as `export` and `diff`
+  already did.
+- **`--help` and `-h` returned an error on twenty of twenty-one commands.**
+  Usage now lives in one place, is what both a missing flag and `--help` report,
+  and goes to stdout with a zero exit. A test reads the dispatch table, so a
+  command added later cannot arrive without either. An unknown command suggests
+  the nearest one, and says nothing rather than guessing when nothing is close.
+- **Opening something that is not an archive** named `VERSION`, an internal
+  file. It now names the directory and the `init` line.
+- **The last step was the worst.** Following every instruction correctly ended
+  at `does not look like a Minecraft world: CreateFile ...level.dat`. Export
+  writes into a world rather than creating one because a seed and generator were
+  never observed, and inventing them is the thing this project refuses to do.
+  That reason, and the three steps that get past it, are now in the message.
+
+The path also narrates itself. `init` names the import command; `ingest-spool`
+finds the spool under the usual Minecraft directory for the platform, prints
+which one it chose, and can still be pointed elsewhere; it and `policy set` end
+by naming what comes next with real paths filled in. The publication decision is
+not automated away — it is a decision someone has to make — it is only announced
+before it blocks anything.
 
 ### `diff` says what changed between two moments, and what it cannot say
 

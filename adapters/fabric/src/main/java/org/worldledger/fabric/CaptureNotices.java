@@ -87,4 +87,41 @@ public final class CaptureNotices {
 	public static String previousSessionEmpty() {
 		return PREFIX + "Last session captured nothing. No chunk stayed loaded long enough to snapshot.";
 	}
+
+	/**
+	 * Where the captures went, and the command that turns them into a world.
+	 *
+	 * <p>Until now the spool path only appeared when the spool was full, so the
+	 * ordinary outcome of a successful session was a chunk count and no way to
+	 * find the chunks. A player who cannot locate what they captured has an
+	 * archive tool that did nothing for them.
+	 */
+	public static String whereCapturesWent(Path spoolDirectory) {
+		return PREFIX + "They are in " + spoolDirectory
+				+ ". Turn them into a world with: worldledger ingest-spool --archive ./archive "
+				+ spoolDirectory;
+	}
+
+	/**
+	 * Shown after /worldledger reload.
+	 *
+	 * <p>Two settings are not re-read: coalesce_ticks sizes the tracker and
+	 * queue_capacity sizes the queue, and both are built when capture starts.
+	 * Naming them is the difference between a reload a player can rely on and
+	 * one that silently ignores half the file.
+	 */
+	public static String reloaded(String contributor) {
+		String caveat = " coalesce_ticks and queue_capacity still need a client restart.";
+		if (contributor.isEmpty()) {
+			return PREFIX + "Reloaded. No contributor is set, so capture stays off." + caveat;
+		}
+		return PREFIX + "Reloaded. Capturing as " + contributor
+				+ " from the next server you join." + caveat;
+	}
+
+	/** Shown when the configuration file could not be read on reload. */
+	public static String reloadFailed(Path configurationFile, String reason) {
+		return PREFIX + "Could not read " + configurationFile + ": " + reason
+				+ ". The previous settings are still in use.";
+	}
 }

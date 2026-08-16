@@ -1,5 +1,7 @@
 package org.worldledger.fabric;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -87,7 +89,13 @@ final class CaptureCoordinator {
 
 	}
 
-	private final CaptureConfiguration configuration;
+	/**
+	 * Re-read by {@link #reload()}. Only coalesceTicks and queueCapacity are
+	 * consumed at construction, so everything else takes effect without a
+	 * restart; the notice sent to the player names those two rather than
+	 * implying the whole file reloads.
+	 */
+	private CaptureConfiguration configuration;
 	private final Path configurationFile;
 	private final Path spoolDirectory;
 	private final DirtyChunkTracker dirtyChunks;
@@ -130,6 +138,57 @@ final class CaptureCoordinator {
 							job.chunk().z(),
 							exception);
 				});
+	}
+
+	/**
+	 * Re-reads the configuration file and reports what a player should be told.
+	 *
+	 * <p>A failure leaves the previous settings in place. Capture running under
+	 * the settings it started with is a better outcome than capture stopping
+	 * because a file was being edited when this ran.
+	 */
+	String reload() {
+		try {
+			configuration = CaptureConfiguration.loadOrCreate(configurationFile.getParent());
+		} catch (IOException | RuntimeException exception) {
+			LOGGER.warn("Could not reload {}", configurationFile, exception);
+			return CaptureNotices.reloadFailed(configurationFile, String.valueOf(exception.getMessage()));
+		}
+		LOGGER.info("Reloaded capture configuration from {}", configurationFile);
+		return CaptureNotices.reloaded(configuration.contributor());
+	}
+
+	/**
+	 * What capture is doing, for a player who is standing there wondering.
+	 *
+	 * <p>The spool is counted on the calling thread, which is the client thread.
+	 * It is a directory listing of a few dozen entries in answer to something
+	 * the player just typed, rather than anything on the capture path.
+	 */
+	CaptureStatus status() {
+		ActiveSession current = session;
+		return new CaptureStatus(
+				configuration.enabled(),
+				configuration.contributor(),
+				current == null ? "" : current.serverId,
+				current == null ? 0L : current.enqueued,
+				current == null ? 0L : current.droppedCoverage,
+				queue.pending(),
+				countReadyBundles(),
+				spoolDirectory,
+				configurationFile,
+				spoolExhausted == null ? "" : spoolExhausted);
+	}
+
+	private int countReadyBundles() {
+		try (var entries = Files.list(spoolDirectory)) {
+			return (int) entries.filter(path -> path.getFileName().toString().startsWith("ready-")).count();
+		} catch (IOException exception) {
+			// A spool that cannot be listed is worth knowing about but not worth
+			// failing a status request over.
+			LOGGER.warn("Could not list {}", spoolDirectory, exception);
+			return 0;
+		}
 	}
 
 	/**
@@ -349,9 +408,15 @@ final class CaptureCoordinator {
 				session.slowTicks);
 		CaptureTiming.publish(timing);
 		LOGGER.info("Client-thread capture cost: {}", timing.describe());
-		previousSessionNotice = session.enqueued == 0
-				? CaptureNotices.previousSessionEmpty()
-				: CaptureNotices.previousSession(session.enqueued, session.droppedCoverage, session.snapshotFailures);
+		if (session.enqueued == 0) {
+			previousSessionNotice = CaptureNotices.previousSessionEmpty();
+		} else {
+			// The count on its own leaves a player holding chunks they cannot
+			// find, so the path and the command that uses it go with it.
+			previousSessionNotice = CaptureNotices.previousSession(
+					session.enqueued, session.droppedCoverage, session.snapshotFailures)
+					+ "\n" + CaptureNotices.whereCapturesWent(spoolDirectory);
+		}
 		dirtyChunks.clear();
 		blockEntities.clear();
 		session = null;

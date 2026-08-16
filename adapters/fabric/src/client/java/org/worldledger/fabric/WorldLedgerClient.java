@@ -8,5 +8,9 @@ public final class WorldLedgerClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		CapturePaths paths = CapturePaths.fromFabricConfigDirectory(FabricLoader.getInstance().getConfigDir());
 		WorldLedgerRuntime.initialize(paths);
+		// Registered here rather than inside the runtime's background bootstrap,
+		// because command registration has to have happened before the player can
+		// type anything, and the runtime deliberately starts off the client thread.
+		CaptureCommands.register();
 	}
 }

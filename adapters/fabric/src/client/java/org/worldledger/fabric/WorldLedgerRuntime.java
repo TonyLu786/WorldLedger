@@ -48,6 +48,25 @@ public final class WorldLedgerRuntime {
 		}
 	}
 
+	/**
+	 * What capture is doing, or null while the runtime is still starting.
+	 *
+	 * <p>Bootstrap runs on its own thread so a slow disk cannot delay the title
+	 * screen, which means a command typed early can arrive before there is
+	 * anything to report. Saying so is better than reporting a state that is
+	 * merely the absence of one.
+	 */
+	public static CaptureStatus status() {
+		CaptureCoordinator coordinator = COORDINATOR.get();
+		return coordinator == null ? null : coordinator.status();
+	}
+
+	/** Re-reads the configuration file, or null if there is nothing to reload yet. */
+	public static String reload() {
+		CaptureCoordinator coordinator = COORDINATOR.get();
+		return coordinator == null ? null : coordinator.reload();
+	}
+
 	public static void onBlockUpdate(ClientboundBlockUpdatePacket packet) {
 		CaptureCoordinator coordinator = COORDINATOR.get();
 		if (coordinator != null) {
