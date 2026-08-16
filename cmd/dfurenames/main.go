@@ -21,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -71,13 +72,24 @@ func main() {
 }
 
 func run() error {
-	jar := flag.String("jar", "", "Mojang-mapped Minecraft jar")
-	javap := flag.String("javap", "javap", "javap executable")
-	source := flag.String("source", "", "source release label, for example 26.2")
-	out := flag.String("out", "", "output path")
-	flag.Parse()
+	const usage = "usage: dfurenames --jar <jar> --source <release> --out <file.json> [--javap <path>]"
+	// The flag package would otherwise answer with the binary's path, which under
+	// go run is a temporary build directory, and a bare list of flags.
+	fs := flag.NewFlagSet("dfurenames", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	jar := fs.String("jar", "", "Mojang-mapped Minecraft jar")
+	javap := fs.String("javap", "javap", "javap executable")
+	source := fs.String("source", "", "source release label, for example 26.2")
+	out := fs.String("out", "", "output path")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Println(usage)
+			return nil
+		}
+		return fmt.Errorf("%w\n\n%s", err, usage)
+	}
 	if *jar == "" || *out == "" || *source == "" {
-		return errors.New("usage: dfurenames --jar <jar> --source <release> --out <file.json> [--javap <path>]")
+		return errors.New(usage)
 	}
 
 	// Static rename tables referenced by the fixer list live in their own

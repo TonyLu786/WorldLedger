@@ -49,13 +49,20 @@ func main() {
 func run(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("mcjava-fixtures", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	const usage = "usage: go run ./cmd/mcjava-fixtures [--root DIR] [--write]"
 	root := flags.String("root", ".", "repository root")
 	write := flags.Bool("write", false, "rewrite committed outputs")
 	if err := flags.Parse(args); err != nil {
-		return err
+		// Being asked for help is not a failure. Without this it exits 1 with
+		// "flag: help requested", which reads as a broken tool.
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(stdout, usage)
+			return nil
+		}
+		return fmt.Errorf("%w\n\n%s", err, usage)
 	}
 	if flags.NArg() != 0 {
-		return errors.New("usage: go run ./cmd/mcjava-fixtures [--root DIR] [--write]")
+		return errors.New(usage)
 	}
 
 	fixtureDir := filepath.Join(*root, "testdata", "mcjava-v1")

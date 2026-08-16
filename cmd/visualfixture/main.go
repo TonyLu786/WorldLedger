@@ -30,6 +30,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -51,18 +52,29 @@ func main() {
 }
 
 func run() error {
-	out := flag.String("out", "", "bundle directory to create")
-	profilePath := flag.String("profile", filepath.Join("profiles", "minecraft-java-26.2.json"), "release profile used to check every block exists")
-	contributor := flag.String("contributor", "visual-check", "contributor id")
-	server := flag.String("server", "worldledger-visual-check", "server id")
+	const usage = "usage: visualfixture --out <bundle-dir> [--profile FILE]"
+	// The flag package would otherwise answer with the binary's path, which under
+	// go run is a temporary build directory, and a bare list of flags.
+	fs := flag.NewFlagSet("visualfixture", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	out := fs.String("out", "", "bundle directory to create")
+	profilePath := fs.String("profile", filepath.Join("profiles", "minecraft-java-26.2.json"), "release profile used to check every block exists")
+	contributor := fs.String("contributor", "visual-check", "contributor id")
+	server := fs.String("server", "worldledger-visual-check", "server id")
 	// Placing the pattern far from spawn keeps it in a region file an existing
 	// world does not have yet, so exporting into that world adds a file instead
 	// of replacing one that already holds generated terrain.
-	chunkX := flag.Int("chunk-x", 0, "chunk x coordinate")
-	chunkZ := flag.Int("chunk-z", 0, "chunk z coordinate")
-	flag.Parse()
+	chunkX := fs.Int("chunk-x", 0, "chunk x coordinate")
+	chunkZ := fs.Int("chunk-z", 0, "chunk z coordinate")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Println(usage)
+			return nil
+		}
+		return fmt.Errorf("%w\n\n%s", err, usage)
+	}
 	if *out == "" {
-		return errors.New("usage: visualfixture --out <bundle-dir> [--profile FILE]")
+		return errors.New(usage)
 	}
 
 	profile, err := mcprofile.Load(*profilePath)
