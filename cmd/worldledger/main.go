@@ -80,6 +80,8 @@ func run(args []string) error {
 		return cmdFingerprint(args[1:])
 	case "redact":
 		return cmdRedact(args[1:])
+	case "landmark":
+		return cmdLandmark(args[1:])
 	case "identity":
 		return cmdIdentity(args[1:])
 	case "attest":
@@ -362,6 +364,7 @@ func usage(w io.Writer) {
 		"Deciding what may be shared:",
 		"  worldledger policy <show|set|list> --archive <archive-dir> [flags]",
 		"  worldledger redact <set|list|withdraw|purge> --archive <archive-dir> [flags]",
+		"  worldledger landmark <set|list|remove> --archive <archive-dir> [flags]",
 		"",
 		"Exchanging with another archive:",
 		"  worldledger manifest --archive <archive-dir> [--out <file>] [--compare <file>]",

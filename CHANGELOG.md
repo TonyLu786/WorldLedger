@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### `landmark` gives places names, so coverage can use them
+
+A chunk coordinate is not how anybody thinks about where they have been.
+`coverage` reported "157 chunks, x -3..3, z -3..3" where a person would say
+"spawn", and an archive full of real exploration read like a spreadsheet.
+
+`worldledger landmark set` names an area, and `coverage` then reports each one:
+`spawn  all 25 chunk(s)`, `far east  none of its 121 chunk(s)`. Pass
+`--landmark` to scope a report to one.
+
+A landmark is a declaration, not an observation, which is why it lives beside
+publication policies and redactions rather than on a chunk. An observation is
+evidence that a client saw certain bytes at an instant; a landmark is somebody
+asserting that an area means something, and letting the second be mistaken for
+the first would put an opinion into the record of what was seen. Every landmark
+records who declared it, an unattributed one is refused, and removing one
+touches nothing observed.
+
+Landmarks stay local. A transfer bundle carries observations, and a name
+somebody chose for a place is not one.
+
+Identity is the server, dimension and folded name, so declaring "Spawn" over
+"spawn" moves the existing landmark rather than leaving two with one name. The
+bounds deliberately do not reach the identity: moving a landmark is editing it.
+
+A chunk-coordinate box is now `model.ChunkBounds`, shared with redaction, which
+names an area for the opposite reason. It replaced a second copy of the type and
+a second parser, and is named to avoid the Anvil region file that `Region`
+already means here.
+
 ### `epoch` records what an archive says a moment looked like
 
 An exported world carries no record of where it came from. Two people can

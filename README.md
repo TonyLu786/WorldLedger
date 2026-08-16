@@ -150,6 +150,27 @@ Pass `--from` and `--to` for an explicit interval, or `--since 30m` to measure b
 
 Add `--json` for the whole comparison, including every observation made during the interval.
 
+### Name the places you have been
+
+```sh
+worldledger landmark set --archive ./archive --server example.org     --name spawn --region -2,-2,2,2 --declared-by alice
+worldledger coverage --archive ./archive --server example.org
+```
+
+A chunk coordinate is not how anybody thinks about where they have been. `coverage` reported "157 chunks, x -3..3, z -3..3" where a person would say "spawn". With landmarks declared it also reports:
+
+```text
+landmarks
+  far east                 none of its 121 chunk(s)
+  spawn                    all 25 chunk(s)
+```
+
+Pass `--landmark spawn` to scope a report to one of them.
+
+A landmark is a declaration, not an observation, and that distinction is why it is stored beside publication policies and redactions rather than on a chunk. An observation is evidence that a client saw certain bytes at a certain instant; a landmark is somebody asserting that an area means something. Each one records who declared it, and removing one touches nothing that was observed.
+
+Landmarks are local. A transfer bundle carries observations, and a name somebody chose for a place is not one, so two archives that merged everything they saw still each keep their own names for it.
+
 ### Record what a moment looked like
 
 ```sh

@@ -86,7 +86,7 @@ Pulled ahead of Phase 4 deliberately. Accumulated observations make a server's g
 - [x] object existence negotiation
 - [ ] resumable upload protocol
 - [ ] server registry and aliases
-- [ ] collection/landmark metadata
+- [x] collection/landmark metadata
 - [x] archive epoch manifests
 - [x] mirror-friendly immutable bundles
 
@@ -97,6 +97,8 @@ What signing does not do is worth repeating here. It proves a key asserted somet
 Transfer bundles carry the result. A bundle is an ordinary directory that can be copied by any means, and the receiver verifies every byte against the digest the bundle declares rather than trusting where it came from. Two real archives holding 158 and 40 observations were merged this way in both directions and ended on the same manifest root, having never shared a database.
 
 An epoch manifest is what an archive says the world was at one moment: every chunk position, the state chosen there, and a root digest over the two. It closes a gap an exported world leaves open, since a world carries no record of the archive, instant or policy that produced it. Its root covers positions and states and nothing else, so two archives that would export the same world agree on one value whoever observed it and however well attested it is; differences in confidence are reported apart from differences in the world.
+
+A landmark names an area of one dimension of one server, so coverage can report "all 25 chunks of spawn" rather than a range of coordinates. It is a declaration rather than an observation and is stored with the publication policies for that reason: an observation is evidence, a landmark is an assertion, and letting the second be mistaken for the first would put an opinion in the record of what was seen. Landmarks stay local, because a transfer bundle carries observations and a name somebody chose is not one.
 
 The two that remain need a service to exist first. A resumable upload protocol has nothing to resume against, and a server registry with no servers registering is a schema rather than a feature.
 

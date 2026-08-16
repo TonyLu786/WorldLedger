@@ -38,28 +38,6 @@ import (
 const Schema = "worldledger.redaction/v1"
 
 // Region is an inclusive rectangle of chunk coordinates.
-type Region struct {
-	MinX int32 `json:"min_x"`
-	MinZ int32 `json:"min_z"`
-	MaxX int32 `json:"max_x"`
-	MaxZ int32 `json:"max_z"`
-}
-
-func (r Region) Contains(x, z int32) bool {
-	return x >= r.MinX && x <= r.MaxX && z >= r.MinZ && z <= r.MaxZ
-}
-
-func (r Region) Validate() error {
-	if r.MinX > r.MaxX || r.MinZ > r.MaxZ {
-		return fmt.Errorf("region has an inverted bound: (%d,%d) to (%d,%d)", r.MinX, r.MinZ, r.MaxX, r.MaxZ)
-	}
-	return nil
-}
-
-func (r Region) String() string {
-	return fmt.Sprintf("chunks (%d,%d) to (%d,%d)", r.MinX, r.MinZ, r.MaxX, r.MaxZ)
-}
-
 // Redaction withholds the observations it matches from anything the archive
 // builds for sharing.
 //
@@ -72,14 +50,14 @@ type Redaction struct {
 	// ID is derived from the scope, so declaring the same scope twice replaces
 	// the record instead of accumulating duplicates that would each have to be
 	// withdrawn separately.
-	ID          string    `json:"id"`
-	Server      string    `json:"server"`
-	Contributor string    `json:"contributor,omitempty"`
-	Dimension   string    `json:"dimension,omitempty"`
-	Region      *Region   `json:"region,omitempty"`
-	Reason      string    `json:"reason"`
-	DeclaredBy  string    `json:"declared_by"`
-	DeclaredAt  time.Time `json:"declared_at"`
+	ID          string             `json:"id"`
+	Server      string             `json:"server"`
+	Contributor string             `json:"contributor,omitempty"`
+	Dimension   string             `json:"dimension,omitempty"`
+	Region      *model.ChunkBounds `json:"region,omitempty"`
+	Reason      string             `json:"reason"`
+	DeclaredBy  string             `json:"declared_by"`
+	DeclaredAt  time.Time          `json:"declared_at"`
 }
 
 func (r Redaction) Validate() error {

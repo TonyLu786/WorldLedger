@@ -49,7 +49,7 @@ func TestContributorScopeIgnoresCaseAndSurroundingSpace(t *testing.T) {
 func TestRegionScopeCoversItsBoundsInclusively(t *testing.T) {
 	redaction := declaration(Redaction{
 		Server: "example.org",
-		Region: &Region{MinX: -2, MinZ: -2, MaxX: 2, MaxZ: 2},
+		Region: &model.ChunkBounds{MinX: -2, MinZ: -2, MaxX: 2, MaxZ: 2},
 	})
 
 	inside := [][2]int32{{-2, -2}, {2, 2}, {0, 0}, {-2, 2}}
@@ -70,7 +70,7 @@ func TestRegionScopeCanBeLimitedToOneDimension(t *testing.T) {
 	redaction := declaration(Redaction{
 		Server:    "example.org",
 		Dimension: "minecraft:the_nether",
-		Region:    &Region{MinX: 0, MinZ: 0, MaxX: 0, MaxZ: 0},
+		Region:    &model.ChunkBounds{MinX: 0, MinZ: 0, MaxX: 0, MaxZ: 0},
 	})
 	if !redaction.Matches(observation("example.org", "minecraft:the_nether", "anyone", 0, 0)) {
 		t.Fatal("the nether observation was not matched")
@@ -109,7 +109,7 @@ func TestValidationRequiresAttributionAndAReason(t *testing.T) {
 		"no reason":      {Schema: Schema, Server: "s", DeclaredBy: "d", DeclaredAt: time.Now()},
 		"inverted region": {
 			Schema: Schema, Server: "s", Reason: "r", DeclaredBy: "d", DeclaredAt: time.Now(),
-			Region: &Region{MinX: 5, MinZ: 0, MaxX: -5, MaxZ: 0},
+			Region: &model.ChunkBounds{MinX: 5, MinZ: 0, MaxX: -5, MaxZ: 0},
 		},
 	}
 	for name, redaction := range cases {

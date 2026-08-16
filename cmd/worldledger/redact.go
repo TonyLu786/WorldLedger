@@ -30,35 +30,6 @@ func cmdRedact(args []string) error {
 	}
 }
 
-type regionFlag struct {
-	value *redact.Region
-}
-
-// Set parses "minX,minZ,maxX,maxZ" in chunk coordinates.
-func (f *regionFlag) Set(raw string) error {
-	fields := strings.Split(raw, ",")
-	if len(fields) != 4 {
-		return fmt.Errorf("want four chunk coordinates as minX,minZ,maxX,maxZ, got %q", raw)
-	}
-	var bounds [4]int32
-	for index, field := range fields {
-		var parsed int64
-		if _, err := fmt.Sscanf(strings.TrimSpace(field), "%d", &parsed); err != nil {
-			return fmt.Errorf("%q is not a chunk coordinate", field)
-		}
-		bounds[index] = int32(parsed)
-	}
-	f.value = &redact.Region{MinX: bounds[0], MinZ: bounds[1], MaxX: bounds[2], MaxZ: bounds[3]}
-	return nil
-}
-
-func (f *regionFlag) String() string {
-	if f == nil || f.value == nil {
-		return ""
-	}
-	return f.value.String()
-}
-
 func cmdRedactSet(args []string) error {
 	fs := flag.NewFlagSet("redact set", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -68,7 +39,7 @@ func cmdRedactSet(args []string) error {
 	dimension := fs.String("dimension", "", "limit to one dimension; omit for every dimension")
 	reason := fs.String("reason", "", "why this was withheld")
 	declaredBy := fs.String("declared-by", "", "who decided")
-	region := &regionFlag{}
+	region := &chunkBoundsFlag{}
 	fs.Var(region, "region", "chunk bounds as minX,minZ,maxX,maxZ")
 	if err := fs.Parse(args); err != nil {
 		return err

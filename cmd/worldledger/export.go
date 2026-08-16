@@ -14,6 +14,7 @@ import (
 	"github.com/worldledger/worldledger-mc/internal/anvil"
 	"github.com/worldledger/worldledger-mc/internal/archive"
 	"github.com/worldledger/worldledger-mc/internal/epoch"
+	"github.com/worldledger/worldledger-mc/internal/landmark"
 	"github.com/worldledger/worldledger-mc/internal/redact"
 	"github.com/worldledger/worldledger-mc/internal/translate"
 )
@@ -78,6 +79,7 @@ func cmdCoverage(args []string) error {
 	moment := fs.String("at", "", "RFC3339 reconstruction time (default now)")
 	asJSON := fs.Bool("json", false, "emit the full per-chunk snapshot as JSON")
 	mapPath := fs.String("map", "", "write a PNG coverage map, one pixel per chunk")
+	landmarkName := fs.String("landmark", "", "report only the area this landmark names")
 	scale := fs.Int("map-scale", 4, "pixels per chunk in the map")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -100,6 +102,26 @@ func cmdCoverage(args []string) error {
 	// of the four situations this is; there is no reason coverage should not.
 	if snapshot.Summary.Chunks == 0 {
 		return emptySelectionError(a, *server, *dimension, snapshot.At)
+	}
+
+	// Reported before the restriction, so the summary of one landmark still
+	// arrives beside how much of every landmark this archive has.
+	places, err := landmark.NewStore(a.Root).List()
+	if err != nil {
+		return err
+	}
+	coverage := landmarkCoverage(places, snapshot)
+
+	if *landmarkName != "" {
+		place, err := requireLandmark(a, *server, *dimension, *landmarkName)
+		if err != nil {
+			return err
+		}
+		snapshot = restrictToLandmark(snapshot, place)
+		if snapshot.Summary.Chunks == 0 {
+			return fmt.Errorf("%w: %q covers %s and this archive has no reading inside it",
+				errLandmarkHasNothing, place.Name, place.Bounds)
+		}
 	}
 
 	if *asJSON {
@@ -131,6 +153,8 @@ func cmdCoverage(args []string) error {
 				selection.Selected.StateDigest[:12], selection.Contributors, len(selection.Rejected))
 		}
 	}
+
+	printLandmarkCoverage(coverage)
 
 	if *mapPath != "" {
 		if err := snapshot.RenderPNG(*mapPath, *scale); err != nil {
