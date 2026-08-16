@@ -70,4 +70,10 @@ Rules are declared data, validated against the target profile when loaded, so a 
 ## What cannot be converted
 
 - Worlds whose generation is changed by a datapack, plugin, or server fork, where the placement and generation assumptions no longer describe the world.
-- Any target release for which no profile exists, which currently means every release other than 26.2.
+- Any target release for which no profile exists. Two ship with the project, 26.2 and 1.21.11; for anything else, whoever holds that release's jar can extract one with the command above.
+
+## What has been checked in Minecraft
+
+A world converted for 1.21.11 has been opened by Mojang's 1.21.11 server. It loaded without a chunk error, answered `execute if block` correctly at five coordinates read out of the converted file, and rewrote those chunks from its own world model with every block still at the same coordinate.
+
+That world loses nothing in conversion, so it exercises the faithful path rather than the lossy one, and a server says nothing about rendering. [`status.md`](status.md) records both limits along with the evidence.

@@ -26,9 +26,25 @@ synthetic one. They name blocks taken from the real difference, so a future
 release that adds them back fails them loudly rather than passing on a name
 nobody ships.
 
-**Still not verified: no converted world has been opened by a 1.21.11 client
-or server.** Everything above says the bytes claim to be 1.21.11; whether
-Minecraft agrees needs Minecraft.
+### Minecraft was asked, and agreed
+
+Everything above says the bytes claim to be 1.21.11. Mojang's 1.21.11 server
+has now opened one of those worlds and answered for it.
+
+The converted world went into `world/region/`, the layout that release uses
+rather than the one 26.2 uses, chosen by asking the world rather than by
+assuming. The server loaded it without a chunk error. Over RCON,
+`execute if block` reported `Test passed` at five coordinates read out of the
+converted file by an independent Anvil reader — oak log, oak stairs, stone,
+grass block, bedrock — and `Test failed` for a block that is not at one of
+them, so the check distinguishes rather than passing whatever it is given. On
+shutdown the server rewrote the chunks from its own world model, palette order
+and all, with every block still at the same coordinate.
+
+Two things this does not cover: no 1.21.11 *client* has opened a converted
+world, so nothing is claimed about rendering; and the world that made the trip
+loses nothing, so what the policies do when there is something to lose rests on
+the tests rather than on this run.
 
 ## v0.2.0
 

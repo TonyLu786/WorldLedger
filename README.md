@@ -299,7 +299,7 @@ Minecraft migrates an older world forward on its own, so a newer client reads a 
 
 ```sh
 worldledger convert --archive ./archive --server example.org --into /path/to/other-world \
-    --target-profile profiles/minecraft-java-26.2.json \
+    --target-profile profiles/minecraft-java-1.21.11.json \
     --rules rules.json --on-unrepresentable skip-chunk
 ```
 

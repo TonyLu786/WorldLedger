@@ -58,13 +58,13 @@ Exit criterion: **met.** A live multiplayer session produced a deterministic loc
 - [x] release capability profiles
 - [x] cross-release translation with declared, auditable loss
 - [ ] regression worlds for Minecraft upgrades
-- [ ] converted world opened in an older release
+- [x] converted world opened in an older release
 
 `level.dat` is deliberately not generated. It carries the data version, generator, and build height, so an export is written into a world the target client created rather than into one this project invented. This is a decision, not a missing feature.
 
-A real older release is now committed to convert against: `profiles/minecraft-java-1.21.11.json`, extracted from Mojang's 1.21.11 client jar. The conversion runs against it and the loss rules are tested against a registry that is genuinely smaller rather than a synthetic one. What remains for the second box is having Minecraft open the result.
+The older release is real and so is the run against it. `profiles/minecraft-java-1.21.11.json` is extracted from Mojang's 1.21.11 jar, the loss rules are tested against a registry that is genuinely smaller rather than a synthetic one, and a converted world has been opened by a 1.21.11 server, which answered `execute if block` correctly at five coordinates and rewrote the chunks from its own world model. See [`status.md`](status.md).
 
-Exit criterion: **met for the faithful export path.** An exported chunk loads and renders correctly in an unmodified Minecraft 26.2 client, including negative sections and block state properties, verified in game and by an independent reader. See [`status.md`](status.md). The conversion path has not had an equivalent run.
+Exit criterion: **met for the faithful export path, and for conversion on a server.** An exported chunk loads and renders correctly in an unmodified Minecraft 26.2 client, including negative sections and block state properties, verified in game and by an independent reader. A converted chunk survives a round trip through a 1.21.11 server with its blocks at the same coordinates. What conversion still lacks is a client: nothing has looked at one.
 
 ## Phase 2.5 — publication controls
 

@@ -2,7 +2,7 @@
 
 What has actually been verified, and by what evidence. Anything not listed as verified should be read as not verified.
 
-## Verified against a real client
+## Verified against real Minecraft
 
 **Reconstruction: archive to a playable world.**
 
@@ -16,6 +16,20 @@ An archive was exported into a world created by an unmodified Minecraft 26.2 cli
 This run also found a real defect that no byte-level test could: Minecraft 26.2 stores every dimension under `dimensions/<namespace>/<path>/region/`, including the vanilla three, and there is no top-level `region/` directory. The exporter had been writing to the older layout, which the game silently ignores.
 
 The capture game test is the standing form of this check. It passes from a clean run: 158 chunks enqueued, none dropped, no snapshot failures, 158 ready bundles, and no quarantined or partial entries once the writer drained. All 158 import, `fsck` reports zero errors, and the archive resolves them to 52 stored objects.
+
+**Cross-release conversion: a converted world opened by an older server.**
+
+A capture taken from 26.2 was converted for 1.21.11 and opened by Mojang's 1.21.11 server, whose SHA-1 matched the one their version manifest publishes. The server was then asked what it had found. Evidence:
+
+- The target is a real release rather than a guess. `profiles/minecraft-java-1.21.11.json` is extracted by `cmd/mcprofile` from that release's own jar, and against 26.2 it is genuinely smaller: 1,168 blocks to 1,198 and 65 biomes to 66, missing the cinnabar and sulfur families and `minecraft:sulfur_caves`, and holding nothing 26.2 does not.
+- Converting the 158-observation capture wrote 157 chunks into four region files under `world/region/`, which is the layout 1.21.11 uses and not the one 26.2 uses. The exporter chose it by asking the world it was writing into. A reader that never touches the Go writer reports data version 4903 on the faithful export and 4671 on the converted copy.
+- The server loaded that world and logged no chunk error.
+- Over RCON, `execute if block` was run at five coordinates: oak log at 2 65 1, oak stairs at 4 65 1, stone at 0 64 0, grass block at 0 -61 0, bedrock at 0 -64 0. All five reported `Test passed`. The same test for a block that is not at 2 65 1 reported `Test failed`, so the check distinguishes rather than passing whatever it is given.
+- The server shut down reporting all chunks saved, and it had rewritten the chunk: the palette came back in a different order, which is the signature of Minecraft re-serialising from its own world model rather than leaving the file alone. Every block was still at the same coordinate, and the chunk still carried data version 4671 and status `minecraft:full`.
+
+The coordinates were not chosen by hand. An independently written Anvil reader unpacked the palette and long array from the converted file and reported where each block sat, so the question put to Minecraft was formed from the bytes rather than from the code that produced them.
+
+Two limits belong with this. The conversion of that particular world reported no loss, which is the truth for it: it is superflat and uses none of the thirty blocks 1.21.11 lacks. The loss paths are covered by tests against the same profile, not by this run. And this was a server, so nothing here says how the world renders.
 
 ## Verified automatically
 
@@ -129,13 +143,9 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 
 ## Not verified
 
-**Cross-release conversion, the last step.** A real older release now exists to convert against. `profiles/minecraft-java-1.21.11.json` was extracted by `cmd/mcprofile` from Mojang's own 1.21.11 client jar, whose SHA-1 matched the one their version manifest publishes, so the profile describes a release rather than a guess. Against 26.2 it is genuinely smaller: 1,168 blocks to 1,198 and 65 biomes to 66, missing the cinnabar and sulfur families and `minecraft:sulfur_caves`, and holding nothing 26.2 does not.
+**How a converted world renders.** A 1.21.11 server has opened one and answered for its contents, which is recorded above. No 1.21.11 *client* has opened one, so nothing here covers lighting, or how the seams between converted and generated chunks look to a player.
 
-Converting the 158-observation capture to it writes 157 chunks into four region files and reports no loss, which is the truth for that world: it is superflat and uses none of the thirty blocks 1.21.11 lacks. An independently written reader, which never touches the Go writer, confirms the faithful export carries data version 4903 and the converted copy carries 4671.
-
-The loss path is now exercised against that profile rather than a synthetic one: a block 1.21.11 cannot represent is named in the report under every policy, the default policy leaves the chunk unwritten rather than substituting for it, the report policy refuses outright, and a chunk of blocks the release does have passes through unchanged.
-
-**What is still not verified is the last step: no converted world has been opened by a 1.21.11 client or server.** Everything above says the bytes claim to be 1.21.11. Whether Minecraft agrees is a different question and needs Minecraft to answer it.
+**Conversion of a world that actually loses something.** The world that has been through a real older release loses nothing, because it uses none of the thirty blocks 1.21.11 lacks. What each policy does when there is something to lose is covered by tests against the 1.21.11 profile — the block is named in the report under every policy, the default policy leaves the chunk unwritten rather than substituting for it, the report policy refuses outright, and a chunk of blocks the release does have passes through unchanged — but no such world has been opened in Minecraft.
 
 **Race detection on Windows.** The race gate needs cgo and is run in Linux CI only.
 
