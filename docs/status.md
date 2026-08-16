@@ -56,11 +56,9 @@ Evidence for both runs is under `validation/gametest-evidence-2026-08-13*/`.
 
 The same game test runs in Linux CI on every push, headless under a software renderer, and passes there. Because the test fails when no bundle appears, a passing run is evidence that capture produced and verified bundles on that platform, not merely that the client started.
 
-## Not verified
+## Measured on the client
 
-**Cross-release conversion.** Translation has unit tests and an end-to-end run against a synthetic target profile, but no converted world has been opened in an older release. There is no committed profile for any release other than 26.2, because building one requires that release's own artifact.
-
-**Performance on the client, in a real session.** The cost is now measured rather than assumed, and the first figure is not comfortable. A game test run on a Windows client reported:
+**What capture costs the thread that draws frames.** This sat under "not verified" while nobody had measured it. It has been, repeatedly, and the figures below are what a real session produced. The first one was not comfortable:
 
 ```text
 169 ticks, mean 1080.1 us, max 15216.3 us (30.433% of a 50 ms tick)
@@ -128,6 +126,10 @@ What was left did look like durability, and the object store did fsync once per 
 The remaining floor is genuine. An object the archive has never seen must be written and forced to disk before the import is acknowledged, and no amount of ordering avoids that. What the archive no longer pays is the same cost for bytes it already has.
 
 Two of these are worth reading carefully. Encoding costs roughly thirty times what decoding does and allocates about once per block state; the reference encoder is used by the fixture tooling rather than on any path a player waits on, so this is a known cost rather than a problem to date. Import spends its time in durability, not computation: seventeen hundred allocations against tens of milliseconds is the signature of the fsync calls that put an observation on disk before the import is acknowledged. Reimporting an observation already held is cheaper but not free, because it still reads and hashes every component rather than trusting the digest the bundle declares.
+
+## Not verified
+
+**Cross-release conversion.** Translation has unit tests and an end-to-end run against a synthetic target profile, but no converted world has been opened in an older release. There is no committed profile for any release other than 26.2, because building one requires that release's own artifact.
 
 **Race detection on Windows.** The race gate needs cgo and is run in Linux CI only.
 
