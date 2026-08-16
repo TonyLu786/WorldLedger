@@ -17,7 +17,11 @@
 # carry an eula.txt from a run you authorised.
 #
 # Usage:
-#   scripts/run-client-gametest.sh [--skip-build] [--timeout SECONDS]
+#   scripts/run-client-gametest.sh [--build-only] [--skip-build] [--timeout SECONDS]
+#
+# Every line printed carries the elapsed time, and the launch streams its
+# milestones rather than hiding them in a log, because a client that takes four
+# minutes to start and one that has hung are otherwise the same thing to watch.
 
 set -euo pipefail
 
@@ -44,37 +48,15 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-step() { printf '==> %s\n' "$1"; }
+started_at=$(date +%s)
+# Every line carries how long the run has been going. A step that takes four
+# minutes and a step that has hung look identical without it, and the longest
+# step here is a Minecraft client starting.
+step() { printf '==> [%3ds] %s\n' "$(( $(date +%s) - started_at ))" "$1"; }
 fail() { printf '!!  %s\n' "$1" >&2; exit 1; }
 
 [ -x "$jdk/bin/java" ] || fail "no JDK at $jdk"
 
-# The client game test starts a Minecraft dedicated server, whose networking is
-# Netty, whose event loop is a java.nio Selector. On Windows a Selector is built
-# from a loopback self-connect, and an environment that blocks that pattern
-# fails here rather than anywhere informative: Minecraft reports "failed to
-# create a child event loop" several minutes into startup, and Gradle reports
-# "Unable to establish loopback connection" before running any build logic. The
-# same restriction, two unrecognisable messages. Checking costs a second.
-preflight="$work/Preflight.java"
-mkdir -p "$work"
-cat > "$preflight" <<'JAVA'
-import java.nio.channels.Selector;
-
-public class Preflight {
-	public static void main(String[] args) throws Exception {
-		Selector.open().close();
-	}
-}
-JAVA
-if ! "$jdk/bin/java" "$preflight" >/dev/null 2>&1; then
-	fail "this environment cannot open a java.nio Selector, so the Minecraft dedicated server
-    the game test needs cannot start. Nothing in this repository can work around it:
-    the same restriction is why Gradle reports \"Unable to establish loopback
-    connection\". Run this where a Selector can be opened; everything else here is
-    ready. Check with:
-      $jdk/bin/java $preflight"
-fi
 [ -f "$fabric/.gradle/loom-cache/launch.cfg" ] || fail \
 	"no $fabric/.gradle/loom-cache/launch.cfg. Loom writes it during a Gradle build, so one
     successful ./gradlew build has to have happened on this machine before this script can work."
@@ -85,6 +67,8 @@ fi
 win() { cygpath -m "$1" | sed 's|^//?/||'; }
 
 mkdir -p "$work"
+
+step 'Collecting the dependency jars from the Gradle cache'
 
 # ---- classpath ------------------------------------------------------------
 # The runtime Minecraft jars are the ones under .gradle/loom-cache that
@@ -112,6 +96,7 @@ compile() {
 	# argument file splits on whitespace and has no way to quote a source.
 	( cd "$fabric" && find "src/$set/java" -name '*.java' ) > "$work/$set-sources.txt" 2>/dev/null || true
 	[ -s "$work/$set-sources.txt" ] || return 0
+	printf '    %-9s compiling %s file(s)...\n' "$set" "$(wc -l < "$work/$set-sources.txt")"
 	rm -rf "$out"
 	mkdir -p "$out"
 	{
@@ -180,6 +165,33 @@ if [ "$build_only" -eq 1 ]; then
 	exit 0
 fi
 
+# The client game test starts a Minecraft dedicated server, whose networking is
+# Netty, whose event loop is a java.nio Selector. On Windows a Selector is built
+# from a loopback self-connect, and an environment that blocks that pattern
+# fails here rather than anywhere informative: Minecraft reports "failed to
+# create a child event loop" several minutes into startup, and Gradle reports
+# "Unable to establish loopback connection" before running any build logic. The
+# same restriction, two unrecognisable messages. Checking costs a second.
+preflight="$work/Preflight.java"
+mkdir -p "$work"
+cat > "$preflight" <<'JAVA'
+import java.nio.channels.Selector;
+
+public class Preflight {
+	public static void main(String[] args) throws Exception {
+		Selector.open().close();
+	}
+}
+JAVA
+if ! "$jdk/bin/java" "$preflight" >/dev/null 2>&1; then
+	fail "this environment cannot open a java.nio Selector, so the Minecraft dedicated server
+    the game test needs cannot start. Nothing in this repository can work around it:
+    the same restriction is why Gradle reports \"Unable to establish loopback
+    connection\". Run this where a Selector can be opened; everything else here is
+    ready. Check with:
+      $jdk/bin/java $preflight"
+fi
+
 # ---- launch ---------------------------------------------------------------
 dli="$(find "$gradle_home/caches/modules-2" -iname 'dev-launch-injector*.jar' | grep -v sources | head -1)"
 [ -n "$dli" ] || fail 'dev-launch-injector is not in the Gradle cache'
@@ -196,10 +208,21 @@ net.fabricmc.devlaunchinjector.Main
 ARGS
 
 step "Running the client game test (opens a Minecraft window; up to ${timeout_seconds}s)"
+echo "    Full log: $work/gametest.log"
+echo "    Milestones below. A gap of a minute or two is normal while the client loads."
 cd "$run_dir"
 set +e
-timeout "$timeout_seconds" "$jdk/bin/java" "@$work/launch-args.txt" > "$work/gametest.log" 2>&1
-status=$?
+# The whole log goes to the file and the milestones go to the terminal. Sending
+# nothing to the terminal for the length of a Minecraft start is what makes a
+# working run and a hung one look the same, which is the complaint this answers.
+timeout "$timeout_seconds" "$jdk/bin/java" "@$work/launch-args.txt" 2>&1 \
+	| tee "$work/gametest.log" \
+	| grep --line-buffered -E \
+		'Loading Minecraft|Loading [0-9]+ mods|Setting user|Starting integrated|Preparing spawn|Time elapsed|Stopping|capture cost|Capture session|game ?test|Exception|ERROR' \
+	| while IFS= read -r line; do
+		printf '    [%3ds] %s\n' "$(( $(date +%s) - started_at ))" "$(echo "$line" | cut -c1-140)"
+	done
+status=${PIPESTATUS[0]}
 set -e
 
 if [ $status -eq 124 ]; then
