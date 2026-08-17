@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -52,10 +53,15 @@ type Fetcher interface {
 	Fetch(source string) ([]byte, error)
 }
 
-// HTTPFetcher is the real one.
+// HTTPFetcher is the real one. It also reads a local path, which is how
+// somebody working on the project installs a jar they built themselves rather
+// than one that has been released.
 type HTTPFetcher struct{ Client *http.Client }
 
 func (f HTTPFetcher) Fetch(source string) ([]byte, error) {
+	if !strings.HasPrefix(source, "http://") && !strings.HasPrefix(source, "https://") {
+		return os.ReadFile(source)
+	}
 	client := f.Client
 	if client == nil {
 		client = &http.Client{Timeout: 90 * time.Second}

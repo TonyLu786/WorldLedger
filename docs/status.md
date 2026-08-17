@@ -37,7 +37,18 @@ The window opens. Built for Windows and launched on a machine with the WebView2 
 
 The path was walked end to end in a browser against forty real capture bundles, on a fabricated Minecraft directory: the health screen read the machine, forty recordings were found and imported, a disposition was declared, forty places were written into a world, and the time-travel map drew. The archive core was called directly throughout; nothing parses command output.
 
-The installer has not been run against a real Minecraft. Its plan was built against this machine and lists the five exact paths it would write, and it refuses to run in a development build because such a build has no source for its own mod jar. What each of its steps does, what it refuses, and that uninstalling restores what was there are covered by tests against a fabricated game directory rather than a real one.
+**The installer, against a real Minecraft.**
+
+It was run against an unmodified Minecraft installation with no mods and no config directory, with the mod jar rebuilt from source first. Evidence:
+
+- The five steps it listed beforehand are the five files it wrote, and no others: the Fabric version profile, an entry in the launcher's own list, Fabric API, the mod, and `capture.properties`.
+- Fabric API arrived as a real archive of 53 entries and 2,531,175 bytes rather than an error page, and the mod jar's SHA-256 matches the jar that was built.
+- The whole of it took a quarter of a second, because no installer program is run: Fabric publishes the version profile the launcher needs, so this is two small downloads and four writes.
+- The health check then reported ready, with all six lines green, including the contributor it had written.
+- The launcher's own two installations were still there afterwards, alongside the added one, and the rest of that file was intact.
+- Uninstalling put everything back. Every file it wrote is gone; the four directories it created are gone; `launcher_profiles.json` is byte-for-byte what it was before; and a SHA-256 of every file two levels deep under `.minecraft` is identical to the same list taken before installing.
+
+What this run does not cover: the game was not started afterwards, so the mod is verified as installed rather than as loading. The capture game test is the standing check for whether the adapter runs, and it runs on every push.
 
 ## Verified automatically
 
@@ -155,7 +166,9 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 
 **Conversion of a world that actually loses something.** The world that has been through a real older release loses nothing, because it uses none of the thirty blocks 1.21.11 lacks. What each policy does when there is something to lose is covered by tests against the 1.21.11 profile — the block is named in the report under every policy, the default policy leaves the chunk unwritten rather than substituting for it, the report policy refuses outright, and a chunk of blocks the release does have passes through unchanged — but no such world has been opened in Minecraft.
 
-**The desktop application against a real Minecraft.** Everything above about it was checked against a fabricated game directory or with the application refusing to act. Nothing has yet installed Fabric and the mod into a real Minecraft through it, played, and come back — which is the run that would make the whole path verified rather than each part of it. It also needs a release carrying the mod jar, because a development build deliberately has no source for one.
+**The desktop application's path from end to end in one sitting.** Each part has been run: the installer against a real Minecraft, and the six screens against forty real captures on a fabricated one. Nobody has installed through it, started the game, played, and come back to import what that produced. Until somebody has, this is a path whose every step works rather than a path known to work.
+
+**A released build installing.** The run above supplied the mod jar with `--mod-source`, because a build from source deliberately has no idea where its own jar lives. A release compiles that in, and that arrangement has not been exercised.
 
 **The desktop application anywhere but Windows.** It compiles for Linux and macOS and the browser path is the whole application there rather than a degraded one, but no window is created on either and neither has been run.
 

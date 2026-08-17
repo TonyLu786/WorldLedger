@@ -40,6 +40,12 @@ func run() error {
 	useBrowser := fs.Bool("browser", false, "open in the default browser instead of a window")
 	printURL := fs.Bool("print-url", false, "print the address and stay open without opening anything")
 	showVersion := fs.Bool("version", false, "print the version and exit")
+	// Where the mod jar comes from. A released build has this compiled in,
+	// pointing at that release's own asset; a build from source has nothing,
+	// and refuses to install rather than fetching something arbitrary. This
+	// flag is how somebody working on the project supplies a jar they built
+	// themselves, and it is deliberately something you have to type.
+	modSource := fs.String("mod-source", "", "where to get the mod jar (a path or URL; development builds only)")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
 			fmt.Println(usage)
@@ -53,6 +59,10 @@ func run() error {
 	if *showVersion {
 		fmt.Println("worldledger-desktop", version)
 		return nil
+	}
+
+	if *modSource != "" {
+		api.ModSource = *modSource
 	}
 
 	server, err := app.New()
