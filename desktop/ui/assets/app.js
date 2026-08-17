@@ -117,16 +117,75 @@ function renderChecks(report) {
     middle.append(el('div', 'check-title', check.title));
     middle.append(el('div', 'check-detail', check.detail));
     row.append(middle);
-    if (check.fix) {
-      const button = el('button', 'fix', check.fix);
-      button.disabled = true;
-      button.title = 'Not available yet';
-      row.append(button);
-    } else {
-      row.append(el('div'));
-    }
+    row.append(el('div'));
     host.append(row);
   }
+
+  // One button for everything outstanding rather than one per line. Four
+  // separate installs is four chances to stop half way, and there is nothing a
+  // person gains by deciding about Fabric API separately from Fabric.
+  if (!report.ready && report.checks.some((c) => c.fix)) {
+    host.append(fixEverything(report));
+  }
+}
+
+function fixEverything(report) {
+  const card = el('section', 'card');
+  card.append(el('h2', null, 'Set it all up'));
+  card.append(el('p', 'card-lead',
+    'This adds Fabric and the mod to your Minecraft. It takes a few seconds, and it can be undone.'));
+
+  const name = el('input', 'name');
+  name.type = 'text';
+  name.placeholder = 'The name to keep your recordings under';
+  name.setAttribute('aria-label', 'The name to keep your recordings under');
+  const contributor = report.checks.find((c) => c.id === 'contributor');
+  if (contributor && contributor.state === 'ok') name.value = contributor.detail;
+  card.append(name);
+
+  const go = el('button', 'primary', 'Set it up');
+  const detail = el('div');
+  card.append(go, detail);
+
+  go.addEventListener('click', async () => {
+    if (!name.value.trim()) {
+      detail.replaceChildren(banner('todo', 'A name is needed first',
+        'Nothing is recorded until there is one, and nobody else can choose it.'));
+      return;
+    }
+    go.disabled = true;
+    try {
+      // Shown before anything happens, with the exact files. This is the point
+      // at which somebody agrees to have their game written into, and it is the
+      // only one: asking four times is not four times the consent.
+      const plan = await call('/api/plan?contributor=' + encodeURIComponent(name.value.trim()));
+      if (plan.refusal) {
+        detail.replaceChildren(banner('todo', plan.refusal, 'Nothing has been changed.'));
+        go.disabled = false;
+        return;
+      }
+      const list = plan.steps.map((s) => '• ' + s.title + '\n     ' + s.target).join('\n');
+      if (!confirm('This will write these files into your Minecraft:\n\n' + list +
+        '\n\nAnything replaced is kept, and Remove puts it all back. Carry on?')) {
+        go.disabled = false;
+        return;
+      }
+      go.textContent = 'Setting up…';
+      const result = await call('/api/install', {
+        method: 'POST',
+        body: JSON.stringify({ contributor: name.value.trim() }),
+      });
+      await refreshSetup();
+      document.getElementById('checks').prepend(banner('good',
+        'Done — ' + result.done + ' files written',
+        'Start Minecraft, choose the WorldLedger installation, and play.'));
+    } catch (err) {
+      go.disabled = false;
+      go.textContent = 'Set it up';
+      detail.replaceChildren(banner('todo', err.message, err.next || ''));
+    }
+  });
+  return card;
 }
 
 async function refreshSetup() {

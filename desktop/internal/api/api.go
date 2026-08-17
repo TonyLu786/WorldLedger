@@ -33,6 +33,9 @@ func Mount(server *app.Server) {
 	server.HandleFunc("/api/export", handleExport)
 	server.HandleFunc("/api/moments", handleMoments)
 	server.HandleFunc("/api/travel", handleTravel)
+	server.HandleFunc("/api/plan", handlePlan)
+	server.HandleFunc("/api/install", handleInstall)
+	server.HandleFunc("/api/uninstall", handleUninstall)
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {

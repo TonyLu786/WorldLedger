@@ -224,3 +224,5 @@ button:disabled { opacity: 0.55; cursor: default; filter: none; }
 
 .step.is-done .step-index { background: var(--accent); border-color: transparent; color: #fff; }
 .step.is-next .step-index { border-color: var(--accent); color: var(--accent); }
+.card-lead { margin: 0 0 14px; color: var(--ink-soft); font-size: 14px; max-width: 60ch; }
+.card .name { display: block; width: 100%; max-width: 380px; margin-bottom: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: inherit; font: inherit; }

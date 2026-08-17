@@ -45,6 +45,19 @@ func (i Install) CaptureProperties() string {
 	return i.sub("config/worldledger/capture.properties")
 }
 
+// LauncherProfiles is the launcher's own list of installations. A version on
+// disk that has no entry here exists and cannot be chosen.
+func (i Install) LauncherProfiles() string { return i.sub("launcher_profiles.json") }
+
+// VersionProfile is where a version's manifest lives. The launcher requires the
+// directory and the file inside it to carry the same name.
+func (i Install) VersionProfile(id string) string {
+	return filepath.Join(i.Versions(), id, id+".json")
+}
+
+// Mod is a file inside the mods directory.
+func (i Install) Mod(name string) string { return filepath.Join(i.Mods(), name) }
+
 func (i Install) sub(suffix string) string {
 	return filepath.Join(i.Root, filepath.FromSlash(suffix))
 }
