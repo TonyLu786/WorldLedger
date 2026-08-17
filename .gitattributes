@@ -18,6 +18,12 @@ Makefile text eol=lf
 gradlew text eol=lf
 *.sh text eol=lf
 *.html text eol=lf
+# The desktop application's page is compiled into its binary, so a checkout that
+# translated these to CRLF would produce a different binary from one that did
+# not. A published checksum that depends on which platform did the build is not
+# a checksum.
+*.css text eol=lf
+*.js text eol=lf
 *.xml text eol=lf
 *.txt text eol=lf
 *.bat text eol=crlf
