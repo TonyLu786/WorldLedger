@@ -23,6 +23,12 @@ import (
 
 // Record is one file this changed, and what it takes to put it back.
 type Record struct {
+	// Kind is what the step was, because not every file is undone the same
+	// way. Most are: put back what was there, or delete what was not. The
+	// launcher's own settings are not, and treating them as ordinary left
+	// somebody with an installation entry pointing at a version that had been
+	// removed.
+	Kind Kind   `json:"kind,omitempty"`
 	Path string `json:"path"`
 	// Backup is where the previous contents were kept, empty when the file did
 	// not exist before. The two cases are undone differently: one is a delete,
@@ -141,6 +147,7 @@ func Apply(plan Plan, fetcher Fetcher, backupDir string) (Manifest, error) {
 		if err != nil {
 			return manifest, fmt.Errorf("%s: %w", step.Title, err)
 		}
+		record.Kind = step.Kind
 		manifest.Records = append(manifest.Records, record)
 	}
 	return manifest, nil
@@ -211,6 +218,20 @@ func Uninstall(manifest Manifest) ([]string, error) {
 	for i := len(manifest.Records) - 1; i >= 0; i-- {
 		record := manifest.Records[i]
 
+		// The launcher rewrites its own settings constantly -- opening it once
+		// is enough -- so this file has almost always changed by the time
+		// anybody uninstalls. Restoring the copy we kept would throw away
+		// whatever it did since; refusing to touch it, which is what happened
+		// before, left an installation entry pointing at a version that had
+		// just been deleted. Neither is right. What we added is removed and
+		// everything else is left exactly as the launcher last wrote it.
+		if record.Kind == AddLauncherEntry {
+			if err := removeLauncherEntry(record.Path, LoaderVersionID()); err != nil {
+				skipped = append(skipped, record.Path+" ("+err.Error()+")")
+			}
+			continue
+		}
+
 		if current, err := os.ReadFile(record.Path); err == nil && record.Digest != "" {
 			digest := sha256.Sum256(current)
 			if hex.EncodeToString(digest[:]) != record.Digest {
@@ -254,6 +275,48 @@ func looksLikeJar(payload []byte) bool {
 	// "PK\x03\x04" for an ordinary archive, "PK\x05\x06" for an empty one.
 	return len(payload) >= 4 && payload[0] == 'P' && payload[1] == 'K' &&
 		(payload[2] == 3 || payload[2] == 5) && (payload[3] == 4 || payload[3] == 6)
+}
+
+// removeLauncherEntry takes out the installation this added and leaves the rest
+// of the launcher's settings as they are.
+//
+// An entry that is not there is not an error. Somebody may have removed it in
+// the launcher already, which is a perfectly ordinary thing to have done.
+func removeLauncherEntry(path, versionID string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("the launcher's own settings could not be read")
+	}
+	var document map[string]any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("the launcher's own settings are not readable as JSON, so the entry was left alone")
+	}
+	profiles, _ := document["profiles"].(map[string]any)
+	if profiles == nil {
+		return nil
+	}
+	key := "worldledger-" + versionID
+	if _, present := profiles[key]; !present {
+		return nil
+	}
+	delete(profiles, key)
+
+	body, err := json.MarshalIndent(document, "", "  ")
+	if err != nil {
+		return fmt.Errorf("the launcher's settings could not be rewritten")
+	}
+	temporary := path + ".worldledger-tmp"
+	if err := os.WriteFile(temporary, body, 0o644); err != nil {
+		return fmt.Errorf("the launcher's settings could not be rewritten")
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		os.Remove(temporary)
+		return fmt.Errorf("the launcher's settings could not be rewritten")
+	}
+	return nil
 }
 
 // captureProperties is the file the adapter would otherwise write on first run,

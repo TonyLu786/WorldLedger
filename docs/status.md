@@ -180,7 +180,11 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 
 **Conversion of a world that actually loses something.** The world that has been through a real older release loses nothing, because it uses none of the thirty blocks 1.21.11 lacks. What each policy does when there is something to lose is covered by tests against the 1.21.11 profile — the block is named in the report under every policy, the default policy leaves the chunk unwritten rather than substituting for it, the report policy refuses outright, and a chunk of blocks the release does have passes through unchanged — but no such world has been opened in Minecraft.
 
-**A released build installing.** The release now compiles the mod's own download address in, and a build made the way the release workflow makes one plans all five steps on a clean machine with nothing passed to it, pointing at that release's own asset. What has not happened is the download itself: no tag has been cut, so nothing has fetched that URL. Both real installs supplied the jar with `--mod-source`.
+**A released build installing.** A binary built exactly as the release workflow builds one carries the mod's download address and plans all five steps on a clean machine with nothing passed to it. Installing and uninstalling with that binary was run against the real Minecraft, from clean and back to clean.
+
+Fetching from a GitHub release asset was checked against a published one: the v0.2.0 mod jar downloaded through the same code path, 128,148 bytes, and was recognised as an archive; a tag that does not exist answered 404 and was refused rather than written into the mods folder.
+
+What has not happened is fetching v0.3.0's own asset, because a draft release does not serve its assets publicly. Both real installs supplied the jar with `--mod-source`.
 
 **An unsigned application on a stranger's Windows.** SmartScreen will warn about a binary from an unknown publisher, and security software may quarantine it. Nothing here is signed, the README says so, and whether to buy a signing certificate is a decision nobody has made.
 

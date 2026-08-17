@@ -428,3 +428,80 @@ func TestAWebPageIsNotWrittenIntoTheModsFolderAsAJar(t *testing.T) {
 		t.Error("nothing was recorded before the failure")
 	}
 }
+
+// The launcher rewrites its own settings constantly; opening it once is enough.
+// So by the time anybody uninstalls, that file has almost always changed, and
+// the ordinary "leave a changed file alone" rule left somebody with an
+// installation entry pointing at a version that had just been deleted.
+func TestUninstallingRemovesTheLauncherEntryEvenAfterTheLauncherRewroteTheFile(t *testing.T) {
+	install, manifest := applyFixture(t)
+
+	// What the launcher does between installing and uninstalling: rewrites the
+	// file, keeping our entry and touching its own.
+	raw, err := os.ReadFile(install.LauncherProfiles())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	profiles := document["profiles"].(map[string]any)
+	profiles["vanilla"].(map[string]any)["lastUsed"] = "2026-08-17T09:00:00.000Z"
+	profiles["another-mod"] = map[string]any{"name": "Somebody else's", "lastVersionId": "1.21.11"}
+	rewritten, err := json.MarshalIndent(document, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(install.LauncherProfiles(), rewritten, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	skipped, err := Uninstall(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skipped) != 0 {
+		t.Errorf("uninstalling gave up on something: %v", skipped)
+	}
+
+	after, err := os.ReadFile(install.LauncherProfiles())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var final map[string]any
+	if err := json.Unmarshal(after, &final); err != nil {
+		t.Fatalf("the launcher settings are no longer valid JSON: %v", err)
+	}
+	remaining := final["profiles"].(map[string]any)
+	if _, present := remaining["worldledger-"+LoaderVersionID()]; present {
+		t.Error("the entry we added is still there, pointing at a version that has been removed")
+	}
+	// And everything the launcher did in the meantime survives.
+	if _, kept := remaining["another-mod"]; !kept {
+		t.Error("an installation added after ours was thrown away")
+	}
+	if remaining["vanilla"].(map[string]any)["lastUsed"] != "2026-08-17T09:00:00.000Z" {
+		t.Error("the launcher's own changes were rolled back over")
+	}
+}
+
+// Somebody may have removed the entry in the launcher already, which is an
+// ordinary thing to have done and not a failure to report.
+func TestUninstallingAnEntryThatIsAlreadyGoneIsNotAProblem(t *testing.T) {
+	install, manifest := applyFixture(t)
+
+	if err := os.WriteFile(install.LauncherProfiles(),
+		[]byte(`{"profiles":{"vanilla":{"lastVersionId":"latest-release"}},"version":6}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skipped, err := Uninstall(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range skipped {
+		if strings.Contains(s, "launcher_profiles") {
+			t.Errorf("an entry somebody had already removed was reported as a problem: %s", s)
+		}
+	}
+}
