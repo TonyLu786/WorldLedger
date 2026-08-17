@@ -31,6 +31,20 @@ The coordinates were not chosen by hand. An independently written Anvil reader u
 
 Two limits belong with this. The conversion of that particular world reported no loss, which is the truth for it: it is superflat and uses none of the thirty blocks 1.21.11 lacks. The loss paths are covered by tests against the same profile, not by this run. And this was a server, so nothing here says how the world renders.
 
+**The whole path, once, by one person, on a public server.**
+
+Somebody installed through the desktop application, played on `top.earthmc.net`, and came back. Nothing was staged: the server is a real one they chose, the session is however long they played, and the archive is the one the application keeps.
+
+- The capture folder held 608 ready bundles and nothing quarantined or half-written.
+- All 608 imported, none failed, in three and a half minutes. The archive came out at 608 observations, 4,115 objects, 33.1 MB, over 395 chunks of one server.
+- The recordings were left in the capture folder, and the screen said so rather than leaving somebody to wonder whether they had been consumed.
+- A disposition was declared by name before anything could be exported. It was refused until then.
+- 395 chunks were written into a world, landing in `dimensions/minecraft/overworld/region/` — the 26.2 layout, chosen by asking the world rather than assuming, which is the defect a real client found once before.
+- The two region files written hold 380 and 15 chunks, which is the 395 the export reported. The four region files that world already had were left with their 3,540 chunks untouched.
+- An independently written Anvil reader, which never touches the Go writer, read chunk (712,320) and (713,319) out of those files: data version 4903, status `minecraft:full`, and real terrain — stone, grass block, water, deepslate — at coordinates around x 11,400 and z 5,120, consistent with the region numbering.
+
+Nothing was observed twice and nothing was withheld, so this run exercises the faithful path rather than the conflict or redaction ones. The world written into was a copy of one the player already had, because a world's seed and rules are never invented; their two existing worlds were not touched.
+
 **The desktop application, as far as it has been run.**
 
 The window opens. Built for Windows and launched on a machine with the WebView2 runtime, it shows a native window titled WorldLedger, and closing that window ends the process. Built with `-H=windowsgui` it shows one window rather than a console behind its own. In browser mode, a page that stops reporting in ends the process after the timeout, which was checked with a shortened timer: without it a closed tab would leave the program running with no way for its owner to stop it.
@@ -166,9 +180,9 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 
 **Conversion of a world that actually loses something.** The world that has been through a real older release loses nothing, because it uses none of the thirty blocks 1.21.11 lacks. What each policy does when there is something to lose is covered by tests against the 1.21.11 profile — the block is named in the report under every policy, the default policy leaves the chunk unwritten rather than substituting for it, the report policy refuses outright, and a chunk of blocks the release does have passes through unchanged — but no such world has been opened in Minecraft.
 
-**The desktop application's path from end to end in one sitting.** Each part has been run: the installer against a real Minecraft, and the six screens against forty real captures on a fabricated one. Nobody has installed through it, started the game, played, and come back to import what that produced. Until somebody has, this is a path whose every step works rather than a path known to work.
+**A released build installing.** Both real installs supplied the mod jar with `--mod-source`, because a build from source deliberately has no idea where its own jar lives. A release compiles that in, and that arrangement has not been exercised.
 
-**A released build installing.** The run above supplied the mod jar with `--mod-source`, because a build from source deliberately has no idea where its own jar lives. A release compiles that in, and that arrangement has not been exercised.
+**The exported world opened in Minecraft.** The chunks are in the world and an independent reader agrees about what they contain. Nobody has yet loaded that world and walked around in it, which is what the 26.2 export was verified by once before and this particular world has not been.
 
 **The desktop application anywhere but Windows.** It compiles for Linux and macOS and the browser path is the whole application there rather than a degraded one, but no window is created on either and neither has been run.
 
