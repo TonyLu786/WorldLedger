@@ -50,10 +50,10 @@ Every substitution and fill is counted by affected block positions and reported,
 A profile describes what a release can represent and is extracted from that release's own artifact:
 
 ```sh
-go run ./cmd/mcprofile --jar <client.jar> --out profiles/minecraft-java-<version>.json
+mcprofile --jar <client.jar> --out profiles/minecraft-java-<version>.json
 ```
 
-This is how "any version" is honestly delivered. No table of releases is hard-coded, because a hard-coded table would be unverifiable and would go stale. Whoever holds a release's jar can produce its profile.
+This is how "any version" is honestly delivered. No table of releases is hard-coded, because a hard-coded table would be unverifiable and would go stale. Whoever holds a release's jar can produce its profile, and `mcprofile` is in the release archive so that holding the jar is the only requirement.
 
 Two profiles can be compared, which is what tells you whether a new release changed anything that bears on observations already captured. See [`upgrading-minecraft.md`](upgrading-minecraft.md).
 

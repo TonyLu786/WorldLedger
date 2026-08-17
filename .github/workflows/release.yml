@@ -63,6 +63,14 @@ jobs:
           go build -trimpath -buildvcs=false \
             -ldflags="-s -w -X main.version=${version}" \
             -o "dist/worldledger${{ matrix.ext }}" ./cmd/worldledger
+          # mcprofile ships as well. The packaged documents promise that whoever
+          # holds a release's jar can produce its profile, and tell the reader to
+          # compare two of them after a Minecraft upgrade. Without the binary in
+          # the archive, keeping that promise needs a source checkout and a Go
+          # toolchain, which is not what the documents say.
+          go build -trimpath -buildvcs=false \
+            -ldflags="-s -w" \
+            -o "dist/mcprofile${{ matrix.ext }}" ./cmd/mcprofile
       # The native build is asked directly. A cross-compiled one cannot run
       # here, so its binary is checked for the string instead, which is weaker
       # but still fails when the injection is dropped.

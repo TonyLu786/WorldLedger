@@ -329,12 +329,13 @@ The archive core requires Go 1.23 or newer.
 go test ./...
 go vet ./...
 go build -trimpath -o bin/worldledger ./cmd/worldledger
+go build -trimpath -o bin/mcprofile ./cmd/mcprofile
 ```
 
-On Windows PowerShell:
+On Windows PowerShell, `scripts\build.ps1` builds both. It uses Go from PATH, and falls back to a toolchain placed beside the checkout under `.tools`, so the documented commands can be followed by name on a machine where Go was never installed system-wide:
 
 ```powershell
-go build -trimpath -o .\bin\worldledger.exe .\cmd\worldledger
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1
 ```
 
 The Fabric adapter requires a Java 25 JDK:
@@ -364,17 +365,24 @@ All values are exact build inputs in [`adapters/fabric/gradle.properties`](adapt
 
 A profile records what a Minecraft release can represent: its data version, each dimension's build range, its block and biome registries, and its structure placement parameters. Profiles are extracted from a real game artifact, never hand-written:
 
+`mcprofile` ships in the release archive next to `worldledger`, because this is the step that makes any release usable:
+
 ```sh
-go run ./cmd/mcprofile --jar <client.jar> --out profiles/minecraft-java-<version>.json
-go run ./cmd/dfurenames --jar <mojang-mapped.jar> --source <version> --out profiles/renames-<version>.json
+mcprofile --jar <client.jar> --out profiles/minecraft-java-<version>.json
 ```
 
-Two are committed, `profiles/minecraft-java-26.2.json` and `profiles/minecraft-java-1.21.11.json`, so the conversion path is exercised against a release that is genuinely smaller rather than a synthetic one. `dfurenames` additionally extracts Mojang's own rename tables from the compiled data fixers, reporting which fixers it could not read rather than implying full coverage.
+Two are committed, `profiles/minecraft-java-26.2.json` and `profiles/minecraft-java-1.21.11.json`, so the conversion path is exercised against a release that is genuinely smaller rather than a synthetic one.
 
 Two profiles can be compared, which is what a Minecraft upgrade needs. The comparison separates what a release merely adds from what it stops representing, moves, or re-salts, because only the second kind bears on observations already captured:
 
 ```sh
-go run ./cmd/mcprofile --from profiles/minecraft-java-1.21.11.json --to profiles/minecraft-java-26.2.json
+mcprofile --from profiles/minecraft-java-1.21.11.json --to profiles/minecraft-java-26.2.json
+```
+
+From a source checkout, each of these is `go run ./cmd/mcprofile` with the same flags. `dfurenames` extracts Mojang's own rename tables from the compiled data fixers, reporting which fixers it could not read rather than implying full coverage; it needs `javap` and a Mojang-mapped jar, so it is run from a checkout rather than shipped:
+
+```sh
+go run ./cmd/dfurenames --jar <mojang-mapped.jar> --source <version> --out profiles/renames-<version>.json
 ```
 
 See [`docs/upgrading-minecraft.md`](docs/upgrading-minecraft.md) for what to run when a release lands and how to tell a game change from a regression.

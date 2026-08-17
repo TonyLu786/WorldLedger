@@ -47,6 +47,32 @@ world, so nothing is claimed about rendering; and the world that made the trip
 loses nothing, so what the policies do when there is something to lose rests on
 the tests rather than on this run.
 
+### mcprofile ships, and comparing two releases is what an upgrade needs
+
+`mcprofile --from A --to B` reports what changed between two release profiles.
+The capture fingerprint is committed, so a Minecraft release that changes what
+the game reports fails the build, but that failure only says something moved.
+The comparison says what, and separates the two kinds of change that get
+conflated: what a release newly represents cannot invalidate an observation
+already captured, while what it stops representing, where it moves a build
+range, and where it changes structure placement all can.
+
+`docs/upgrading-minecraft.md` is the procedure, including the rule that a
+fingerprint change the comparison does not explain is a regression and the
+reference is not to be updated to accommodate it.
+
+The release archive now contains `mcprofile` next to `worldledger`. It always
+should have: the packaged documents promise that whoever holds a release's jar
+can produce its profile, and until now keeping that promise needed a source
+checkout and a Go toolchain. A new check fails the build when a packaged
+document invokes a command of this project's by name that the release does not
+build, and the packaged-link check it sits beside now runs on every push
+instead of only when a tag is cut.
+
+On Windows, `scripts\build.ps1` builds both, taking Go from PATH or from a
+toolchain placed beside the checkout, so the documented commands can be
+followed by name without installing one system-wide.
+
 ## v0.2.0
 
 v0.1.0 proved the thing works: a live multiplayer session becomes an archive,

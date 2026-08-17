@@ -15,17 +15,19 @@ The golden vectors describe encoding, not Minecraft, so no release can move them
 
 ## When a release lands
 
-Extract its profile. Nothing here is hand-written, so this needs only that release's jar:
+Extract its profile. Nothing here is hand-written, so this needs only that release's jar, and `mcprofile` is in the release archive next to `worldledger`:
 
 ```sh
-go run ./cmd/mcprofile --jar <client.jar> --out profiles/minecraft-java-<version>.json
+mcprofile --jar <client.jar> --out profiles/minecraft-java-<version>.json
 ```
 
 Compare it against the release the archive core was last checked against:
 
 ```sh
-go run ./cmd/mcprofile --from profiles/minecraft-java-26.2.json --to profiles/minecraft-java-<version>.json
+mcprofile --from profiles/minecraft-java-26.2.json --to profiles/minecraft-java-<version>.json
 ```
+
+From a source checkout both are `go run ./cmd/mcprofile` with the same flags, and `build.ps1` under `scripts/` builds the binaries on Windows where Go is not on PATH.
 
 Then run the client game test. `runClientGametest` in `adapters/fabric` drives a real client, and `run-client-gametest.ps1` under `scripts/` runs the same thing without Gradle. Either way it rebuilds the capture fingerprint and compares it to the committed reference.
 

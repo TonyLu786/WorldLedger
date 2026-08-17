@@ -38,14 +38,23 @@ jobs:
         run: go run ./cmd/mcjava-fixtures
       - name: Check the documented baseline against the build files
         run: ./scripts/check-documented-versions.sh
+      # Both of these ran only when a tag was pushed, which is the worst moment
+      # to learn that a packaged document points at something the package does
+      # not have. They are cheap, so they run on every push instead.
+      - name: Check every packaged link resolves inside the package
+        run: ./scripts/check-packaged-links.sh
+      - name: Check the packaged documents only invoke commands the release builds
+        run: ./scripts/check-packaged-commands.sh
       - name: Test
         run: go test -count=1 ./...
       - name: Vet
         run: go vet ./...
       - name: Race test
         run: go test -race -count=1 ./...
-      - name: Build CLI
-        run: go build -trimpath -o "${RUNNER_TEMP}/worldledger" ./cmd/worldledger
+      - name: Build the commands the release ships
+        run: |
+          go build -trimpath -o "${RUNNER_TEMP}/worldledger" ./cmd/worldledger
+          go build -trimpath -o "${RUNNER_TEMP}/mcprofile" ./cmd/mcprofile
 
   go-windows:
     name: Go core (Windows)
@@ -67,9 +76,11 @@ jobs:
         run: go test -count=1 ./...
       - name: Vet
         run: go vet ./...
-      - name: Build CLI
+      - name: Build the commands the release ships
         shell: pwsh
-        run: go build -trimpath -o "$env:RUNNER_TEMP\worldledger.exe" ./cmd/worldledger
+        run: |
+          go build -trimpath -o "$env:RUNNER_TEMP\worldledger.exe" ./cmd/worldledger
+          go build -trimpath -o "$env:RUNNER_TEMP\mcprofile.exe" ./cmd/mcprofile
 
   fabric:
     name: Fabric 26.2 adapter
