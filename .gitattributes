@@ -4,6 +4,7 @@
 .gitattributes text eol=lf
 .gitignore text eol=lf
 go.mod text eol=lf
+go.sum text eol=lf
 LICENSE text eol=lf
 NOTICE text eol=lf
 *.go text eol=lf

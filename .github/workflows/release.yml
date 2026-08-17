@@ -71,6 +71,16 @@ jobs:
           go build -trimpath -buildvcs=false \
             -ldflags="-s -w" \
             -o "dist/mcprofile${{ matrix.ext }}" ./cmd/mcprofile
+          # The desktop application is a separate module, so it is built from
+          # its own directory rather than by a relative package path, which does
+          # not work across a module boundary. -H=windowsgui keeps a console
+          # window from appearing behind the application's own: somebody who
+          # double-clicks this should get one window, not two.
+          gui=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then gui="-H=windowsgui"; fi
+          ( cd desktop && go build -trimpath -buildvcs=false \
+              -ldflags="-s -w ${gui} -X main.version=${version}" \
+              -o "../dist/worldledger-desktop${{ matrix.ext }}" . )
       # The native build is asked directly. A cross-compiled one cannot run
       # here, so its binary is checked for the string instead, which is weaker
       # but still fails when the injection is dropped.

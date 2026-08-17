@@ -23,7 +23,9 @@ import (
 )
 
 // Mount registers every endpoint the page uses.
-func Mount(server *app.Server) {
+func Mount(server *app.Server, watchdog *app.Watchdog) {
+	holdDuringLongWork = watchdog.Hold
+
 	server.HandleFunc("/api/health", handleHealth)
 	server.HandleFunc("/api/status", handleStatus)
 	server.HandleFunc("/api/import", handleImport)
@@ -66,3 +68,13 @@ func openArchive() (archive.Archive, error) {
 	}
 	return archive.Open(dir)
 }
+
+// holdDuringLongWork marks work that must outlive a quiet page. An import of
+// two hundred bundles can take longer than the watchdog's patience, and a page
+// waiting for it is not a page nobody is looking at.
+//
+// It is a variable so that the handlers can use it without every one of them
+// carrying a reference to the watchdog. The default does nothing, which is what
+// the tests want and is safe: the worst case is a timer that was never held off
+// in a program with no watchdog running.
+var holdDuringLongWork = func() func() { return func() {} }

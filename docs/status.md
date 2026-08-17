@@ -31,6 +31,14 @@ The coordinates were not chosen by hand. An independently written Anvil reader u
 
 Two limits belong with this. The conversion of that particular world reported no loss, which is the truth for it: it is superflat and uses none of the thirty blocks 1.21.11 lacks. The loss paths are covered by tests against the same profile, not by this run. And this was a server, so nothing here says how the world renders.
 
+**The desktop application, as far as it has been run.**
+
+The window opens. Built for Windows and launched on a machine with the WebView2 runtime, it shows a native window titled WorldLedger, and closing that window ends the process. Built with `-H=windowsgui` it shows one window rather than a console behind its own. In browser mode, a page that stops reporting in ends the process after the timeout, which was checked with a shortened timer: without it a closed tab would leave the program running with no way for its owner to stop it.
+
+The path was walked end to end in a browser against forty real capture bundles, on a fabricated Minecraft directory: the health screen read the machine, forty recordings were found and imported, a disposition was declared, forty places were written into a world, and the time-travel map drew. The archive core was called directly throughout; nothing parses command output.
+
+The installer has not been run against a real Minecraft. Its plan was built against this machine and lists the five exact paths it would write, and it refuses to run in a development build because such a build has no source for its own mod jar. What each of its steps does, what it refuses, and that uninstalling restores what was there are covered by tests against a fabricated game directory rather than a real one.
+
 ## Verified automatically
 
 - **Canonical identity.** Observation ids, state digests, and object hashes have committed golden vectors. Changing one requires a specification-level explanation. The identity preimage encodes an instant as integer seconds and nanoseconds rather than as formatted text, because text leaves trailing zeros in the fractional part to each language's convention and two conforming implementations would otherwise disagree; golden vectors cover the values where those conventions differ.
@@ -146,6 +154,10 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 **How a converted world renders.** A 1.21.11 server has opened one and answered for its contents, which is recorded above. No 1.21.11 *client* has opened one, so nothing here covers lighting, or how the seams between converted and generated chunks look to a player.
 
 **Conversion of a world that actually loses something.** The world that has been through a real older release loses nothing, because it uses none of the thirty blocks 1.21.11 lacks. What each policy does when there is something to lose is covered by tests against the 1.21.11 profile — the block is named in the report under every policy, the default policy leaves the chunk unwritten rather than substituting for it, the report policy refuses outright, and a chunk of blocks the release does have passes through unchanged — but no such world has been opened in Minecraft.
+
+**The desktop application against a real Minecraft.** Everything above about it was checked against a fabricated game directory or with the application refusing to act. Nothing has yet installed Fabric and the mod into a real Minecraft through it, played, and come back — which is the run that would make the whole path verified rather than each part of it. It also needs a release carrying the mod jar, because a development build deliberately has no source for one.
+
+**The desktop application anywhere but Windows.** It compiles for Linux and macOS and the browser path is the whole application there rather than a degraded one, but no window is created on either and neither has been run.
 
 **Race detection on Windows.** The race gate needs cgo and is run in Linux CI only.
 

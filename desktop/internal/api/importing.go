@@ -52,6 +52,7 @@ func handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer importing.Unlock()
+	defer holdDuringLongWork()()
 
 	dir, candidates, found := mcpath.FindSpool()
 	if !found {

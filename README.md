@@ -19,6 +19,14 @@ The Fabric process never opens or mutates an archive. The Go importer is the onl
 
 ## Quickstart
 
+Take `worldledger-desktop` for your platform from the [releases page](https://github.com/TonyLu786/WorldLedger/releases) and run it. It opens a window, checks what your Minecraft is missing, and offers to add Fabric and the mod in one step, naming every file it would write before it writes any of them. After that it is: play, bring it in, decide what may be shared, make a world.
+
+The one thing it will not do for you is the deciding. An archive holds where you went and when, and nothing becomes a world until a named person has said what may happen to it. That is the point of the step, not friction in it.
+
+Everything the window does is also the command line below, which is the way in if you would rather have one, or are scripting, or want the operations the window deliberately leaves out.
+
+## The same path from a terminal
+
 Six steps from nothing to a world you can walk around in.
 
 **1. Install.** Fabric Loader 0.19.3 and Fabric API for Minecraft 26.2, then the mod JAR from the [releases page](https://github.com/TonyLu786/WorldLedger/releases) into `.minecraft/mods`. Take the `worldledger` archive for your platform from the same page and unpack it anywhere.

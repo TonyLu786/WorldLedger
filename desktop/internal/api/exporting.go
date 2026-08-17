@@ -58,6 +58,7 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer exporting.Unlock()
+	defer holdDuringLongWork()()
 
 	var request exportRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {

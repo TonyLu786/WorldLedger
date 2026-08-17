@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### A window, for people who will not open a terminal
+
+The archive core has been finished and verified for a while, and the project
+has been unusable by the people it is for. Getting from wanting this to a
+world you can walk around in cost four downloads, an edited properties file
+and four terminal commands, and every one of those is a place somebody stops.
+
+`worldledger-desktop` is one file. It opens a window, reads what your
+Minecraft is missing, and offers to add Fabric and the mod in a single step
+that names every file it will write before writing any of them. Then: play,
+bring it in, decide, make a world, and look at it changing.
+
+Adding Fabric normally means downloading an installer, having Java, and
+watching a window for a minute. All that installer does for a client is write
+one version profile and add a launcher entry, and Fabric publishes the profile
+itself, so this fetches a few kilobytes of JSON instead. Undoing it is a
+replay of a record of what was written, not a guess: anything replaced is
+kept, a file changed since it was installed is left alone, and a mods folder
+with somebody else's mods in it is not ours to remove.
+
+The archive core gains nothing from any of this. The desktop application is a
+separate module with its own dependencies, because the core's claim is that
+anyone can recompute an observation's identity, and every dependency in it is
+something a reader has to audit before that claim means anything.
+
+Time travel is in the window now rather than only in `diff`, which is where
+nobody who would care about it was going to find it. It keeps the distinction
+the whole project is about: between two moments a place changed, or did not
+change, or was never looked at again, and the third is not the second.
+
 ### A real older release to convert against
 
 `convert` has always had a target profile to translate into, and until now

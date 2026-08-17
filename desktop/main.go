@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/worldledger/worldledger-mc/desktop/internal/api"
 	"github.com/worldledger/worldledger-mc/desktop/internal/app"
@@ -63,22 +64,42 @@ func run() error {
 	if err := ui.Mount(server); err != nil {
 		return err
 	}
-	api.Mount(server)
+	// Generous on purpose. A machine that pauses for ten seconds under load has
+	// not been abandoned, and quitting on somebody mid-import would be a worse
+	// failure than lingering a little.
+	watchdog := app.NewWatchdog(45 * time.Second)
+	abandoned := watchdog.Mount(server)
+	api.Mount(server, watchdog)
 
 	errs := make(chan error, 1)
 	go func() { errs <- server.Serve() }()
 
-	switch {
-	case *printURL:
+	if *printURL {
+		// Nothing is watching, so this stays up until it is stopped. It exists
+		// to be driven by something other than a person.
 		fmt.Println(server.URL())
-	default:
-		// A window that cannot be opened is not a reason to fail. Whatever
-		// happened is worth saying once, and then the browser gets the same
-		// application.
-		if note := shell.Open(server.URL(), *useBrowser); note != "" {
-			fmt.Fprintln(os.Stderr, note)
-		}
+		return <-errs
 	}
 
-	return <-errs
+	// A window that cannot be opened is not a reason to fail. Whatever happened
+	// is worth saying once, and then the browser gets the same application.
+	mode, note := shell.Present(server.URL(), *useBrowser)
+	if note != "" {
+		fmt.Fprintln(os.Stderr, note)
+	}
+
+	// The two ways of showing the page end differently, and getting this wrong
+	// leaves somebody with a program they cannot see and cannot close. A window
+	// closing is the program being closed, and Present has already returned by
+	// the time we are here. A browser tab closing tells nobody anything, so the
+	// page reports in while it is open and the quiet is what ends this.
+	if mode == shell.InWindow {
+		return nil
+	}
+	select {
+	case err := <-errs:
+		return err
+	case <-abandoned:
+		return nil
+	}
 }

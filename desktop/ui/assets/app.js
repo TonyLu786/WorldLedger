@@ -639,4 +639,11 @@ function drawMap(chunks) {
   return canvas;
 }
 
+// A window closing ends the program. A tab closing tells nobody anything, so
+// the page says it is still here while it is open, and the application stops
+// when it stops saying so. Without this it would sit in the process list until
+// somebody learned what Task Manager is.
+setInterval(() => { call('/api/alive').catch(() => {}); }, 10000);
+call('/api/alive').catch(() => {});
+
 show('setup');

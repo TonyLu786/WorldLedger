@@ -102,7 +102,9 @@ try {
     }
     Step 'building worldledger-desktop'
     $output = Join-Path $binDir 'worldledger-desktop.exe'
-    & $go build -trimpath -o $output .
+    # -H=windowsgui keeps a console window from appearing behind the
+    # application's own. Somebody who double-clicks this should get one window.
+    & $go build -trimpath -ldflags '-H=windowsgui' -o $output .
     if ($LASTEXITCODE -ne 0) { Fail 'building worldledger-desktop failed' }
     Detail $output
 } finally {
