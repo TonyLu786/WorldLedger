@@ -102,6 +102,11 @@ jobs:
           cp ../profiles/*.json profiles/
           cp -r ../docs ../spec ../examples .
           cp ../adapters/fabric/README.md ../adapters/fabric/gradle.properties adapters/fabric/
+      # ci.yml runs on pushes to main and on pull requests, not on tags, so a
+      # tag is the one push where this would otherwise not be checked -- and it
+      # is the push that produces the archive.
+      - name: Check the packaged documents only invoke commands the release builds
+        run: ./scripts/check-packaged-commands.sh
       # A README whose links go nowhere is worse than one that says less. The
       # packaged set is checked against what the packaged documents actually
       # reference, so adding a link without adding the file fails the release

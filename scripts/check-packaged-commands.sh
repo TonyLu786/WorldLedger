@@ -31,7 +31,17 @@ documents=$(
 )
 
 commands=$(find cmd -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
-built=$(grep -oE '\./cmd/[a-z-]+' .github/workflows/release.yml | sed 's|\./cmd/||' | sort -u)
+# Only a line that writes into dist/ counts as built. The release also runs
+# `go run ./cmd/mcjava-fixtures` to check the committed fixtures, and reading
+# every ./cmd/ mention would take that for a shipped binary -- which is this
+# check's own failure mode, one it would then be blind to.
+built=$(grep -E '\-o "dist/' .github/workflows/release.yml |
+	grep -oE '\./cmd/[a-z-]+' | sed 's|\./cmd/||' | sort -u)
+if [ -z "$built" ]; then
+	echo "no command in .github/workflows/release.yml builds into dist/;" >&2
+	echo "this check cannot tell what ships and will not guess" >&2
+	exit 1
+fi
 
 missing=""
 for name in $commands; do

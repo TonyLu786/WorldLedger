@@ -62,7 +62,7 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("%w\n\n%s", err, usage)
 	}
 	if flags.NArg() != 0 {
-		return errors.New(usage)
+		return fmt.Errorf("unexpected argument %q\n\n%s", flags.Arg(0), usage)
 	}
 
 	fixtureDir := filepath.Join(*root, "testdata", "mcjava-v1")

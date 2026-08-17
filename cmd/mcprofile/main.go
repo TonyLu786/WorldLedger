@@ -73,6 +73,12 @@ func run() error {
 		}
 		return fmt.Errorf("%w\n\n%s", err, usage)
 	}
+	// Every input is named by a flag, so a bare argument is somebody guessing a
+	// positional form. Ignoring it and reporting success would mean exiting zero
+	// having done nothing they asked for.
+	if fs.NArg() != 0 {
+		return fmt.Errorf("unexpected argument %q\n\n%s", fs.Arg(0), usage)
+	}
 
 	switch {
 	case *fromPath != "" && *toPath != "":

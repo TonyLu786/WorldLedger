@@ -45,6 +45,9 @@ if ($onPath) {
     $go = $onPath.Source
 } else {
     $tools = Split-Path -Parent $repository
+    # Highest-sorting name wins. That is not a version comparison and is not
+    # claimed to be one; it only has to be deterministic when more than one
+    # toolchain has been unpacked there.
     $candidates = @(Get-ChildItem -Path (Join-Path $tools '.tools') -Filter 'go*' -Directory -ErrorAction SilentlyContinue |
         ForEach-Object { Join-Path $_.FullName 'go\bin\go.exe' } |
         Where-Object { Test-Path -LiteralPath $_ } |
@@ -65,21 +68,35 @@ if (-not (Test-Path -LiteralPath $binDir)) {
     New-Item -ItemType Directory -Path $binDir | Out-Null
 }
 
-if ($Test) {
-    Step 'go test ./...'
-    & $go test ./...
-    if ($LASTEXITCODE -ne 0) { Fail 'tests failed' }
+# go resolves ./cmd/... and finds go.mod relative to the working directory, so
+# this has to run in the repository rather than wherever it was invoked from.
+# The whole point of the script is that it can be called by path from anywhere.
+Push-Location -LiteralPath $repository
+try {
+    if ($Test) {
+        Step 'go test ./...'
+        & $go test ./...
+        if ($LASTEXITCODE -ne 0) { Fail 'tests failed' }
+    }
+
+    foreach ($command in @('worldledger', 'mcprofile')) {
+        Step "building $command"
+        $output = Join-Path $binDir "$command.exe"
+        & $go build -trimpath -o $output "./cmd/$command"
+        if ($LASTEXITCODE -ne 0) { Fail "building $command failed" }
+        Detail $output
+    }
+} finally {
+    Pop-Location
 }
 
-foreach ($command in @('worldledger', 'mcprofile')) {
-    Step "building $command"
-    $output = Join-Path $binDir "$command.exe"
-    & $go build -trimpath -o $output "./cmd/$command"
-    if ($LASTEXITCODE -ne 0) { Fail "building $command failed" }
-    Detail $output
-}
-
+# Printed with full paths so the lines can be pasted anywhere, which is the
+# same reason the script itself no longer depends on where it was called from.
+$profiles = Join-Path $repository 'profiles'
 Write-Host ''
-Write-Host 'Built. Run them from the repository root:'
-Write-Host '  .\bin\worldledger.exe status --archive .\archive'
-Write-Host '  .\bin\mcprofile.exe --from profiles\minecraft-java-1.21.11.json --to profiles\minecraft-java-26.2.json'
+Write-Host 'Built. These run from any directory:'
+Write-Host ('  & "{0}" version' -f (Join-Path $binDir 'worldledger.exe'))
+Write-Host ('  & "{0}" --from "{1}" --to "{2}"' -f
+    (Join-Path $binDir 'mcprofile.exe'),
+    (Join-Path $profiles 'minecraft-java-1.21.11.json'),
+    (Join-Path $profiles 'minecraft-java-26.2.json'))

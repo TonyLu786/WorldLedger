@@ -88,6 +88,9 @@ func run() error {
 		}
 		return fmt.Errorf("%w\n\n%s", err, usage)
 	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("unexpected argument %q\n\n%s", fs.Arg(0), usage)
+	}
 	if *jar == "" || *out == "" || *source == "" {
 		return errors.New(usage)
 	}
