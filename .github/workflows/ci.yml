@@ -51,10 +51,23 @@ jobs:
         run: go vet ./...
       - name: Race test
         run: go test -race -count=1 ./...
+      # desktop/ is its own module so that the archive core keeps having no
+      # dependencies at all. The cost is that ./... at the root does not reach
+      # it: without these steps its code would be neither built nor tested here,
+      # and would break silently.
+      - name: Test the desktop application
+        working-directory: desktop
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          go test -count=1 ./...
       - name: Build the commands the release ships
         run: |
           go build -trimpath -o "${RUNNER_TEMP}/worldledger" ./cmd/worldledger
           go build -trimpath -o "${RUNNER_TEMP}/mcprofile" ./cmd/mcprofile
+      - name: Build the desktop application
+        working-directory: desktop
+        run: go build -trimpath -o "${RUNNER_TEMP}/worldledger-desktop" .
 
   go-windows:
     name: Go core (Windows)
@@ -76,11 +89,22 @@ jobs:
         run: go test -count=1 ./...
       - name: Vet
         run: go vet ./...
+      # Windows is where the desktop application is aimed first, so its tests
+      # run on the platform whose path handling they are about.
+      - name: Test the desktop application
+        working-directory: desktop
+        run: go test -count=1 ./...
       - name: Build the commands the release ships
         shell: pwsh
         run: |
           go build -trimpath -o "$env:RUNNER_TEMP\worldledger.exe" ./cmd/worldledger
           go build -trimpath -o "$env:RUNNER_TEMP\mcprofile.exe" ./cmd/mcprofile
+      # A separate module cannot be built from the parent by relative path, so
+      # this runs where its go.mod is.
+      - name: Build the desktop application
+        working-directory: desktop
+        shell: pwsh
+        run: go build -trimpath -o "$env:RUNNER_TEMP\worldledger-desktop.exe" .
 
   fabric:
     name: Fabric 26.2 adapter

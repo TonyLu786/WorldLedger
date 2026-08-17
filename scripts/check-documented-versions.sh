@@ -66,6 +66,31 @@ for readme in README.md adapters/fabric/README.md examples/minecraft-26.2-fixtur
     fi
 done
 
+# The desktop application refuses to install the mod into a Minecraft it was not
+# built for, which is the check that stops somebody's game being broken by a
+# well-meant button. It can only refuse correctly while these agree with the
+# build. A bump that left them behind would produce an application that rejects
+# a correct installation, or accepts a wrong one -- and neither looks like a
+# version mismatch from the outside.
+target=desktop/internal/health/target.go
+constant() { sed -n "s/^\t$1 *= *\"\\(.*\\)\"\$/\\1/p" "$target" | tr -d '\r'; }
+
+expect_constant() { # name value
+    local got
+    got=$(constant "$1")
+    if [ -z "$got" ]; then
+        printf '%s: could not read %s\n' "$target" "$1" >&2
+        status=1
+    elif [ "$got" != "$2" ]; then
+        printf '%s: %s is %s but the build says %s\n' "$target" "$1" "$got" "$2" >&2
+        status=1
+    fi
+}
+
+expect_constant MinecraftVersion "$minecraft"
+expect_constant LoaderVersion "$loader"
+expect_constant FabricAPIVersion "$api"
+
 if [ "$status" -eq 0 ]; then
     echo "documented baseline and adapter defaults match the files that decide them"
 fi

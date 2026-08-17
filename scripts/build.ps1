@@ -90,6 +90,25 @@ try {
     Pop-Location
 }
 
+# The desktop application is a separate module, so it is built where its go.mod
+# is rather than by a relative package path from the root, which does not work
+# across a module boundary.
+Push-Location -LiteralPath (Join-Path $repository 'desktop')
+try {
+    if ($Test) {
+        Step 'go test ./... (desktop)'
+        & $go test ./...
+        if ($LASTEXITCODE -ne 0) { Fail 'desktop tests failed' }
+    }
+    Step 'building worldledger-desktop'
+    $output = Join-Path $binDir 'worldledger-desktop.exe'
+    & $go build -trimpath -o $output .
+    if ($LASTEXITCODE -ne 0) { Fail 'building worldledger-desktop failed' }
+    Detail $output
+} finally {
+    Pop-Location
+}
+
 # Printed with full paths so the lines can be pasted anywhere, which is the
 # same reason the script itself no longer depends on where it was called from.
 $profiles = Join-Path $repository 'profiles'
