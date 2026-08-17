@@ -59,21 +59,34 @@ func handleMoments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Grouped by hour. Every observation is its own instant, and offering a
-	// player several hundred timestamps that differ by seconds is offering them
-	// nothing they can choose between.
+	// Grouped by hour, because every observation is its own instant and offering
+	// a player several hundred timestamps that differ by seconds is offering
+	// them nothing they can choose between.
+	//
+	// The instant reported for a group is the last observation in it, not the
+	// hour it starts. Reporting the start looked reasonable and was wrong in a
+	// way that made the screen useless: an hour's observations happen after the
+	// hour begins, so "as of 02:00" is before all of them, and a player whose
+	// whole session fell in one hour opened this to be told that all forty
+	// places had never been seen.
+	latest := map[time.Time]time.Time{}
 	counts := map[time.Time]int{}
 	for _, input := range inputs.Chunks {
 		for _, observation := range input.Observations {
-			counts[observation.ObservedAt.UTC().Truncate(time.Hour)]++
+			at := observation.ObservedAt.UTC()
+			bucket := at.Truncate(time.Hour)
+			counts[bucket]++
+			if at.After(latest[bucket]) {
+				latest[bucket] = at
+			}
 		}
 	}
 
 	answer := momentsAnswer{Server: server, Dimension: dimension}
-	for at, chunks := range counts {
+	for bucket, chunks := range counts {
 		answer.Moments = append(answer.Moments, moment{
-			At:     at.Format(time.RFC3339),
-			Label:  at.Format("2 January 2006, 15:04"),
+			At:     latest[bucket].Format(time.RFC3339Nano),
+			Label:  bucket.Format("2 January 2006, 15:04"),
 			Chunks: chunks,
 		})
 	}

@@ -185,3 +185,42 @@ button:disabled { opacity: 0.55; cursor: default; filter: none; }
   .step-text small { display: none; }
   .stage { padding: 24px 20px; }
 }
+
+/* Facts, cards and pickers ------------------------------------------------ */
+
+.facts { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.fact { display: flex; justify-content: space-between; gap: 18px; padding: 10px 15px; background: var(--card); }
+.fact + .fact { border-top: 1px solid var(--line); }
+.fact-label { color: var(--ink-soft); font-size: 13px; }
+.fact-value { font-size: 13px; text-align: right; word-break: break-all; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.card-head h2 { margin: 0; font-size: 17px; word-break: break-all; }
+.card-note { color: var(--ink-soft); font-size: 13px; white-space: nowrap; }
+
+.choices { display: flex; flex-direction: column; gap: 8px; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.choice:hover { background: var(--paper); }
+.choice input { margin-top: 3px; }
+.choice strong { display: block; font-weight: 550; }
+.choice-meaning { display: block; font-size: 13px; color: var(--ink-soft); }
+.choices .until, .choices .name { padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: inherit; font: inherit; }
+.choices .primary { align-self: flex-start; }
+
+.howto { color: var(--ink-soft); margin: 0 0 18px; padding-left: 22px; }
+.howto li { margin-bottom: 5px; }
+
+.picker { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px; }
+.picker-field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--ink-soft); }
+.picker select { padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font: inherit; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 13px; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+.map { border: 1px solid var(--line); border-radius: 6px; image-rendering: pixelated; max-width: 100%; background: var(--card); }
+.honesty { margin-top: 12px; color: var(--ink-soft); font-size: 13px; max-width: 62ch; }
+
+.step.is-done .step-index { background: var(--accent); border-color: transparent; color: #fff; }
+.step.is-next .step-index { border-color: var(--accent); color: var(--accent); }

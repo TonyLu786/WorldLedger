@@ -13,84 +13,64 @@
       <span class="mark-name">WorldLedger</span>
       <span class="mark-note">for Minecraft</span>
     </div>
-    <button class="step" data-screen="setup" aria-current="true">
-      <span class="step-index">1</span>
-      <span class="step-text">Set up<small>Get Minecraft ready</small></span>
-    </button>
-    <button class="step" data-screen="capture">
-      <span class="step-index">2</span>
-      <span class="step-text">Play<small>What has been recorded</small></span>
-    </button>
-    <button class="step" data-screen="import">
-      <span class="step-index">3</span>
-      <span class="step-text">Bring it in<small>Add it to your archive</small></span>
-    </button>
-    <button class="step" data-screen="declare">
-      <span class="step-index">4</span>
-      <span class="step-text">Decide<small>What may be shared</small></span>
-    </button>
-    <button class="step" data-screen="world">
-      <span class="step-index">5</span>
-      <span class="step-text">Make a world<small>Walk around in it</small></span>
-    </button>
-    <button class="step" data-screen="travel">
-      <span class="step-index">6</span>
-      <span class="step-text">Time travel<small>See it change</small></span>
-    </button>
+    <button class="step" data-screen="setup"><span class="step-index">1</span><span class="step-text">Set up<small>Get Minecraft ready</small></span></button>
+    <button class="step" data-screen="capture"><span class="step-index">2</span><span class="step-text">Play<small>What has been recorded</small></span></button>
+    <button class="step" data-screen="import"><span class="step-index">3</span><span class="step-text">Bring it in<small>Add it to your archive</small></span></button>
+    <button class="step" data-screen="declare"><span class="step-index">4</span><span class="step-text">Decide<small>What may be shared</small></span></button>
+    <button class="step" data-screen="world"><span class="step-index">5</span><span class="step-text">Make a world<small>Walk around in it</small></span></button>
+    <button class="step" data-screen="travel"><span class="step-index">6</span><span class="step-text">Time travel<small>See it change</small></span></button>
   </nav>
 
   <main class="stage">
     <section class="screen" id="screen-setup" hidden>
       <header class="screen-head">
         <h1>Set up</h1>
-        <p>WorldLedger records the world your Minecraft client is already being shown, and keeps it so you can go back to it later. This page checks that everything it needs is in place.</p>
+        <p>WorldLedger keeps the world your Minecraft client is already being shown, so you can go back to it later. This checks that everything it needs is in place.</p>
       </header>
-      <div class="checks" id="checks" aria-live="polite">
-        <p class="waiting">Looking at this computer&hellip;</p>
-      </div>
-      <footer class="screen-foot">
-        <button class="primary" id="recheck">Check again</button>
-      </footer>
+      <div class="checks" id="checks" aria-live="polite"><p class="waiting">Looking at this computer&hellip;</p></div>
+      <footer class="screen-foot"><button class="primary" id="recheck">Check again</button></footer>
     </section>
 
     <section class="screen" id="screen-capture" hidden>
       <header class="screen-head">
         <h1>Play</h1>
-        <p>Join a server and play normally. What your client is shown is recorded as you go.</p>
+        <p>Join a server and play normally. What your client is shown is kept as you go, without touching the server or the world.</p>
       </header>
-      <div class="placeholder">Not connected to the archive yet.</div>
+      <div id="capture-body" aria-live="polite"><p class="waiting">Looking&hellip;</p></div>
+      <footer class="screen-foot"><button class="primary" id="capture-refresh">Check again</button></footer>
     </section>
 
     <section class="screen" id="screen-import" hidden>
       <header class="screen-head">
         <h1>Bring it in</h1>
-        <p>Everything recorded while you played is waiting to be added to your archive.</p>
+        <p>Everything kept while you played is waiting to be added to your archive. Your recordings stay where they are as well &mdash; nothing is deleted.</p>
       </header>
-      <div class="placeholder">Not connected to the archive yet.</div>
+      <div id="import-body" aria-live="polite"><p class="waiting">Looking&hellip;</p></div>
+      <footer class="screen-foot"><button class="primary" id="import-run">Bring it in</button></footer>
     </section>
 
     <section class="screen" id="screen-declare" hidden>
       <header class="screen-head">
         <h1>Decide what may be shared</h1>
-        <p>An archive holds where you went and when. Nothing leaves it until someone has said what may happen to it. This step is not skipped.</p>
+        <p>An archive holds where you went and when. Nothing can be made into a world until someone has said what may happen to it. This is the one step that is not done for you.</p>
       </header>
-      <div class="placeholder">Not connected to the archive yet.</div>
+      <div id="declare-body" aria-live="polite"><p class="waiting">Looking&hellip;</p></div>
     </section>
 
     <section class="screen" id="screen-world" hidden>
       <header class="screen-head">
         <h1>Make a world</h1>
-        <p>Your recordings are written into a single-player world you can open and walk around in.</p>
+        <p>Your recordings are written into a world Minecraft made. A world&rsquo;s seed and rules were never yours to see, so one is never invented &mdash; you make an empty world, and this fills in what you saw.</p>
       </header>
-      <div class="placeholder">Not connected to the archive yet.</div>
+      <div id="world-body" aria-live="polite"><p class="waiting">Looking&hellip;</p></div>
     </section>
 
     <section class="screen" id="screen-travel" hidden>
       <header class="screen-head">
         <h1>Time travel</h1>
-        <p>Pick a place and see how it changed between two moments &mdash; including where nobody was watching, which is left blank rather than guessed.</p>
+        <p>Pick two moments and see what changed between them.</p>
       </header>
-      <div class="placeholder">Not connected to the archive yet.</div>
+      <div id="travel-body" aria-live="polite"><p class="waiting">Looking&hellip;</p></div>
     </section>
   </main>
 </div>
