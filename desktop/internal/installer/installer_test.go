@@ -30,8 +30,20 @@ func (s stubFetcher) Fetch(source string) ([]byte, error) {
 	return body, nil
 }
 
+// noLauncher makes the tests independent of whether somebody has Minecraft
+// open on the machine running them. Every test that builds a plan needs it,
+// because the launcher check would otherwise refuse and the whole suite would
+// pass or fail according to what is in the task list.
+func noLauncher(t *testing.T) {
+	t.Helper()
+	previous := launcherRunning
+	launcherRunning = func() (bool, string) { return false, "" }
+	t.Cleanup(func() { launcherRunning = previous })
+}
+
 func fixture(t *testing.T) mcpath.Install {
 	t.Helper()
+	noLauncher(t)
 	install := mcpath.Install{Root: t.TempDir()}
 	if err := os.MkdirAll(install.Versions(), 0o755); err != nil {
 		t.Fatal(err)
@@ -324,5 +336,45 @@ func TestAFailurePartWayThroughStillReportsWhatWasDone(t *testing.T) {
 	}
 	if _, err := os.Stat(install.VersionProfile(LoaderVersionID())); !os.IsNotExist(err) {
 		t.Error("the half-installed version profile is still there")
+	}
+}
+
+// The launcher writes launcher_profiles.json whenever it feels like it, and
+// read-modify-write from two programs at once is how somebody's list of
+// installations disappears.
+func TestAnOpenLauncherIsRefusedRatherThanRacedWith(t *testing.T) {
+	install := fixture(t)
+	launcherRunning = func() (bool, string) { return true, "Minecraft.exe" }
+
+	plan := BuildPlan(install, report(allMissing()), "mod-source", "alice")
+	if plan.Runnable() {
+		t.Fatal("a plan was produced while the launcher was open")
+	}
+	if !strings.Contains(plan.Refusal, "Minecraft.exe") {
+		t.Errorf("the refusal does not name what is open: %q", plan.Refusal)
+	}
+	if len(plan.Steps) != 0 {
+		t.Errorf("a refused plan still lists %d steps", len(plan.Steps))
+	}
+}
+
+// The game being open is not the same as the launcher being open. Mods and
+// version profiles are read at start up, so writing them while somebody plays
+// takes effect next launch and disturbs nothing; refusing then would be a
+// needless obstacle.
+func TestAnAlreadyInstalledLoaderDoesNotConsultTheLauncherAtAll(t *testing.T) {
+	install := fixture(t)
+	asked := false
+	launcherRunning = func() (bool, string) { asked = true; return true, "Minecraft.exe" }
+
+	plan := BuildPlan(install, report(map[string]health.State{
+		"minecraft": health.OK, "release": health.OK, "loader": health.OK,
+	}), "mod-source", "alice")
+
+	if asked {
+		t.Error("the launcher was checked for an install that does not touch its settings")
+	}
+	if plan.Refusal != "" {
+		t.Errorf("adding only mods was refused: %q", plan.Refusal)
 	}
 }

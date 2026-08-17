@@ -70,6 +70,14 @@ type Plan struct {
 // Runnable reports whether there is anything to do and nothing stopping it.
 func (p Plan) Runnable() bool { return p.Refusal == "" && len(p.Steps) > 0 }
 
+// launcherRunning is a variable so that the tests do not depend on whether
+// somebody happens to have Minecraft open on the machine running them.
+//
+// Calling the real check directly made the suite pass in CI and fail on a
+// developer's machine with the launcher in the background, which is the kind
+// of result that teaches people to stop believing a test suite.
+var launcherRunning = launcherIsRunning
+
 // loaderProfileURL is where Fabric publishes the profile the launcher needs.
 func loaderProfileURL(minecraft, loader string) string {
 	return fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json", minecraft, loader)
@@ -117,6 +125,18 @@ func BuildPlan(install mcpath.Install, report health.Report, modSource string, c
 				"added to another one. Select %s in the Minecraft launcher, play it once, then come back.",
 			health.MinecraftVersion, health.MinecraftVersion)
 		return plan
+	}
+
+	// The launcher writes launcher_profiles.json whenever it feels like it, and
+	// read-modify-write from two programs at once is how somebody's list of
+	// installations disappears. The game being open is fine -- mods are read at
+	// start up, so writing them takes effect next launch.
+	if state["loader"] != health.OK {
+		if running, name := launcherRunning(); running {
+			plan.Refusal = "The Minecraft launcher is open (" + name + "). Close it first, " +
+				"so that adding Fabric to its list cannot collide with the launcher writing to it."
+			return plan
+		}
 	}
 
 	if state["loader"] != health.OK {
