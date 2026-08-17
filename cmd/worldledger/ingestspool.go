@@ -6,11 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/worldledger/worldledger-mc/internal/archive"
 	"github.com/worldledger/worldledger-mc/internal/bundle"
+	// Aliased because this file's own variable for a spool path is called
+	// spool, and a package of the same name would be shadowed inside every
+	// function that has one.
+	spooldir "github.com/worldledger/worldledger-mc/internal/spool"
 )
 
 func cmdIngestSpool(args []string) error {
@@ -127,32 +129,23 @@ func printNextStepAfterImport(a archive.Archive, archivePath string) {
 // adapter rejected. Neither is importable, and neither should be silently
 // ignored: the first means a client is still running, and the second is a
 // failure someone should look at.
+// Reading the directory belongs to internal/spool, because the desktop
+// application asks the same question of the same three prefixes. What stays
+// here is the shape the rest of this file already prints from, and the message
+// for a directory that is not there, which names the path this command was
+// given.
 func readSpool(spool string) (ready []string, leftovers map[string]int, err error) {
-	entries, err := os.ReadDir(spool)
+	contents, err := spooldir.Read(spool)
 	if os.IsNotExist(err) {
 		return nil, nil, fmt.Errorf("no spool directory at %s", spool)
 	}
 	if err != nil {
 		return nil, nil, err
 	}
-
-	leftovers = map[string]int{}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		switch {
-		case strings.HasPrefix(name, "ready-"):
-			ready = append(ready, filepath.Join(spool, name))
-		case strings.HasPrefix(name, ".tmp-"):
-			leftovers["being written"]++
-		case strings.HasPrefix(name, "quarantine-"):
-			leftovers["quarantined"]++
-		}
-	}
-	sort.Strings(ready)
-	return ready, leftovers, nil
+	return contents.Ready, map[string]int{
+		"being written": contents.InProgress,
+		"quarantined":   contents.Quarantined,
+	}, nil
 }
 
 func reportSpoolLeftovers(leftovers map[string]int) {

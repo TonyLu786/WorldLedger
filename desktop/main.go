@@ -15,14 +15,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 
+	"github.com/worldledger/worldledger-mc/desktop/internal/api"
 	"github.com/worldledger/worldledger-mc/desktop/internal/app"
-	"github.com/worldledger/worldledger-mc/desktop/internal/health"
 	"github.com/worldledger/worldledger-mc/desktop/internal/shell"
 	"github.com/worldledger/worldledger-mc/desktop/ui"
-	"github.com/worldledger/worldledger-mc/internal/mcpath"
 )
 
 var version = "dev"
@@ -65,7 +63,7 @@ func run() error {
 	if err := ui.Mount(server); err != nil {
 		return err
 	}
-	mountAPI(server)
+	api.Mount(server)
 
 	errs := make(chan error, 1)
 	go func() { errs <- server.Serve() }()
@@ -83,21 +81,4 @@ func run() error {
 	}
 
 	return <-errs
-}
-
-// mountAPI registers what the page calls. Handlers stay thin: everything they
-// do belongs to a package that can be tested without a socket.
-func mountAPI(server *app.Server) {
-	server.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		install, candidates, found := mcpath.FindInstall()
-		if !found {
-			looked := make([]string, 0, len(candidates))
-			for _, candidate := range candidates {
-				looked = append(looked, candidate.Root)
-			}
-			app.WriteJSON(w, http.StatusOK, health.NotFound(looked))
-			return
-		}
-		app.WriteJSON(w, http.StatusOK, health.Inspect(install))
-	})
 }
