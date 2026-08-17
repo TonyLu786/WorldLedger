@@ -15,7 +15,7 @@ import (
 	"github.com/worldledger/worldledger-mc/internal/archive"
 	"github.com/worldledger/worldledger-mc/internal/epoch"
 	"github.com/worldledger/worldledger-mc/internal/landmark"
-	"github.com/worldledger/worldledger-mc/internal/redact"
+	"github.com/worldledger/worldledger-mc/internal/reconstruct"
 	"github.com/worldledger/worldledger-mc/internal/translate"
 )
 
@@ -28,30 +28,22 @@ import (
 // inspect, fsck, and fingerprint deliberately still see everything. An operator
 // examining their own archive is not the risk this guards, and a diagnostic that
 // hides data is a diagnostic that lies. Removing data is what purge is for.
+//
+// The gathering itself is internal/reconstruct's, because the desktop
+// application builds the same thing and a second implementation that forgot the
+// redactions would not be slightly wrong: it would publish observations
+// somebody asked to have withheld. Saying so on stderr stays here, because that
+// is this program's way of saying it.
 func dimensionInputs(a archive.Archive, server, dimension string) ([]epoch.ChunkInput, error) {
-	gathered, err := a.DimensionObservations(server, dimension)
+	inputs, err := reconstruct.Gather(a, server, dimension)
 	if err != nil {
 		return nil, err
 	}
-	redactions, err := redact.NewStore(a.Root).List()
-	if err != nil {
-		return nil, fmt.Errorf("read redactions: %w", err)
+	if inputs.Withheld > 0 {
+		fmt.Fprintf(os.Stderr, "withholding %d observation(s) under %d declared redaction(s)\n",
+			inputs.Withheld, inputs.Redactions)
 	}
-
-	inputs := make([]epoch.ChunkInput, 0, len(gathered))
-	withheld := 0
-	for _, entry := range gathered {
-		kept, dropped := redactions.Filter(entry.Observations)
-		withheld += len(dropped)
-		if len(kept) == 0 {
-			continue
-		}
-		inputs = append(inputs, epoch.ChunkInput{Chunk: entry.Chunk, Observations: kept})
-	}
-	if withheld > 0 {
-		fmt.Fprintf(os.Stderr, "withholding %d observation(s) under %d declared redaction(s)\n", withheld, len(redactions))
-	}
-	return inputs, nil
+	return inputs.Chunks, nil
 }
 
 func snapshotAt(a archive.Archive, server, dimension, moment string) (epoch.Snapshot, error) {

@@ -29,6 +29,10 @@ func Mount(server *app.Server) {
 	server.HandleFunc("/api/import", handleImport)
 	server.HandleFunc("/api/choices", handleChoices)
 	server.HandleFunc("/api/declare", handleDeclare)
+	server.HandleFunc("/api/worlds", handleWorlds)
+	server.HandleFunc("/api/export", handleExport)
+	server.HandleFunc("/api/moments", handleMoments)
+	server.HandleFunc("/api/travel", handleTravel)
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
