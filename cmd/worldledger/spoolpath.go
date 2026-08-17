@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/worldledger/worldledger-mc/internal/archive"
+	"github.com/worldledger/worldledger-mc/internal/mcpath"
 	"github.com/worldledger/worldledger-mc/internal/policy"
 )
 
@@ -18,63 +16,16 @@ import (
 // So the path is worked out rather than demanded, and the directory that was
 // chosen is always printed. A tool that silently picks a directory and imports
 // from it is worse than one that asks, because the mistake is invisible.
-
-const spoolSuffix = "config/worldledger/spool"
-
-// spoolCandidates lists where an unmodified launcher puts Minecraft on this
-// machine, most likely first.
-func spoolCandidates() []string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	return spoolCandidatesFor(runtime.GOOS, os.Getenv("APPDATA"), home)
-}
-
-// spoolCandidatesFor is the platform knowledge on its own, with the two values
-// it needs passed in.
 //
-// Reading the environment inside would leave two of the three branches
-// untestable anywhere: a test on Windows could never check what a macOS user
-// gets. Getting one of them wrong means telling somebody their captures are
-// missing while they are sitting in a directory nobody looked in.
-func spoolCandidatesFor(goos, appData, home string) []string {
-	var roots []string
-	switch goos {
-	case "windows":
-		if appData != "" {
-			roots = append(roots, filepath.Join(appData, ".minecraft"))
-		}
-	case "darwin":
-		if home != "" {
-			roots = append(roots,
-				filepath.Join(home, "Library", "Application Support", "minecraft"),
-				filepath.Join(home, ".minecraft"))
-		}
-	default:
-		if home != "" {
-			roots = append(roots, filepath.Join(home, ".minecraft"))
-		}
-	}
-	out := make([]string, 0, len(roots))
-	for _, root := range roots {
-		out = append(out, filepath.Join(root, filepath.FromSlash(spoolSuffix)))
-	}
-	return out
-}
+// Where to look is mcpath's, because the desktop application needs the same
+// answer. What to say when there is nothing there stays here, because it names
+// this command's own flag.
 
 // findSpool returns the first candidate that exists.
-//
-// A candidate that exists but holds nothing is still the answer: an empty spool
-// means nothing was captured, which is a different problem from not finding
-// Minecraft, and the caller reports them differently.
 func findSpool() (string, error) {
-	candidates := spoolCandidates()
-	for _, candidate := range candidates {
-		info, err := os.Stat(candidate)
-		if err == nil && info.IsDir() {
-			return candidate, nil
-		}
+	path, candidates, found := mcpath.FindSpool()
+	if found {
+		return path, nil
 	}
 	if len(candidates) == 0 {
 		return "", fmt.Errorf(
