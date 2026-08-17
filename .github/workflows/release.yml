@@ -173,14 +173,12 @@ jobs:
             tar -czf "../${name}.tar.gz" .
           fi
           cd ..
-          sha256sum "${name}.${{ matrix.archive }}" > "${name}.${{ matrix.archive }}.sha256"
           # The desktop application also goes up on its own, not only inside the
           # archive. Somebody who is here because they do not want a terminal
           # should not have to download a zip, find the right file inside it and
           # know which one it is; the releases page should have a thing to click.
           desktop="worldledger-desktop-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           cp "dist/worldledger-desktop${{ matrix.ext }}" "${desktop}"
-          sha256sum "${desktop}" > "${desktop}.sha256"
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -188,7 +186,6 @@ jobs:
           path: |
             worldledger-*.tar.gz
             worldledger-*.zip
-            worldledger-*.sha256
             worldledger-desktop-*
 
   mod:
@@ -232,15 +229,13 @@ jobs:
             ls -1 ./*.jar >&2
             exit 1
           fi
-          sha256sum ./*.jar > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          sha256sum ./*.jar
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: worldledger-fabric-mod
           path: |
             adapters/fabric/build/libs/*.jar
-            adapters/fabric/build/libs/SHA256SUMS.txt
 
   publish:
     name: Publish release
@@ -262,6 +257,24 @@ jobs:
       # that repeats every previous release buries what changed, and the check
       # below stops a build from publishing the previous version's notes under
       # a new tag.
+      # One list, computed from the files that are actually about to be
+      # published rather than by each job for its own output.
+      #
+      # It used to be neither. SHA256SUMS.txt was written by the mod job and
+      # named only the jar, while the archives carried separate .sha256
+      # siblings -- so a reader following the README to "check the SHA-256
+      # against the one on the releases page" found a file that did not mention
+      # what they had downloaded. Seven files also meant seven chances for one
+      # to go missing, and on both v0.2.0 and v0.3.0 several did.
+      - name: Checksum everything that is being published
+        run: |
+          cd artifacts
+          # Names are printed null-separated and sorted the same way, so a file
+          # with a space or a newline in it cannot split into two entries.
+          find . -type f ! -name SHA256SUMS.txt -print0 |
+            sort -z |
+            xargs -0 sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - name: Take this version's notes from the changelog
         run: |
           awk '/^## /{ if (seen) exit; seen = 1 } seen' CHANGELOG.md > release-notes.md
@@ -285,10 +298,9 @@ jobs:
           files: |
             artifacts/**/*.tar.gz
             artifacts/**/*.zip
-            artifacts/**/*.sha256
             artifacts/**/*.jar
-            artifacts/**/SHA256SUMS.txt
             artifacts/**/worldledger-desktop-*
+            artifacts/SHA256SUMS.txt
           body_path: release-notes.md
 
             **Java Edition 26.2 only.** The adapter is pinned to one Minecraft

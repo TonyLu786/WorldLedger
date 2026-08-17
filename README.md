@@ -21,7 +21,7 @@ The Fabric process never opens or mutates an archive. The Go importer is the onl
 
 Take `worldledger-desktop` for your platform from the [releases page](https://github.com/TonyLu786/WorldLedger/releases) and run it. It opens a window, checks what your Minecraft is missing, and offers to add Fabric and the mod in one step, naming every file it would write before it writes any of them. After that it is: play, bring it in, decide what may be shared, make a world.
 
-Two things to expect the first time. Windows will warn that the file is from an unknown publisher, because it is not code-signed — More info, then Run anyway, or check the SHA-256 against the one on the releases page first. And Minecraft has to have been played once at 26.2 before there is anything to add the mod to; the application says so rather than guessing.
+Two things to expect the first time. Windows will warn that the file is from an unknown publisher, because it is not code-signed — More info, then Run anyway, or check its SHA-256 against `SHA256SUMS.txt` on the releases page first, which lists every file that release ships. And Minecraft has to have been played once at 26.2 before there is anything to add the mod to; the application says so rather than guessing.
 
 The one thing it will not do for you is the deciding. An archive holds where you went and when, and nothing becomes a world until a named person has said what may happen to it. That is the point of the step, not friction in it.
 
