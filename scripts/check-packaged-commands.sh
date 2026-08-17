@@ -30,13 +30,31 @@ documents=$(
 	} | sort -u
 )
 
-commands=$(find cmd -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+# Commands are the directories under cmd/, plus the desktop application, which
+# is its own module and so has no directory there.
+commands=$(
+	{
+		find cmd -mindepth 1 -maxdepth 1 -type d -exec basename {} \;
+		[ -f desktop/go.mod ] && echo worldledger-desktop
+	} | sort -u
+)
+
 # Only a line that writes into dist/ counts as built. The release also runs
 # `go run ./cmd/mcjava-fixtures` to check the committed fixtures, and reading
 # every ./cmd/ mention would take that for a shipped binary -- which is this
 # check's own failure mode, one it would then be blind to.
-built=$(grep -E '\-o "dist/' .github/workflows/release.yml |
-	grep -oE '\./cmd/[a-z-]+' | sed 's|\./cmd/||' | sort -u)
+#
+# The desktop application is built from inside its own module, so its output
+# path is ../dist/ rather than dist/, and it is named by its output rather than
+# by a ./cmd/ package. Matching only the latter left it looking unbuilt.
+built=$(
+	{
+		grep -E '\-o "\.*/?dist/' .github/workflows/release.yml |
+			grep -oE '\./cmd/[a-z-]+' | sed 's|\./cmd/||'
+		grep -oE '\-o "\.*/?dist/(worldledger-desktop)' .github/workflows/release.yml |
+			grep -oE 'worldledger-desktop'
+	} | sort -u
+)
 if [ -z "$built" ]; then
 	echo "no command in .github/workflows/release.yml builds into dist/;" >&2
 	echo "this check cannot tell what ships and will not guess" >&2

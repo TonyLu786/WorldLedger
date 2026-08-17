@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.3.0
+
+WorldLedger stops being a thing you have to be a programmer to use.
+
+Everything the command line does is now behind a window: check what your
+Minecraft is missing, add Fabric and the mod in one step, play, bring in what
+was recorded, decide what may be shared, make a world, and look at how it
+changed. The archive core is unchanged and gains no dependencies from any of
+it.
 
 ### A window, for people who will not open a terminal
 

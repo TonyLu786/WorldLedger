@@ -122,6 +122,19 @@ jobs:
           cp ../profiles/*.json profiles/
           cp -r ../docs ../spec ../examples .
           cp ../adapters/fabric/README.md ../adapters/fabric/gradle.properties adapters/fabric/
+      # -X against a package path that does not match writes nothing and says
+      # nothing. A desktop application that came out of that would look fine,
+      # start fine, and refuse to install, which is the whole of what this
+      # release is for. So the address is looked for in the binary.
+      - name: Check the desktop application knows where its mod is
+        run: |
+          mod_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/worldledger-fabric-${version}.jar"
+          if ! grep -qa -- "${mod_url}" "dist/worldledger-desktop${{ matrix.ext }}"; then
+            echo "the ${{ matrix.goos }}/${{ matrix.goarch }} desktop binary does not carry ${mod_url};" >&2
+            echo "the -X package path is probably wrong, and it would refuse to install" >&2
+            exit 1
+          fi
+          echo "it will fetch the mod from ${mod_url}"
       # ci.yml runs on pushes to main and on pull requests, not on tags, so a
       # tag is the one push where this would otherwise not be checked -- and it
       # is the push that produces the archive.
@@ -161,6 +174,13 @@ jobs:
           fi
           cd ..
           sha256sum "${name}.${{ matrix.archive }}" > "${name}.${{ matrix.archive }}.sha256"
+          # The desktop application also goes up on its own, not only inside the
+          # archive. Somebody who is here because they do not want a terminal
+          # should not have to download a zip, find the right file inside it and
+          # know which one it is; the releases page should have a thing to click.
+          desktop="worldledger-desktop-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          cp "dist/worldledger-desktop${{ matrix.ext }}" "${desktop}"
+          sha256sum "${desktop}" > "${desktop}.sha256"
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -169,6 +189,7 @@ jobs:
             worldledger-*.tar.gz
             worldledger-*.zip
             worldledger-*.sha256
+            worldledger-desktop-*
 
   mod:
     name: Fabric mod JAR
@@ -267,6 +288,7 @@ jobs:
             artifacts/**/*.sha256
             artifacts/**/*.jar
             artifacts/**/SHA256SUMS.txt
+            artifacts/**/worldledger-desktop-*
           body_path: release-notes.md
 
             **Java Edition 26.2 only.** The adapter is pinned to one Minecraft
