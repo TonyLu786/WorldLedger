@@ -78,8 +78,18 @@ jobs:
           # double-clicks this should get one window, not two.
           gui=""
           if [ "${{ matrix.goos }}" = "windows" ]; then gui="-H=windowsgui"; fi
+          # Where the application will fetch its own mod jar from. It is this
+          # release's own asset, named by the same version the mod job builds
+          # under, so a released build installs without being told anything and
+          # a build from source still refuses rather than guessing.
+          #
+          # The URL is resolved when somebody installs, not now, so it does not
+          # matter that the asset is uploaded by a different job or that the
+          # release is still a draft at this point.
+          mod_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/worldledger-fabric-${version}.jar"
           ( cd desktop && go build -trimpath -buildvcs=false \
-              -ldflags="-s -w ${gui} -X main.version=${version}" \
+              -ldflags="-s -w ${gui} -X main.version=${version} \
+                        -X github.com/worldledger/worldledger-mc/desktop/internal/api.ModSource=${mod_url}" \
               -o "../dist/worldledger-desktop${{ matrix.ext }}" . )
       # The native build is asked directly. A cross-compiled one cannot run
       # here, so its binary is checked for the string instead, which is weaker

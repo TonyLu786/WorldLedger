@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/worldledger/worldledger-mc/desktop/internal/app"
@@ -118,7 +119,7 @@ func handleInstall(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		undone, undoErr := installer.Uninstall(manifest)
-		next := "nothing was left behind"
+		next := reachabilityAdvice(err)
 		if undoErr != nil || len(undone) > 0 {
 			next = "some of it could not be undone automatically; the record is in " + saved
 		}
@@ -169,6 +170,39 @@ func handleUninstall(w http.ResponseWriter, r *http.Request) {
 }
 
 func manifestPath(dir string) string { return filepath.Join(dir, "installed.json") }
+
+// reachabilityAdvice turns a failure into the thing to try.
+//
+// Installing needs two files from the internet, and the ways that goes wrong
+// for a player are dull and specific: no connection, a network that blocks
+// what it does not recognise, or security software that stopped the download.
+// "dial tcp: lookup meta.fabricmc.net" is an accurate way of saying the first
+// of those to somebody who will never read it.
+func reachabilityAdvice(err error) string {
+	text := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(text, "no such host"),
+		strings.Contains(text, "dial tcp"),
+		strings.Contains(text, "timeout"),
+		strings.Contains(text, "deadline exceeded"),
+		strings.Contains(text, "connection refused"),
+		strings.Contains(text, "connection reset"):
+		return "nothing was changed. This needs the internet to fetch Fabric and the mod. " +
+			"Check your connection; on a school or work network, or behind security software, " +
+			"the download may be blocked"
+	case strings.Contains(text, "is not a mod file"),
+		strings.Contains(text, "is not a version profile"):
+		return "nothing was changed. Something answered instead of the file itself, " +
+			"which usually means a network sign-in page or a blocked download"
+	case strings.Contains(text, "answered 404"):
+		return "nothing was changed. That file is not where this version of the application " +
+			"expects it; a newer release should be used"
+	case strings.Contains(text, "permission denied"), strings.Contains(text, "access is denied"):
+		return "nothing was changed. Windows refused the write. Close Minecraft and its launcher, " +
+			"and check that security software is not protecting the folder"
+	}
+	return "nothing was left behind"
+}
 
 // saveManifest writes the record and returns where it went. A failure to save
 // is not worth failing the install over, but it does mean the path reported

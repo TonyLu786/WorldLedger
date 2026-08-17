@@ -107,11 +107,18 @@ func Apply(plan Plan, fetcher Fetcher, backupDir string) (Manifest, error) {
 			if err != nil {
 				return manifest, fmt.Errorf("%s: %w", step.Title, err)
 			}
+			// What arrives is checked for being the kind of thing it claims to
+			// be. A server that answers a missing file with a courteous HTML
+			// page is ordinary, and writing that page into the mods folder as a
+			// jar produces a Minecraft that will not start -- reported by the
+			// game, hours later, to somebody with no reason to connect it to
+			// this.
 			if step.Kind == WriteLoaderProfile && !json.Valid(payload) {
-				// A version profile that is not JSON is a version the launcher
-				// will refuse, and it fails at the point where somebody is
-				// trying to play rather than here.
 				return manifest, fmt.Errorf("%s: what arrived is not a version profile", step.Title)
+			}
+			if step.Kind == DownloadMod && !looksLikeJar(payload) {
+				return manifest, fmt.Errorf(
+					"%s: what arrived from %s is not a mod file", step.Title, step.Source)
 			}
 		case WriteContributor:
 			payload = captureProperties(plan.Contributor)
@@ -234,6 +241,19 @@ func Uninstall(manifest Manifest) ([]string, error) {
 		os.Remove(manifest.Directories[i])
 	}
 	return skipped, nil
+}
+
+// looksLikeJar reports whether these bytes begin the way a zip archive does,
+// which is what a jar is.
+//
+// This does not prove the archive is the right mod, or that it is not damaged
+// further in. It rules out the failure that actually happens: a download that
+// returned a web page, a redirect, or an error document, and would otherwise be
+// written into the mods folder under a name the game trusts.
+func looksLikeJar(payload []byte) bool {
+	// "PK\x03\x04" for an ordinary archive, "PK\x05\x06" for an empty one.
+	return len(payload) >= 4 && payload[0] == 'P' && payload[1] == 'K' &&
+		(payload[2] == 3 || payload[2] == 5) && (payload[3] == 4 || payload[3] == 6)
 }
 
 // captureProperties is the file the adapter would otherwise write on first run,

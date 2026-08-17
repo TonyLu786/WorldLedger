@@ -1,6 +1,8 @@
 package installer
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -39,6 +41,26 @@ func noLauncher(t *testing.T) {
 	previous := launcherRunning
 	launcherRunning = func() (bool, string) { return false, "" }
 	t.Cleanup(func() { launcherRunning = previous })
+}
+
+// tinyJar is a real zip archive, because a jar that is not one is now refused
+// on arrival. Writing a text file under a .jar name would have been testing
+// against a payload the installer will never accept.
+func tinyJar(t *testing.T, name string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	entry, err := writer.Create("fabric.mod.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte(`{"id":"` + name + `"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
 }
 
 func fixture(t *testing.T) mcpath.Install {
@@ -143,8 +165,8 @@ func applyFixture(t *testing.T) (mcpath.Install, Manifest) {
 	fetcher := stubFetcher{
 		loaderProfileURL(health.MinecraftVersion, health.LoaderVersion): []byte(
 			`{"id":"` + LoaderVersionID() + `","inheritsFrom":"` + health.MinecraftVersion + `"}`),
-		fabricAPIURL(health.FabricAPIVersion):     []byte("fabric api jar"),
-		"https://example.invalid/worldledger.jar": []byte("worldledger jar"),
+		fabricAPIURL(health.FabricAPIVersion):     tinyJar(t, "fabric-api"),
+		"https://example.invalid/worldledger.jar": tinyJar(t, "worldledger"),
 	}
 
 	manifest, err := Apply(plan, fetcher, filepath.Join(t.TempDir(), "backups"))
@@ -376,5 +398,33 @@ func TestAnAlreadyInstalledLoaderDoesNotConsultTheLauncherAtAll(t *testing.T) {
 	}
 	if plan.Refusal != "" {
 		t.Errorf("adding only mods was refused: %q", plan.Refusal)
+	}
+}
+
+// A server that answers a missing file with a courteous HTML page is ordinary.
+// Writing that page into the mods folder under a name the game trusts produces
+// a Minecraft that will not start, reported by the game hours later to somebody
+// with no reason to connect it to this.
+func TestAWebPageIsNotWrittenIntoTheModsFolderAsAJar(t *testing.T) {
+	install := fixture(t)
+	plan := BuildPlan(install, report(allMissing()), "https://example.invalid/worldledger.jar", "alice")
+
+	fetcher := stubFetcher{
+		loaderProfileURL(health.MinecraftVersion, health.LoaderVersion): []byte(`{"id":"x"}`),
+		fabricAPIURL(health.FabricAPIVersion):                           []byte("<!doctype html><title>404</title>"),
+	}
+	manifest, err := Apply(plan, fetcher, filepath.Join(t.TempDir(), "backups"))
+	if err == nil {
+		t.Fatal("an HTML page was accepted as a mod")
+	}
+	if !strings.Contains(err.Error(), "not a mod file") {
+		t.Errorf("the failure does not say what was wrong with it: %v", err)
+	}
+	if _, statErr := os.Stat(install.Mod("fabric-api-" + health.FabricAPIVersion + ".jar")); !os.IsNotExist(statErr) {
+		t.Error("it was written anyway")
+	}
+	// The part that did succeed is still recorded, so it can be undone.
+	if len(manifest.Records) == 0 {
+		t.Error("nothing was recorded before the failure")
 	}
 }
