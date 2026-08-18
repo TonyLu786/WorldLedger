@@ -45,6 +45,12 @@ Somebody installed through the desktop application, played on `top.earthmc.net`,
 
 Nothing was observed twice and nothing was withheld, so this run exercises the faithful path rather than the conflict or redaction ones. The world written into was a copy of one the player already had, because a world's seed and rules are never invented; their two existing worlds were not touched.
 
+**A released build installing, from the release itself.** The `worldledger-desktop-windows-amd64.exe` published with v0.3.0 was downloaded, its SHA-256 matched the checksum shipped beside it, and it reports version 0.3.0 and carries the address of that release's own mod jar. Installing with it put the released jar into the mods folder with a digest matching the published asset, and the health check then read six green lines.
+
+Uninstalling with it, after the launcher settings had been rewritten the way opening the launcher rewrites them, left nothing behind and kept everything that was not ours. A checksum of every file two levels down under `.minecraft` came back to what it was before, apart from the launcher timestamp that had been changed on purpose.
+
+The address the application fetches from was then requested with no credentials at all, which is what a stranger's copy does: 200, 128,149 bytes, and a digest matching what `SHA256SUMS.txt` on the releases page declares.
+
 **The desktop application, as far as it has been run.**
 
 The window opens. Built for Windows and launched on a machine with the WebView2 runtime, it shows a native window titled WorldLedger, and closing that window ends the process. Built with `-H=windowsgui` it shows one window rather than a console behind its own. In browser mode, a page that stops reporting in ends the process after the timeout, which was checked with a shortened timer: without it a closed tab would leave the program running with no way for its owner to stop it.
@@ -179,12 +185,6 @@ Two of these are worth reading carefully. Encoding costs roughly thirty times wh
 **How a converted world renders.** A 1.21.11 server has opened one and answered for its contents, which is recorded above. No 1.21.11 *client* has opened one, so nothing here covers lighting, or how the seams between converted and generated chunks look to a player.
 
 **Conversion of a world that actually loses something.** The world that has been through a real older release loses nothing, because it uses none of the thirty blocks 1.21.11 lacks. What each policy does when there is something to lose is covered by tests against the 1.21.11 profile — the block is named in the report under every policy, the default policy leaves the chunk unwritten rather than substituting for it, the report policy refuses outright, and a chunk of blocks the release does have passes through unchanged — but no such world has been opened in Minecraft.
-
-**A released build installing, from the release itself.** The `worldledger-desktop-windows-amd64.exe` published with v0.3.0 was downloaded, its SHA-256 matched the checksum shipped beside it, and it reports version 0.3.0 and carries the address of that release's own mod jar. Installing with it put the released jar into the mods folder with a digest matching the published asset, and the health check then read six green lines.
-
-Uninstalling with it, after the launcher settings had been rewritten the way opening the launcher rewrites them, left nothing behind and kept everything that was not ours. A checksum of every file two levels down under `.minecraft` came back to what it was before, apart from the launcher timestamp that had been changed on purpose.
-
-The address the application fetches from was then requested with no credentials at all, which is what a stranger's copy does: 200, 128,149 bytes, and a digest matching what `SHA256SUMS.txt` on the releases page declares.
 
 **An unsigned application on a stranger's Windows.** SmartScreen will warn about a binary from an unknown publisher, and security software may quarantine it. Nothing here is signed, the README says so, and whether to buy a signing certificate is a decision nobody has made.
 
