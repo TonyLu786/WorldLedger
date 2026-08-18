@@ -263,7 +263,20 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 		server.runCommand("setblock 2 65 1 minecraft:oak_log[axis=x]");
 		server.runCommand("setblock 4 65 1 minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]");
 		server.runCommand("setblock 6 65 1 minecraft:repeater[delay=4,facing=east,locked=false,powered=false]");
-		server.runCommand("setblock 12 65 1 minecraft:oak_fence[east=true,north=false,south=false,waterlogged=true,west=false]");
+		// Waterlogged, and sealed in so that it stays that way.
+		//
+		// This block sat in the open at first, and a waterlogged block feeds
+		// water into the air beside it. It drained downwards and sideways into
+		// the chunk to the north, which went from one observed state to three --
+		// and how far the water had spread when the session ended differed from
+		// run to run, so the fingerprint disagreed with itself. The final state
+		// was always the same; the intermediate one was a race.
+		//
+		// The properties are the ones the game will compute for a fence with
+		// stone on all four sides. Asking for anything else would have the game
+		// correct it, which is another state change for no reason.
+		server.runCommand("fill 12 64 1 14 66 3 minecraft:stone");
+		server.runCommand("setblock 13 65 2 minecraft:oak_fence[east=true,north=true,south=true,west=true,waterlogged=true]");
 
 		// Block entities: one without contents, one with.
 		server.runCommand("setblock 8 65 1 minecraft:oak_sign[rotation=0,waterlogged=false]");
@@ -271,8 +284,10 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 		server.runCommand("item replace block 10 65 1 container.0 with minecraft:diamond 3");
 
 		// Both ends of the build range, so neither end section is uniform.
-		server.runCommand("setblock 0 -63 0 minecraft:glass");
-		server.runCommand("setblock 0 319 0 minecraft:glass");
+		// Placed away from the chunk corner, which costs nothing and keeps
+		// whatever light they change inside the chunk being measured.
+		server.runCommand("setblock 8 -63 8 minecraft:glass");
+		server.runCommand("setblock 8 319 8 minecraft:glass");
 
 		// Two biomes, so both the uniform and the mixed path are taken.
 		server.runCommand("fillbiome 0 64 0 15 79 15 minecraft:desert");
