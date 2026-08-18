@@ -23,12 +23,12 @@ func cmdCorpus(args []string) error {
 	fs := flag.NewFlagSet("corpus", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	archivePath := fs.String("archive", "", "archive directory")
-	server := fs.String("server", "", "stable server id")
+	server := fs.String("server", "", "stable server id; every server in the archive when omitted")
 	dimension := fs.String("dimension", defaultDimension, "dimension id")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *archivePath == "" || *server == "" {
+	if *archivePath == "" {
 		return usageError("corpus")
 	}
 

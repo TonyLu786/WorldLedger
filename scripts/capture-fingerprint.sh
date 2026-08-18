@@ -54,7 +54,7 @@ fi
 # commands whose results nobody reads, so a block a release renames places
 # nothing, fails nothing, and yields a smaller fingerprint that is just as
 # green. This says which of the shapes are actually there.
-"$workspace/worldledger" corpus --archive "$archive" --server worldledger-client-gametest
+"$workspace/worldledger" corpus --archive "$archive"
 
 "$workspace/worldledger" fingerprint --archive "$archive" --out "$output"
 echo "imported $imported bundle(s)"

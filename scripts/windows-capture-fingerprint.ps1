@@ -113,7 +113,7 @@ if ($LASTEXITCODE -ne 0) { Fail 'the archive failed its integrity check' }
 # places nothing, fails nothing, and produces a smaller fingerprint that is just
 # as green. This says which of the shapes are actually there.
 Step 'Checking the capture still contains every shape the fixture is meant to have.'
-& $worldledger corpus --archive $archive --server worldledger-client-gametest
+& $worldledger corpus --archive $archive
 if ($LASTEXITCODE -ne 0) { Fail 'the capture is missing shapes the fixture world is meant to contain' }
 
 Step 'Writing the fingerprint.'

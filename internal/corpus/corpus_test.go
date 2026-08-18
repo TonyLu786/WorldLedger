@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/worldledger/worldledger-mc/internal/archive"
 	"github.com/worldledger/worldledger-mc/internal/mcjava"
 )
 
@@ -289,5 +290,29 @@ func TestACompleteReportIsComplete(t *testing.T) {
 	}
 	if !report.Complete() {
 		t.Fatalf("a report with everything present was not complete: %+v", report.Missing)
+	}
+}
+
+// An archive with nothing in it must not pass. "Every required shape was
+// found" and "there was nothing to look at" are the same sentence to a build
+// log, and only one of them means the fixture is intact.
+func TestAnArchiveWithNoObservationsIsNotComplete(t *testing.T) {
+	dir := t.TempDir()
+	a, err := archive.Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := Inspect(a, "", "minecraft:overworld")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Complete() {
+		t.Fatal("an empty archive was reported as containing every shape")
+	}
+	if len(report.Missing) != len(Required) {
+		t.Errorf("missing = %d, want all %d", len(report.Missing), len(Required))
+	}
+	if report.Chunks != 0 {
+		t.Errorf("chunks = %d, want 0", report.Chunks)
 	}
 }

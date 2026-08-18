@@ -67,14 +67,33 @@ type Report struct {
 // Complete reports whether every required shape was observed.
 func (r Report) Complete() bool { return len(r.Missing) == 0 }
 
-// Inspect reads every observation of a server and reports which shapes it
-// found. Components that will not decode are skipped rather than fatal: a
-// corpus check that stops at the first oddity reports one problem where there
-// may be seven.
+// Inspect reads every observation and reports which shapes it found.
+//
+// An empty server means every server the archive holds. The archives this runs
+// against hold one capture and nothing else, and naming the server would mean
+// three places -- two scripts and the adapter's run configuration -- that have
+// to agree about a string, with a rename in one of them turning into a report
+// that the world was built wrong.
+//
+// Components that will not decode are skipped rather than fatal: a check that
+// stops at the first oddity reports one problem where there may be seven.
 func Inspect(a archive.Archive, server, dimension string) (Report, error) {
-	gathered, err := a.DimensionObservations(server, dimension)
-	if err != nil {
-		return Report{}, err
+	servers := []string{server}
+	if server == "" {
+		found, err := a.Servers()
+		if err != nil {
+			return Report{}, err
+		}
+		servers = found
+	}
+
+	var gathered []archive.ChunkObservations
+	for _, id := range servers {
+		part, err := a.DimensionObservations(id, dimension)
+		if err != nil {
+			return Report{}, err
+		}
+		gathered = append(gathered, part...)
 	}
 
 	report := Report{Present: map[string]bool{}}
