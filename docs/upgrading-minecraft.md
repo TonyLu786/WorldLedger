@@ -8,8 +8,20 @@ A new release changes what the game reports, and the archive core is supposed to
 | --- | --- |
 | `profiles/minecraft-java-<version>.json` | what a release can represent |
 | `testdata/capture-fingerprint-reference.txt` | what the adapter produces from the pinned game-test world |
+| the shapes `worldledger corpus` requires | whether that world still contains what it was built to contain |
 | golden vectors in `internal/mcjava` | what canonical encoding produces for fixed inputs |
 | [`the 26.2 fixture`](../examples/minecraft-26.2-fixture/README.md) | block entities, a sign edit, an unopened chest, and the ordered mutation sequence |
+
+The third of those exists because the second cannot do its job alone. A
+fingerprint describes what the world contained, and says nothing about what it
+was meant to contain. The game test builds its world with server commands whose
+results nobody reads, so a block a release renames places nothing, fails
+nothing, and produces a smaller fingerprint that is just as green. `corpus`
+names the shapes an upgrade could break -- nested block-entity payloads,
+property-rich states, waterlogging, both ends of the build range, more than one
+biome, and a container whose contents were *not* captured -- and reports which
+of them the capture actually holds. It runs beside the fingerprint in both
+capture scripts.
 
 The golden vectors describe encoding, not Minecraft, so no release can move them. If they change, the change came from this repository. The other three can legitimately move when the game does, which is the whole difficulty.
 

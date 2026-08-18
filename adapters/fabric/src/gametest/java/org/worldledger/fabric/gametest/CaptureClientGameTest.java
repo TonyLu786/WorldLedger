@@ -220,12 +220,63 @@ public final class CaptureClientGameTest implements FabricClientGameTest {
 		}
 	}
 
+	/**
+	 * Builds the world whose capture the committed fingerprint describes.
+	 *
+	 * <p>This is the regression corpus for a Minecraft upgrade, and each line is
+	 * here because a release could change what the game reports about it. A
+	 * fingerprint only covers what the world contains, so a thin world is a
+	 * fingerprint that would not notice.
+	 *
+	 * <p>What is deliberately represented, and why:
+	 *
+	 * <ul>
+	 * <li>Block entities. Their payload is the network representation of the
+	 *     release, which is the part most likely to change shape between two of
+	 *     them. Nothing here had one at all, so the block-entity component was
+	 *     empty in every observation and an upgrade could have changed it
+	 *     silently. A sign carries one with no contents; a chest with an item
+	 *     carries one with contents, which is a different shape.
+	 * <li>Blocks whose state is several properties. A repeater has four and a
+	 *     fence five, so a change to how properties are ordered or encoded shows
+	 *     up rather than hiding behind a single-property block.
+	 * <li>Waterlogging, which is one property that has moved between releases
+	 *     before and travels on blocks that are not water.
+	 * <li>Both ends of the build range. The column is captured whole, so
+	 *     sections -4 and 19 were always present and always uniform: air at the
+	 *     top, bedrock and air at the bottom. A distinctive block in each makes
+	 *     those sections mixed, so the palette path is exercised where the range
+	 *     ends rather than only in the middle.
+	 * <li>Two biomes rather than one. A uniform biome section takes the
+	 *     adapter's single-value fast path; only a mixed one takes the other.
+	 * </ul>
+	 *
+	 * <p>The commands are the ones the manual fixture procedure already uses,
+	 * because those have been run by a person against a real client and are
+	 * known to be accepted rather than merely plausible.
+	 */
 	private static void placeFixture(TestDedicatedServerContext server) {
 		server.runCommand("forceload add 0 0");
 		server.runCommand("fill 0 64 0 15 64 15 minecraft:stone");
+
+		// Block states with more than one property.
 		server.runCommand("setblock 2 65 1 minecraft:oak_log[axis=x]");
 		server.runCommand("setblock 4 65 1 minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]");
+		server.runCommand("setblock 6 65 1 minecraft:repeater[delay=4,facing=east,locked=false,powered=false]");
+		server.runCommand("setblock 12 65 1 minecraft:oak_fence[east=true,north=false,south=false,waterlogged=true,west=false]");
+
+		// Block entities: one without contents, one with.
+		server.runCommand("setblock 8 65 1 minecraft:oak_sign[rotation=0,waterlogged=false]");
+		server.runCommand("setblock 10 65 1 minecraft:chest[facing=north,type=single,waterlogged=false]");
+		server.runCommand("item replace block 10 65 1 container.0 with minecraft:diamond 3");
+
+		// Both ends of the build range, so neither end section is uniform.
+		server.runCommand("setblock 0 -63 0 minecraft:glass");
+		server.runCommand("setblock 0 319 0 minecraft:glass");
+
+		// Two biomes, so both the uniform and the mixed path are taken.
 		server.runCommand("fillbiome 0 64 0 15 79 15 minecraft:desert");
+		server.runCommand("fillbiome 8 64 0 15 79 15 minecraft:plains");
 	}
 
 	private static void requireCaptureConfigured(Path configDirectory) {

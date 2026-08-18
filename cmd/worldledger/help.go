@@ -29,6 +29,7 @@ var commandUsage = map[string]string{
 	"convert":       "convert --archive DIR --server ID --dimension DIM --into WORLD_DIR --target-profile FILE [--rules FILE] [--on-unrepresentable POLICY]",
 	"seed":          "seed --observations FILE --operator NAME --accept-terms [--seed N | --from A --to B] [--out FILE]",
 	"status":        "status --archive DIR [--spool DIR]",
+	"corpus":        "corpus --archive DIR --server ID [--dimension DIM]",
 	"fsck":          "fsck --archive DIR",
 	"manifest":      "manifest --archive DIR [--out FILE] [--compare FILE]",
 	"fingerprint":   "fingerprint (--archive DIR | --file FILE) [--server ID] [--out FILE] [--compare FILE]",

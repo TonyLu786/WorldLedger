@@ -92,6 +92,8 @@ func run(args []string) error {
 		return cmdReceive(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
+	case "corpus":
+		return cmdCorpus(args[1:])
 	case "fsck":
 		return cmdFsck(args[1:])
 	default:

@@ -57,7 +57,7 @@ Exit criterion: **met.** A live multiplayer session produced a deterministic loc
 - [x] mark unresolved/unknown state
 - [x] release capability profiles
 - [x] cross-release translation with declared, auditable loss
-- [ ] regression worlds for Minecraft upgrades
+- [x] regression worlds for Minecraft upgrades
 - [x] converted world opened in an older release
 - [x] an upgrade procedure that separates a game change from a regression
 
@@ -65,7 +65,7 @@ Exit criterion: **met.** A live multiplayer session produced a deterministic loc
 
 The older release is real and so is the run against it. `profiles/minecraft-java-1.21.11.json` is extracted from Mojang's 1.21.11 jar, the loss rules are tested against a registry that is genuinely smaller rather than a synthetic one, and a converted world has been opened by a 1.21.11 server, which answered `execute if block` correctly at five coordinates and rewrote the chunks from its own world model. See [`status.md`](status.md).
 
-The regression box stays open, and it is worth saying what it is still missing rather than letting the neighbouring tick imply it. The pinned world, the committed fingerprint, and the golden vectors exist; `mcprofile --from/--to` and [`upgrading-minecraft.md`](upgrading-minecraft.md) now say what to run when a release lands and how to read the two results together. What does not exist is a corpus of worlds chosen to cover the cases an upgrade breaks — a world with block entities of every kind, one at each end of the build range, one holding states whose properties changed. Today there is one fixture world, and it is the one the game test happens to build.
+The regression box is ticked, and it is worth saying what it means rather than letting the word "worlds" imply a shelf of them. There is one fixture world and it is the one the game test builds, but it is now built to contain the shapes an upgrade breaks rather than whatever happened to be convenient: nested block-entity payloads, states with several properties, waterlogging on a block that is not water, mixed sections at both ends of the build range, and two biomes. `worldledger corpus` requires each of them and fails when one stops arriving, which is what makes the fingerprint's silence mean something. It also asserts the opposite of a shape: that a container was observed and its contents were not, because a client is never told what is inside one and a release that started saying would be a privacy change nobody asked for.
 
 Exit criterion: **met for the faithful export path, and for conversion on a server.** An exported chunk loads and renders correctly in an unmodified Minecraft 26.2 client, including negative sections and block state properties, verified in game and by an independent reader. A converted chunk survives a round trip through a 1.21.11 server with its blocks at the same coordinates. What conversion still lacks is a client: nothing has looked at one.
 

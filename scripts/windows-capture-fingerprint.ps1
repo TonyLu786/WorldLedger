@@ -107,6 +107,15 @@ Step 'Checking the archive before trusting what it says.'
 & $worldledger fsck --archive $archive | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail 'the archive failed its integrity check' }
 
+# A fingerprint only describes what the world contained. It cannot say whether
+# the world contained what it was meant to: the game test places its fixture
+# with server commands whose results nobody reads, so a block a release renames
+# places nothing, fails nothing, and produces a smaller fingerprint that is just
+# as green. This says which of the shapes are actually there.
+Step 'Checking the capture still contains every shape the fixture is meant to have.'
+& $worldledger corpus --archive $archive --server worldledger-client-gametest
+if ($LASTEXITCODE -ne 0) { Fail 'the capture is missing shapes the fixture world is meant to contain' }
+
 Step 'Writing the fingerprint.'
 & $worldledger fingerprint --archive $archive --out $Out
 if ($LASTEXITCODE -ne 0) { Fail 'could not write the fingerprint' }
