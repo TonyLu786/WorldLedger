@@ -15,7 +15,7 @@ An archive was exported into a world created by an unmodified Minecraft 26.2 cli
 
 This run also found a real defect that no byte-level test could: Minecraft 26.2 stores every dimension under `dimensions/<namespace>/<path>/region/`, including the vanilla three, and there is no top-level `region/` directory. The exporter had been writing to the older layout, which the game silently ignores.
 
-The capture game test is the standing form of this check. It passes from a clean run: 158 chunks enqueued, none dropped, no snapshot failures, 158 ready bundles, and no quarantined or partial entries once the writer drained. All 158 import, `fsck` reports zero errors, and the archive resolves them to 52 stored objects.
+The capture game test is the standing form of this check. It passes from a clean run: 158 chunks enqueued, none dropped, no snapshot failures, 158 ready bundles, and no quarantined or partial entries once the writer drained. All 158 import, `fsck` reports zero errors, and the archive resolves them to 55 stored objects.
 
 **Cross-release conversion: a converted world opened by an older server.**
 
@@ -45,11 +45,13 @@ Somebody installed through the desktop application, played on `top.earthmc.net`,
 
 Nothing was observed twice and nothing was withheld, so this run exercises the faithful path rather than the conflict or redaction ones. The world written into was a copy of one the player already had, because a world's seed and rules are never invented; their two existing worlds were not touched.
 
-**A released build installing, from the release itself.** The `worldledger-desktop-windows-amd64.exe` published with v0.3.0 was downloaded, its SHA-256 matched the checksum shipped beside it, and it reports version 0.3.0 and carries the address of that release's own mod jar. Installing with it put the released jar into the mods folder with a digest matching the published asset, and the health check then read six green lines.
+**A released build installing, from the release itself.** The `worldledger-desktop-windows-amd64.exe` published with v0.3.0 was downloaded, its SHA-256 matched the checksum published beside it at the time, and it reports version 0.3.0 and carries the address of that release's own mod jar. Installing with it put the released jar into the mods folder with a digest matching the published asset, and the health check then read six green lines.
 
 Uninstalling with it, after the launcher settings had been rewritten the way opening the launcher rewrites them, left nothing behind and kept everything that was not ours. A checksum of every file two levels down under `.minecraft` came back to what it was before, apart from the launcher timestamp that had been changed on purpose.
 
 The address the application fetches from was then requested with no credentials at all, which is what a stranger's copy does: 200, 128,149 bytes, and a digest matching what `SHA256SUMS.txt` on the releases page declares.
+
+**What that release does not currently let a reader repeat.** v0.3.0 was drafted before the workflow learned to compute one checksum list over everything it publishes, so the `SHA256SUMS.txt` on that release names the mod jar and nothing else. The per-file `.sha256` siblings that covered the other six assets were clutter and were removed by hand afterwards, which is why the check described above cannot be repeated as written: somebody downloading the desktop application from that release today has no published checksum to compare it against. The list the workflow now produces covers every file it uploads, from the next release on.
 
 **The desktop application, as far as it has been run.**
 
@@ -85,7 +87,7 @@ What this run does not cover: the game was not started afterwards, so the mod is
 - **Attestation.** An ed25519 signature over an observation id verifies, and fails when moved to another observation, when the signature is altered, when the key is swapped, or when it was made without the domain separator. The archive refuses to store an attestation that does not verify. A valid signature from an unregistered key is reported as valid and unrecognised rather than as an endorsement, and a second key cannot register a label another key already holds.
 - **Object existence negotiation.** Two mirrors work out what to transfer from their fingerprints alone, in both directions, without either opening the other's archive.
 - **Archive exchange.** Two archives that never shared a database converge to the same manifest root by exchanging transfer bundles in both directions, exercised on the two real capture sessions on disk. A bundle whose object bytes were substituted is refused, and so is one whose observation was reattributed to another contributor, because the identity no longer matches the record. A repeated import changes nothing.
-- **Cross-platform digest agreement.** The same observed world state, captured by a Windows client here and by a Linux client in CI, canonicalized to identical bytes. The two fingerprints agree on all 157 chunks both observed, with no chunk seen by only one side and no state either could not account for, and the two files are byte-identical at 24,677 bytes. The game test pins the world seed, generator and view distance so that a difference between the two could only have come from the encoder. That reference is committed, so every CI run now compares against it and fails on a disagreement rather than reporting one.
+- **Cross-platform digest agreement.** The same observed world state, captured by a Windows client here and by a Linux client in CI, canonicalized to identical bytes. The two fingerprints agree on all 157 chunks both observed, with no chunk seen by only one side and no state either could not account for, and the two files are byte-identical at 24,972 bytes. The game test pins the world seed, generator and view distance so that a difference between the two could only have come from the encoder. That reference is committed, so every CI run now compares against it and fails on a disagreement rather than reporting one.
 - **Spool storage.** Identical component bytes are stored once. Twenty bundles declaring 199,671 bytes occupied 36,879 on disk, identical components resolved to a single file, and deleting one bundle after import left a bundle sharing its bytes readable. A 40 KB budget stopped capture after 32 bundles and left all 32 in place; the same writer with a large budget kept going.
 - **Player-facing notices.** The text shown in game is built with no Minecraft type in it and is asserted directly: the disabled notice names the file and the setting, a clean session does not mention drops, a lossy one names them separately from the total, and a session that captured nothing does not read like capture being switched off. The class that draws them holds no logic.
 - **In-game commands.** The client game test parses `/worldledger`, `/worldledger status`, `/worldledger spool` and `/worldledger reload` against the live client dispatcher and requires each to reach something executable, then sends one through the client's own command path the way a keystroke would. Registering without throwing is not the same as a command a player can type, and the two fail separately: a tree of the wrong shape parses nothing, and a tree of the right shape can still have a handler that throws on its first line.
@@ -103,9 +105,11 @@ That closes the loop end to end: a live multiplayer session becomes an archive, 
 
 **It also found a defect that no unit test could.** A disconnect releases every dirty chunk at once, and the first run discarded 108 of 158 chunk snapshots because the bounded queue refused what it could not hold. The bound exists so game threads never wait on disk, which is right during play but inverted at disconnect: there is no gameplay left to protect, and refusing a job only destroys observed state. The final flush now waits for the writer under a single ten-second budget shared by the whole flush, so memory stays bounded and leaving a server stays bounded, while nothing observed is thrown away.
 
-After the fix the same test enqueued 158 chunks and dropped none, while the in-play retry path was unchanged. The 158 observations resolve to 52 stored objects: repeatedly snapshotting an unchanged chunk stores nothing new, so content addressing removed about two thirds of the bytes on real capture data.
+After the fix the same test enqueued 158 chunks and dropped none, while the in-play retry path was unchanged.
 
-Evidence for both runs is under `validation/gametest-evidence-2026-08-13*/`.
+What those observations cost on disk is worth stating exactly, because a count of observations is not a count of bytes and this said otherwise until it was measured. The 158 observations reference 7,900 components declaring 32,121,143 bytes; content addressing resolves those to 55 objects holding 229,101, which is 0.7% of what was declared. Repeatedly snapshotting an unchanged chunk stores nothing new, and neither does a section identical to one already held.
+
+The raw logs from both runs are kept outside the repository, because they carry the absolute paths of the machine that produced them. What a reader can run instead is the test itself — `./gradlew runClientGametest -Pworldledger.acceptMinecraftEula=true` from `adapters/fabric`, or `scripts/run-client-gametest.ps1` where Gradle will not start — and both end by re-checking the capture fingerprint against the committed reference.
 
 The same game test runs in Linux CI on every push, headless under a software renderer, and passes there. Because the test fails when no bundle appears, a passing run is evidence that capture produced and verified bundles on that platform, not merely that the client started.
 
@@ -154,6 +158,14 @@ Reporting where the worst tick fell settled what it was. A later run:
 ```
 
 The worst tick is the **first** one, which is a cost paid once as a session warms up rather than a stutter that recurs, and four of 191 ticks exceeded 5 ms. At 7.9 ms against a 16.7 ms frame none of them is a dropped frame at 60 fps. A maximum alone could not have told these apart from a session stuttering every few seconds, which is why the position and the slow-tick count are reported with it.
+
+The fixture world has since been given the shapes an upgrade breaks — a block entity, waterlogging, property-rich states, mixed sections at both ends of the build range, a second biome — and the cost did not move with it:
+
+```text
+186 ticks, mean 310.5 us, max 6955.0 us (13.910% of a 50 ms tick); worst was tick 1 of 186, 3 tick(s) over 5 ms
+```
+
+That run also enqueued 158 chunks with none dropped and no snapshot failures, produced 158 ready bundles that all imported, and its fingerprint was byte-identical to the committed reference.
 
 This is one machine, one scripted world, and a small pinned area. A player exploring loads far more chunks, so this is a floor for how often the cost is paid, though not for how large any single payment is.
 

@@ -125,14 +125,17 @@ footer { border-top: 1px solid var(--line); margin-top: 3.5rem; padding-top: 1.2
   </ul>
 
   <h2>Using it</h2>
+  <p><code>worldledger-desktop</code> is one file. It opens a window, reads what your Minecraft is missing, and offers to add Fabric and the mod in a single step that names every file it would write before writing any of them. After that it is: play, bring in what was recorded, decide what may be shared, make a world. Nothing is code-signed, so Windows will warn that the publisher is unknown.</p>
+  <p>Everything the window does is also a command, which is the way in for scripting, and for the operations the window deliberately leaves out:</p>
   <pre><code>worldledger init ./archive
-worldledger ingest-bundle --archive ./archive ./spool/ready-session-sequence
+worldledger ingest-spool --archive ./archive
 worldledger export --archive ./archive --server example.org --into /path/to/world</code></pre>
   <p>The mod writes its recordings while you play; the tool assembles them afterwards. The export is written into a world the game itself created, because the world file that records the version and generator is not something this project should invent.</p>
 
   <h2>Where it stands</h2>
   <p>Rebuilding has been checked in a real Minecraft 26.2 client: an exported chunk loads and renders correctly, including sections below y=0 and block state properties, confirmed both in game and by an independently written reader of the file format.</p>
-  <p class="note">Builds are pre-releases. One check the project considers necessary has not been done: the same world state captured on two different platforms has never been compared digest for digest. Every claim and its evidence is listed in <a href="https://github.com/TonyLu786/WorldLedger/blob/main/docs/status.md">status.md</a>, including what is not verified.</p>
+  <p>The same observed world state, captured by a Windows client and by a Linux one, canonicalizes to byte-identical results. That comparison is committed as a reference and runs on every push, so a later divergence fails the build instead of waiting to be noticed.</p>
+  <p class="note">Not everything is done. A world converted for an older release has been opened by a Minecraft 1.21.11 server, which answered correctly for what it found, but no older client has rendered one. The window has only been run on Windows. Nothing is code-signed. Every claim and its evidence is listed in <a href="https://github.com/TonyLu786/WorldLedger/blob/main/docs/status.md">status.md</a>, including what is not verified.</p>
 
   <h2>Before you use it</h2>
   <p>This records data a normal client receives, on servers whose operators and players may not know an archive exists. Accumulated coverage of a server can reveal more than any single recording does, which is why the tool requires an explicit, attributed decision before it will build anything shareable. The reasoning is in the <a href="https://github.com/TonyLu786/WorldLedger/blob/main/docs/trust-model.md">trust model</a>.</p>

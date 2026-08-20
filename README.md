@@ -21,7 +21,7 @@ The Fabric process never opens or mutates an archive. The Go importer is the onl
 
 Take `worldledger-desktop` for your platform from the [releases page](https://github.com/TonyLu786/WorldLedger/releases) and run it. It opens a window, checks what your Minecraft is missing, and offers to add Fabric and the mod in one step, naming every file it would write before it writes any of them. After that it is: play, bring it in, decide what may be shared, make a world.
 
-Two things to expect the first time. Windows will warn that the file is from an unknown publisher, because it is not code-signed — More info, then Run anyway, or check its SHA-256 against `SHA256SUMS.txt` on the releases page first, which lists every file that release ships. And Minecraft has to have been played once at 26.2 before there is anything to add the mod to; the application says so rather than guessing.
+Two things to expect the first time. Windows will warn that the file is from an unknown publisher, because it is not code-signed — More info, then Run anyway, or check its SHA-256 against `SHA256SUMS.txt` on the releases page first. And Minecraft has to have been played once at 26.2 before there is anything to add the mod to; the application says so rather than guessing.
 
 The one thing it will not do for you is the deciding. An archive holds where you went and when, and nothing becomes a world until a named person has said what may happen to it. That is the point of the step, not friction in it.
 
@@ -78,7 +78,7 @@ A world downloader saves what one player can see, once, overwriting whatever it 
 
 ## Install
 
-Prebuilt archives for Windows, Linux, and macOS are on the [releases page](https://github.com/TonyLu786/WorldLedger/releases). Each carries the `worldledger` binary, the committed release profiles, and every document this README links to, so the copy you download is readable offline and none of its links go nowhere. The Fabric mod JAR is published alongside them, and there is exactly one: installing a sources JAR by mistake fails silently. Every file has a `.sha256` beside it.
+Prebuilt archives for Windows, Linux, and macOS are on the [releases page](https://github.com/TonyLu786/WorldLedger/releases). Each carries the `worldledger` binary, the committed release profiles, and every document this README links to, so the copy you download is readable offline and none of its links go nowhere. The Fabric mod JAR is published alongside them, and there is exactly one: installing a sources JAR by mistake fails silently. Each release carries a `SHA256SUMS.txt`.
 
 ## Capture
 
@@ -163,11 +163,12 @@ Add `--json` for the whole comparison, including every observation made during t
 ### Name the places you have been
 
 ```sh
-worldledger landmark set --archive ./archive --server example.org     --name spawn --region -2,-2,2,2 --declared-by alice
+worldledger landmark set --archive ./archive --server example.org \
+    --name spawn --region -2,-2,2,2 --declared-by alice
 worldledger coverage --archive ./archive --server example.org
 ```
 
-A chunk coordinate is not how anybody thinks about where they have been. `coverage` reported "157 chunks, x -3..3, z -3..3" where a person would say "spawn". With landmarks declared it also reports:
+A chunk coordinate is not how anybody thinks about where they have been. What the archive could say about a captured session was `157 chunk(s) across 4 region(s), x -6..6, z -6..6`, where a person would say "spawn". With landmarks declared, `coverage` also reports:
 
 ```text
 landmarks
