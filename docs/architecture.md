@@ -126,3 +126,11 @@ The first game-facing integration uses a filesystem spool rather than an in-proc
 Minecraft Java chunk components are defined independently of Fabric implementation details in [`../spec/minecraft-java-chunk-v1.md`](../spec/minecraft-java-chunk-v1.md). Unknown state is represented by component absence, not by fabricated defaults; see [ADR 0002](decisions/0002-observed-state.md).
 
 The 26.2 Fabric adapter copies bounded semantic snapshots on the client thread, then performs canonical encoding, hashing, manifest generation, fsync, and ready publication on one background writer. A bounded queue makes lost coverage observable instead of allowing disk pressure to grow the heap without limit. Complete temporary bundles are recovered at startup; invalid ones are quarantined rather than published or silently removed.
+
+## Presentation, and where dependencies are allowed to live
+
+The desktop application is a second Go module under `desktop/`, with its own `go.mod` that reaches the core through a `replace` directive. The split is a dependency boundary, not a build convenience. The core's claim is that anybody can recompute an observation's identity from the specification, and every third-party package in the module that computes it is something a reader has to audit before that claim means anything, so the core stays on the standard library and the window's dependencies stay on the far side of the line.
+
+The application is a loopback HTTP server with the interface embedded in the binary, and the native window is a shell over it. That is also why the interface is HTML rather than native controls: where a window cannot be created the same application runs in a browser, with nothing removed. It calls `internal/` directly and never parses command output, so there is one implementation of each operation rather than a second one behind a screen.
+
+The operations it does not offer are deliberate. Seeding, attestation, redaction, transfer, and landmarks are for whoever runs an archive rather than whoever plays, and putting them behind buttons would make the dangerous ones easy and the rest confusing.

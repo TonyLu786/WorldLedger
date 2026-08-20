@@ -77,9 +77,9 @@ Pure-Java tests cover sequence monotonicity/exhaustion, due and final dirty clai
 
 Maintain a small controlled 26.2 server fixture with known coordinates containing:
 
-- air/stone terrain;
-- block states with several properties;
-- multiple biomes if practical;
+- air/stone terrain, with a mixed section at each end of the build range;
+- block states with several properties, and waterlogging on a block that is not water;
+- more than one biome in a chunk;
 - signs or another block entity with visible update NBT;
 - a container whose contents are intentionally not opened during one capture pass.
 
@@ -94,7 +94,11 @@ Test procedure:
 7. compare expected observation/component digests;
 8. verify that unopened container contents are not asserted by v1 data.
 
-The versioned procedure and evidence template live in `examples/minecraft-26.2-fixture`. A written procedure is not a passing integration run; Windows and Linux evidence records are required before the Java capture milestone is marked complete.
+This stopped being a procedure somebody follows. `adapters/fabric/src/gametest` builds that world with server commands, drives a real client through it, and runs the steps above on every push. The versioned procedure and evidence template in `examples/minecraft-26.2-fixture` remain as the record of what the world is meant to contain, and both the Windows and the Linux record the Java capture milestone waited on now exist and agree byte for byte.
+
+Two committed things stand behind that world. `testdata/capture-fingerprint-reference.txt` pins what a capture of it canonicalizes to, so a change in the encoding fails the build rather than waiting to be noticed. `worldledger corpus` requires each shape in the list above to actually be present — including the last one, which is the absence of something: a container was observed and its contents were not.
+
+The second exists because the first cannot tell a thinner world from a changed one. The game test does not read the results of the commands that build its world, so a block a release renames places nothing and fails nothing. What shows up is a fingerprint that no longer matches, which is also what a genuine game change looks like, and [`upgrading-minecraft.md`](upgrading-minecraft.md) tells a maintainer to update the reference once the release explains it. From that run on, the smaller world compares clean forever.
 
 ## 6. Release gates
 
@@ -115,7 +119,11 @@ cd adapters/fabric
 ./gradlew --no-daemon clean build --warning-mode all
 ```
 
-CI runs all Go gates on Linux and separately tests, vets, and builds the Windows-specific filesystem and locking paths. The Fabric build runs in Linux CI and is also verified locally on Windows; the live cross-platform client records remain a separate release gate.
+CI runs all Go gates on Linux and separately tests, vets, and builds the Windows-specific filesystem and locking paths. The Fabric build runs in Linux CI and is also verified locally on Windows.
+
+Two gates are not in the list above, because they need a running client rather than a compiler. The capture game test rebuilds the capture fingerprint and compares it against the committed reference, and runs `worldledger corpus` over what it captured. Both run in Linux CI on every push; `scripts/run-client-gametest.ps1` runs the same pair on Windows, including where Gradle will not start. The cross-platform comparison the Java capture milestone waited on is one of them now, rather than something a person remembers to do at release time.
+
+The desktop application is a separate Go module and is tested and built as one, on Linux and on Windows. Its tests do not touch a real Minecraft directory: the installer is exercised against a fabricated one, and the check for a running launcher is injectable, because a suite whose result depends on whether somebody has the game open is not a gate.
 
 ## 7. Performance guardrails
 
