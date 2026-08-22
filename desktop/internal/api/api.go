@@ -26,9 +26,11 @@ import (
 func Mount(server *app.Server, watchdog *app.Watchdog) {
 	holdDuringLongWork = watchdog.Hold
 
+	server.HandleFunc("/api/notice", handleNotice)
 	server.HandleFunc("/api/health", handleHealth)
 	server.HandleFunc("/api/status", handleStatus)
 	server.HandleFunc("/api/import", handleImport)
+	server.HandleFunc("/api/tidy", handleTidy)
 	server.HandleFunc("/api/choices", handleChoices)
 	server.HandleFunc("/api/declare", handleDeclare)
 	server.HandleFunc("/api/worlds", handleWorlds)

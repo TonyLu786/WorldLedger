@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/worldledger/worldledger-mc/desktop/internal/app"
+	"github.com/worldledger/worldledger-mc/desktop/internal/health"
 	"github.com/worldledger/worldledger-mc/internal/archive"
 	"github.com/worldledger/worldledger-mc/internal/mcpath"
 	"github.com/worldledger/worldledger-mc/internal/policy"
@@ -30,6 +31,21 @@ type Status struct {
 	// run, which is a different thing from nothing having been captured.
 	Spool *SpoolState `json:"spool,omitempty"`
 
+	// Capturing is whether the mod is in place to record anything at all.
+	//
+	// It is here rather than left to the set-up screen because a spool folder
+	// outlives the mod that made it. Somebody who has removed the mod, or whose
+	// launcher replaced the mods folder, still has the folder and every capture
+	// in it, and a page that reads the folder's existence as "you are recording"
+	// tells them to go and play while nothing is being kept.
+	Capturing bool `json:"capturing"`
+
+	// Contributor is the name captures are recorded under, when the mod has
+	// been set up. The declaration screen offers it as the default for who is
+	// deciding, because in almost every case it is the same person and making
+	// them type it again is asking a question already answered.
+	Contributor string `json:"contributor,omitempty"`
+
 	// Next is what to do about all of it, in one sentence.
 	Next string `json:"next"`
 }
@@ -52,6 +68,13 @@ type SpoolState struct {
 	// folder anyway, so the page can say the recordings still exist rather than
 	// leaving somebody to assume they were consumed.
 	Imported int `json:"imported"`
+	// ImportedBytes is what those are costing inside the Minecraft directory.
+	//
+	// Keeping them is the safe default and stays the default. Not saying what
+	// they weigh is how a player ends up with gigabytes under .minecraft that
+	// nothing in this application ever mentioned, so the number is reported and
+	// there is a way to act on it.
+	ImportedBytes int64 `json:"imported_bytes"`
 }
 
 func handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -75,9 +98,31 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	status.ObjectBytes = manifest.ObjectBytes
 	status.Servers = describeServers(a, manifest)
 	status.Spool = readSpoolState()
+	status.Capturing, status.Contributor = captureState()
 	status.Next = nextStep(status)
 
 	app.WriteJSON(w, http.StatusOK, status)
+}
+
+// captureState answers whether anything would be recorded if the player started
+// the game now, and under whose name.
+//
+// It asks the same checks the set-up screen shows rather than a second opinion
+// of its own. Two places deciding separately whether capture works is how the
+// two screens come to disagree in front of somebody who has to believe one of
+// them.
+func captureState() (capturing bool, contributor string) {
+	install, _, found := mcpath.FindInstall()
+	if !found {
+		return false, ""
+	}
+	report := health.Inspect(install)
+	for _, check := range report.Checks {
+		if check.ID == "contributor" && check.State == health.OK {
+			contributor = check.Detail
+		}
+	}
+	return report.Ready, contributor
 }
 
 // describeServers pairs what was seen with whether it may be used.
@@ -118,34 +163,42 @@ func readSpoolState() *SpoolState {
 		return &SpoolState{Dir: dir}
 	}
 	return &SpoolState{
-		Dir:         dir,
-		Ready:       len(contents.Ready),
-		InProgress:  contents.InProgress,
-		Quarantined: contents.Quarantined,
-		Imported:    contents.Imported,
+		Dir:           dir,
+		Ready:         len(contents.Ready),
+		InProgress:    contents.InProgress,
+		Quarantined:   contents.Quarantined,
+		Imported:      len(contents.Imported),
+		ImportedBytes: spool.Size(contents.Imported),
 	}
 }
 
 // nextStep is the sentence the screen leads with.
 //
-// The order is the order of the path: something waiting to be brought in comes
-// before anything else, because leaving it in the spool is the only state where
-// data can still be lost. A declaration comes next because it is what blocks
-// making a world.
+// The order is the order of the path, with two exceptions that are the whole
+// reason this is worked out here rather than by the page.
+//
+// Anything waiting to be brought in comes first, whatever else is true. The
+// spool is the only place observed state exists in one copy, so emptying it is
+// the only step where waiting can still lose something.
+//
+// What can already be done comes before what would have to be set up again. A
+// player who has removed the mod, or whose launcher replaced the mods folder,
+// still has an archive they can declare and make a world from, and sending them
+// back to Set up would read as the application having forgotten all of it.
 func nextStep(status Status) string {
 	if status.Spool != nil && status.Spool.Ready > 0 {
 		return "import"
 	}
-	if status.Observations == 0 {
-		if status.Spool == nil {
-			return "install"
+	if status.Observations > 0 {
+		for _, server := range status.Servers {
+			if !server.Declared {
+				return "declare"
+			}
 		}
-		return "play"
+		return "export"
 	}
-	for _, server := range status.Servers {
-		if !server.Declared {
-			return "declare"
-		}
+	if !status.Capturing {
+		return "install"
 	}
-	return "export"
+	return "play"
 }

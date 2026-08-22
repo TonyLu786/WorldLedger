@@ -12,6 +12,7 @@
 package spool
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -47,8 +48,16 @@ type Contents struct {
 	InProgress int
 	// Quarantined is a count of bundles the adapter itself rejected.
 	Quarantined int
-	// Imported is a count of bundles already taken into an archive and kept.
-	Imported int
+	// Imported are full paths, sorted, of bundles already taken into an archive
+	// and kept afterwards.
+	//
+	// They are paths rather than a count because keeping them is a default
+	// rather than a rule. A player who captures every evening accumulates them
+	// inside their Minecraft directory, and the only honest way to offer to
+	// clear them is to be able to name exactly which ones qualify: a bundle is
+	// on this list only because an import already returned for it, which is
+	// after the archive forced the observation to disk.
+	Imported []string
 }
 
 // Read reports what is in a spool directory.
@@ -77,11 +86,60 @@ func Read(dir string) (Contents, error) {
 		case strings.HasPrefix(name, quarantinePrefix):
 			contents.Quarantined++
 		case strings.HasPrefix(name, ImportedPrefix):
-			contents.Imported++
+			contents.Imported = append(contents.Imported, filepath.Join(dir, name))
 		}
 	}
 	sort.Strings(contents.Ready)
+	sort.Strings(contents.Imported)
 	return contents, nil
+}
+
+// Size adds up what a list of bundles occupies.
+//
+// Errors are ignored deliberately. The number exists to answer "is this worth
+// clearing", and a bundle with one unreadable file should still be counted
+// rather than making the whole answer disappear.
+func Size(paths []string) int64 {
+	var total int64
+	for _, path := range paths {
+		filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return nil
+			}
+			total += info.Size()
+			return nil
+		})
+	}
+	return total
+}
+
+// Discard removes bundles that have already been imported.
+//
+// It takes the whole path and checks the name itself rather than trusting the
+// caller, because this is the one operation here that destroys the only copy of
+// something outside the archive. A path that is not marked imported is refused
+// rather than skipped: a caller asking to delete a ready bundle has a bug, and
+// carrying on quietly would hide it behind a smaller number.
+//
+// It returns how many were removed and how many bytes went with them, so that
+// whatever asked can say what happened rather than that something happened.
+func Discard(paths []string) (removed int, freed int64, err error) {
+	for _, path := range paths {
+		if !strings.HasPrefix(filepath.Base(path), ImportedPrefix) {
+			return removed, freed, fmt.Errorf(
+				"refusing to remove %s: only bundles already taken into an archive can be cleared",
+				filepath.Base(path))
+		}
+	}
+	for _, path := range paths {
+		size := Size([]string{path})
+		if err := os.RemoveAll(path); err != nil {
+			return removed, freed, err
+		}
+		removed++
+		freed += size
+	}
+	return removed, freed, nil
 }
 
 // MarkImported renames a bundle so it stops counting as outstanding.

@@ -89,8 +89,8 @@ func TestAnImportedBundleStopsCountingAsOutstanding(t *testing.T) {
 	if len(after.Ready) != 1 {
 		t.Errorf("ready = %d, want 1", len(after.Ready))
 	}
-	if after.Imported != 1 {
-		t.Errorf("imported = %d, want 1", after.Imported)
+	if len(after.Imported) != 1 {
+		t.Errorf("imported = %d, want 1", len(after.Imported))
 	}
 	// The bytes are the point: this is somebody's only copy until they say
 	// otherwise.
@@ -108,8 +108,8 @@ func TestMarkingSomethingAlreadyMarkedIsNotAnError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if contents.Imported != 1 {
-		t.Errorf("imported = %d, want 1", contents.Imported)
+	if len(contents.Imported) != 1 {
+		t.Errorf("imported = %d, want 1", len(contents.Imported))
 	}
 }
 
@@ -134,5 +134,97 @@ func TestLooseFilesAreNotMistakenForBundles(t *testing.T) {
 	}
 	if len(contents.Ready) != 1 || contents.Quarantined != 0 {
 		t.Fatalf("files were counted: ready=%v quarantined=%d", contents.Ready, contents.Quarantined)
+	}
+}
+
+// Discarding is the only thing here that destroys somebody's copy of what they
+// saw, so what it refuses matters more than what it removes.
+
+func withBytes(t *testing.T, dir, bundle string, size int) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, bundle, "components"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, bundle, "components", "blocks.bin"),
+		make([]byte, size), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOnlyBundlesAlreadyTakenInCanBeCleared(t *testing.T) {
+	dir := makeSpool(t)
+	withBytes(t, dir, "ready-0001", 32)
+	withBytes(t, dir, "imported-0002", 32)
+
+	contents, err := Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The ready bundle is the only copy of what somebody saw. Asking to remove
+	// it is a caller's mistake, and a mistake that removes data has to fail
+	// rather than quietly do less than it was asked.
+	if _, _, err := Discard(append(contents.Imported, contents.Ready...)); err == nil {
+		t.Fatal("a bundle that has not been imported was accepted for removal")
+	}
+	for _, name := range []string{"ready-0001", "imported-0002"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("%s was removed by a call that should have refused before touching anything: %v", name, err)
+		}
+	}
+}
+
+func TestClearingRemovesTheImportedOnesAndReportsWhatItFreed(t *testing.T) {
+	dir := makeSpool(t, "quarantine-0009")
+	withBytes(t, dir, "ready-0001", 64)
+	withBytes(t, dir, "imported-0002", 100)
+	withBytes(t, dir, "imported-0003", 200)
+
+	contents, err := Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed, freed, err := Discard(contents.Imported)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != 2 {
+		t.Errorf("removed = %d, want 2", removed)
+	}
+	if freed != 300 {
+		t.Errorf("freed = %d, want 300", freed)
+	}
+
+	after, err := Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Imported) != 0 {
+		t.Errorf("%d imported bundle(s) survived", len(after.Imported))
+	}
+	// Everything else is somebody else's business: a ready bundle has not been
+	// saved anywhere yet, and a quarantined one is kept precisely so it can be
+	// looked at.
+	if len(after.Ready) != 1 {
+		t.Errorf("ready = %d, want the untouched one", len(after.Ready))
+	}
+	if after.Quarantined != 1 {
+		t.Errorf("quarantined = %d, want the untouched one", after.Quarantined)
+	}
+}
+
+func TestSizeAddsUpWhatIsUnderEachBundle(t *testing.T) {
+	dir := makeSpool(t)
+	withBytes(t, dir, "imported-0001", 10)
+	withBytes(t, dir, "imported-0002", 25)
+
+	contents, err := Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size := Size(contents.Imported); size != 35 {
+		t.Errorf("size = %d, want 35", size)
+	}
+	if size := Size(nil); size != 0 {
+		t.Errorf("size of nothing = %d, want 0", size)
 	}
 }

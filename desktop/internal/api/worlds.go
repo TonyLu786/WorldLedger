@@ -50,10 +50,20 @@ const sizeableBytes = 40 << 20
 type worldsAnswer struct {
 	SavesDir string  `json:"saves_dir"`
 	Worlds   []World `json:"worlds"`
-	// HowToMake is shown when there is nothing to choose. It is the same three
-	// steps the command line gives, in the same order, because they are the
-	// steps.
-	HowToMake []string `json:"how_to_make,omitempty"`
+	// HowToMake is the three steps for making a world to write into. It is the
+	// same three the command line gives, in the same order, because they are
+	// the steps.
+	//
+	// It used to be sent only when the saves folder was empty, which put the
+	// instructions where they were least needed. Somebody with no worlds at all
+	// is going to end up in Minecraft whatever this says. The player who needs
+	// telling is the one with three worlds they have played in for a year, who
+	// is being offered three choices that are all the wrong one; for them the
+	// screen listed the danger and withheld the way out of it.
+	HowToMake []string `json:"how_to_make"`
+	// Fresh is how many of the listed worlds look freshly made. The page uses
+	// it to decide how loudly to say the above, rather than counting again.
+	Fresh int `json:"fresh"`
 }
 
 func handleWorlds(w http.ResponseWriter, r *http.Request) {
@@ -101,12 +111,15 @@ func handleWorlds(w http.ResponseWriter, r *http.Request) {
 		return answer.Worlds[i].LastPlayed > answer.Worlds[j].LastPlayed
 	})
 
-	if len(answer.Worlds) == 0 {
-		answer.HowToMake = []string{
-			"In Minecraft, choose Singleplayer, then Create New World.",
-			"Give it a name and click Create.",
-			"Leave the world and quit to the title screen.",
+	for _, world := range answer.Worlds {
+		if !world.Sizeable {
+			answer.Fresh++
 		}
+	}
+	answer.HowToMake = []string{
+		"In Minecraft, choose Singleplayer, then Create New World.",
+		"Give it a name and click Create.",
+		"Leave the world and quit to the title screen.",
 	}
 	app.WriteJSON(w, http.StatusOK, answer)
 }

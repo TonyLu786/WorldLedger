@@ -83,7 +83,6 @@ for (const step of steps) {
 // The rail marks what is done, so somebody can see where they are without
 // reading anything. It is driven by the same next-step the server works out,
 // rather than by the page keeping its own idea of progress.
-const order = ['setup', 'capture', 'import', 'declare', 'world', 'travel'];
 function markProgress(next) {
   const reached = { install: 0, play: 1, import: 2, declare: 3, export: 4 }[next];
   steps.forEach((step, index) => {
@@ -127,6 +126,46 @@ function renderChecks(report) {
   if (!report.ready && report.checks.some((c) => c.fix)) {
     host.append(fixEverything(report));
   }
+  host.append(removeEverything());
+}
+
+// The install asks somebody to agree to files being written into their game, and
+// what it offers in exchange is that it can be undone. That promise was made in
+// the confirmation and then had nowhere to be kept: the endpoint existed, its
+// own refusal message named a button on this screen, and no such button had
+// ever been drawn.
+function removeEverything() {
+  const card = el('section', 'card');
+  card.append(el('h2', null, 'Remove it again'));
+  card.append(el('p', 'card-lead',
+    'Puts back exactly what was there before. Only files this application wrote are removed; ' +
+    'anything you installed yourself, and everything you have recorded, is left alone.'));
+
+  const go = el('button', 'fix danger', 'Remove');
+  const detail = el('div');
+  card.append(go, detail);
+
+  go.addEventListener('click', async () => {
+    if (!confirm('This removes Fabric and the mod from your Minecraft, and puts back anything ' +
+      'that was replaced.\n\nYour recordings and your archive are not touched. Carry on?')) {
+      return;
+    }
+    go.disabled = true;
+    go.textContent = 'Removing…';
+    try {
+      const result = await call('/api/uninstall', { method: 'POST' });
+      await refreshSetup();
+      const left = (result.skipped || []).length;
+      document.getElementById('checks').prepend(banner('good', 'Removed',
+        left ? left + ' file(s) were left alone because they had been changed since they were installed.'
+          : 'Your Minecraft is back to what it was.'));
+    } catch (err) {
+      go.disabled = false;
+      go.textContent = 'Remove';
+      detail.replaceChildren(banner('todo', err.message, err.next || ''));
+    }
+  });
+  return card;
 }
 
 function fixEverything(report) {
@@ -217,16 +256,32 @@ function renderCapture(status) {
       'The mod has not run. Finish Set up first, then play once.'));
     return;
   }
+
   const waiting = status.spool.ready;
-  host.append(waiting > 0
-    ? banner('good', waiting + (waiting === 1 ? ' recording waiting' : ' recordings waiting'),
-      'Go to Bring it in to add them to your archive.')
-    : banner('todo', 'Nothing new since last time',
-      'Join a server and play. Recordings appear here when you quit the game.'));
+
+  // The folder outlives the mod that made it. Somebody who has removed the mod,
+  // or whose launcher replaced the mods folder, still has every recording they
+  // ever made sitting here, and reading the folder's existence as "you are
+  // recording" told them to go and play while nothing was being kept.
+  if (!status.capturing) {
+    host.append(banner('todo', 'Nothing would be recorded if you played now',
+      'Your past recordings are safe and listed below. Go to Set up to put the mod back.'));
+  } else if (waiting > 0) {
+    host.append(banner('good',
+      waiting + (waiting === 1 ? ' recording waiting' : ' recordings waiting'),
+      'Go to Bring it in to add them to your archive.'));
+  } else {
+    host.append(banner('todo', 'Nothing new since last time',
+      'Join a server and play. Recordings appear here as you go, and the last of them when you quit.'));
+  }
 
   const facts = el('div', 'facts');
+  if (status.capturing && status.contributor) {
+    addFact(facts, 'Recording under the name', status.contributor);
+  }
   addFact(facts, 'Waiting to be brought in', String(status.spool.ready));
-  addFact(facts, 'Already brought in and kept', String(status.spool.imported));
+  addFact(facts, 'Already brought in and kept',
+    String(status.spool.imported) + (status.spool.imported_bytes ? ' (' + bytes(status.spool.imported_bytes) + ')' : ''));
   if (status.spool.in_progress > 0) {
     addFact(facts, 'Still being written', String(status.spool.in_progress) + ' (Minecraft is running)');
   }
@@ -235,6 +290,49 @@ function renderCapture(status) {
   }
   addFact(facts, 'Recordings folder', status.spool.dir);
   host.append(facts);
+
+  if (status.spool.imported > 0) host.append(clearKept(status));
+}
+
+// Keeping recordings after they have been brought in is the safe default and
+// stays the default: nothing is deleted for you. What it should not do is grow
+// without ever being mentioned, which is how somebody ends up with gigabytes
+// inside .minecraft that nothing here ever named.
+function clearKept(status) {
+  const card = el('section', 'card');
+  card.append(el('h2', null, 'Clear the ones already brought in'));
+  card.append(el('p', 'card-lead',
+    status.spool.imported + ' recording(s), ' + bytes(status.spool.imported_bytes) +
+    ', are being kept inside your Minecraft folder after being brought in. Clearing them ' +
+    'frees that space. Anything not yet brought in, and anything set aside as unreadable, ' +
+    'stays exactly where it is.'));
+
+  const go = el('button', 'fix', 'Clear ' + bytes(status.spool.imported_bytes));
+  const detail = el('div');
+  card.append(go, detail);
+
+  go.addEventListener('click', async () => {
+    if (!confirm('This deletes ' + status.spool.imported + ' recording(s) that have already been ' +
+      'brought in, freeing ' + bytes(status.spool.imported_bytes) + '.\n\n' +
+      'Your archive is not touched, and neither is anything still waiting to be brought in. ' +
+      'This cannot be undone. Carry on?')) {
+      return;
+    }
+    go.disabled = true;
+    go.textContent = 'Clearing…';
+    try {
+      const result = await call('/api/tidy', { method: 'POST' });
+      renderCapture(await loadStatus());
+      document.getElementById('capture-body').prepend(banner('good',
+        'Cleared ' + result.removed + ' recording(s), freeing ' + bytes(result.freed),
+        'Your archive still holds everything they contained.'));
+    } catch (err) {
+      go.disabled = false;
+      go.textContent = 'Clear ' + bytes(status.spool.imported_bytes);
+      detail.replaceChildren(banner('todo', err.message, err.next || ''));
+    }
+  });
+  return card;
 }
 
 // The one sentence for what to do next, taken from the step the server worked
@@ -362,6 +460,11 @@ async function refreshDeclare() {
         input.type = 'radio';
         input.name = 'disposition-' + server.id;
         input.value = choice.value;
+        // A decision already made is shown as made. Redrawing five empty
+        // circles under a banner saying "Decided: private" leaves somebody
+        // unable to tell which of them they are looking at, and makes changing
+        // a decision look exactly like confirming one.
+        input.checked = server.disposition === choice.value;
         input.dataset.needsExpiry = choice.needs_expiry ? 'yes' : '';
         label.append(input);
         const text = el('span');
@@ -373,20 +476,24 @@ async function refreshDeclare() {
 
       const until = el('input', 'until');
       until.type = 'date';
-      until.hidden = true;
       until.setAttribute('aria-label', 'Held back until');
-      form.addEventListener('change', () => {
+      const showExpiry = () => {
         const picked = form.querySelector('input[type=radio]:checked');
         until.hidden = !(picked && picked.dataset.needsExpiry);
-      });
+      };
+      form.addEventListener('change', showExpiry);
       form.append(until);
+      showExpiry();
 
+      const nameLabel = el('label', 'picker-field');
+      nameLabel.append(el('span', null, 'Who is deciding'));
       const name = el('input', 'name');
       name.type = 'text';
       name.placeholder = 'Your name';
       name.value = declarerName(status);
       name.setAttribute('aria-label', 'Who is deciding');
-      form.append(name);
+      nameLabel.append(name);
+      form.append(nameLabel);
 
       const submit = el('button', 'primary', 'Decide');
       submit.type = 'submit';
@@ -428,11 +535,93 @@ async function refreshDeclare() {
 // The contributor name is what they already record under, so it is the sensible
 // default for who is deciding. It stays editable: the person deciding is not
 // always the person who played.
+//
+// This used to read a field the status has never had, so the comment above
+// described something that did not happen and the box came up empty every time
+// — on the one step the application deliberately does not do for anybody.
 function declarerName(status) {
-  return status.declared_by || '';
+  return status.contributor || '';
+}
+
+// Which server the last two screens are about ------------------------------
+
+// An archive holds one server per place the player has been, and both of the
+// screens below used to take servers[0] without saying so. On an archive with
+// two, that silently answered a question nobody had been asked: making a world
+// wrote whichever server sorted first, and time travel reported "only one
+// session so far" while the session somebody was looking for sat beside it.
+//
+// The choice is remembered across the two screens, because looking at a server
+// and then building it is one thought.
+let chosenServer = '';
+
+// The default is whichever holds the most, not whichever sorts first. Somebody
+// with a long-played server and one evening somewhere else means the first of
+// those, and an ordering of names does not know that.
+function defaultServer(servers) {
+  if (servers.some((s) => s.id === chosenServer)) return chosenServer;
+  let best = servers[0];
+  for (const server of servers) if (server.chunks > best.chunks) best = server;
+  return best ? best.id : '';
+}
+
+function serverChooser(servers, onChange) {
+  chosenServer = defaultServer(servers);
+  const select = el('select');
+  for (const server of servers) {
+    const option = el('option', null, server.id + ' — ' + server.chunks + ' places');
+    option.value = server.id;
+    select.append(option);
+  }
+  select.value = chosenServer;
+  select.addEventListener('change', () => {
+    chosenServer = select.value;
+    onChange();
+  });
+  // One server is not a choice, and a control that cannot be changed teaches
+  // somebody only that it does not work. It is still named and still shown,
+  // because which server is about to be written is worth knowing either way.
+  if (servers.length < 2) select.disabled = true;
+  const field = el('label', 'scope-field');
+  field.append(el('span', null, 'Server'));
+  field.append(select);
+  return field;
+}
+
+// The same shape the moments come back in, which is what puts two dates from
+// two sources on one screen without them looking like two different kinds of
+// thing. Following the machine's locale here instead produced a world list
+// dated one way and a moment list dated another, in the same sentence.
+function whenText(iso) {
+  if (!iso) return '';
+  const at = new Date(iso);
+  if (isNaN(at.getTime())) return '';
+  return at.toLocaleString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+async function momentsFor(server) {
+  if (!server) return [];
+  try {
+    return (await call('/api/moments?server=' + encodeURIComponent(server))).moments || [];
+  } catch (err) {
+    // A missing list of moments costs the choice of one, not the screen.
+    return [];
+  }
+}
+
+function momentLabel(moments, at) {
+  const found = moments.find((m) => m.at === at);
+  return found ? found.label : at;
 }
 
 // Make a world -------------------------------------------------------------
+
+// Set by time travel, so that "make a world as it was then" arrives here with
+// the answer already filled in rather than asking somebody to find the moment
+// they were just looking at in a second list.
+let pendingMoment = null;
 
 async function refreshWorld() {
   const host = document.getElementById('world-body');
@@ -447,29 +636,65 @@ async function refreshWorld() {
       return;
     }
 
+    const scope = el('div', 'scope');
+    scope.append(serverChooser(ready, refreshWorld));
+
+    // Which moment is the whole reason for keeping every observation rather
+    // than one snapshot, and the window could only ever write "now". The list
+    // is the one time travel offers, newest first, because that is what almost
+    // everybody wants and the rest is what makes this different from a world
+    // downloader.
+    const moments = await momentsFor(chosenServer);
+    const when = el('select');
+    const now = el('option', null, 'Now — the newest of everything recorded');
+    now.value = '';
+    when.append(now);
+    for (const moment of moments.slice().reverse()) {
+      const option = el('option', null, 'As it was on ' + moment.label);
+      option.value = moment.at;
+      when.append(option);
+    }
+    if (pendingMoment && moments.some((m) => m.at === pendingMoment)) when.value = pendingMoment;
+    pendingMoment = null;
+    if (moments.length) {
+      const field = el('label', 'scope-field');
+      field.append(el('span', null, 'Which moment'));
+      field.append(when);
+      scope.append(field);
+    }
+    host.append(scope);
+
     const answer = await call('/api/worlds');
     if (!answer.worlds.length) {
-      const box = banner('todo', 'No Minecraft world to write into', '');
-      host.append(box);
-      const list = el('ol', 'howto');
-      for (const line of answer.how_to_make || []) list.append(el('li', null, line));
-      host.append(list);
+      host.append(banner('todo', 'No Minecraft world to write into', ''));
+      host.append(howToMakeOne(answer));
       const again = el('button', 'primary', 'I have made one');
       again.addEventListener('click', refreshWorld);
       host.append(again);
       return;
     }
 
-    host.append(banner('good', 'Pick a world to write into',
-      'The newest is first. Choose one you made for this, not one you have played in.'));
+    // The instructions used to appear only when the saves folder was empty,
+    // which is where they were least needed. The person who needs telling is
+    // the one being offered three worlds they have played in for a year.
+    host.append(answer.fresh > 0
+      ? banner('good', 'Pick a world to write into',
+        'The newest is first. Choose one you made for this, not one you have played in.')
+      : banner('todo', 'Every world here looks like one you have played in',
+        'Writing into one of these puts your recordings over what is already there. ' +
+        'Making an empty world first is the safe way round.'));
+    if (answer.fresh === 0) host.append(howToMakeOne(answer));
 
     for (const world of answer.worlds) {
       const row = el('div', 'check');
       row.append(el('div', 'check-dot', world.sizeable ? '!' : '✓'));
       const middle = el('div');
       middle.append(el('div', 'check-title', world.name));
+      const touched = whenText(world.last_played);
       middle.append(el('div', 'check-detail',
-        bytes(world.bytes) + (world.sizeable ? ' — this looks like a world you have played in' : ' — looks freshly made')));
+        bytes(world.bytes) +
+        (world.sizeable ? ' — this looks like a world you have played in' : ' — looks freshly made') +
+        (touched ? ', last touched ' + touched : '')));
       row.append(middle);
 
       const button = el('button', 'fix', 'Write into this');
@@ -484,11 +709,16 @@ async function refreshWorld() {
         try {
           const result = await call('/api/export', {
             method: 'POST',
-            body: JSON.stringify({ server: ready[0].id, world_dir: world.path }),
+            body: JSON.stringify({ server: chosenServer, world_dir: world.path, at: when.value }),
           });
+          const moment = when.value ? ' as it was on ' + momentLabel(moments, when.value) : '';
           host.replaceChildren(banner('good',
-            'Wrote ' + result.chunks + ' places into ' + world.name,
+            'Wrote ' + result.chunks + ' places from ' + chosenServer + moment + ' into ' + world.name,
             'Open Minecraft and play that world. Anything nobody saw is left as the empty world made it.'));
+          if (result.withheld) {
+            host.append(el('p', 'quiet',
+              result.withheld + ' recording(s) were held back by a redaction and are not in it.'));
+          }
         } catch (err) {
           button.disabled = false;
           button.textContent = 'Write into this';
@@ -501,6 +731,12 @@ async function refreshWorld() {
   } catch (err) {
     problem(host, err);
   }
+}
+
+function howToMakeOne(answer) {
+  const list = el('ol', 'howto');
+  for (const line of answer.how_to_make || []) list.append(el('li', null, line));
+  return list;
 }
 
 // Time travel --------------------------------------------------------------
@@ -523,8 +759,12 @@ async function refreshTravel() {
       return;
     }
 
-    const server = status.servers[0].id;
-    const moments = (await call('/api/moments?server=' + encodeURIComponent(server))).moments;
+    const scope = el('div', 'scope');
+    scope.append(serverChooser(status.servers, refreshTravel));
+    host.append(scope);
+
+    const server = chosenServer;
+    const moments = await momentsFor(server);
     if (moments.length < 1) {
       host.append(banner('todo', 'Nothing recorded for ' + server, 'Play and bring in some recordings.'));
       return;
@@ -533,7 +773,7 @@ async function refreshTravel() {
     // why there is nothing to compare beats showing a map of one colour and
     // leaving somebody to work out that it means "come back later".
     if (moments.length < 2) {
-      host.append(banner('todo', 'Only one session so far',
+      host.append(banner('todo', 'Only one session so far on ' + server,
         'Time travel compares two moments. Play again another day, bring those recordings in, ' +
         'and this will show what changed in between.'));
       const facts = el('div', 'facts');
@@ -569,6 +809,7 @@ async function refreshTravel() {
         const diff = await call('/api/travel?server=' + encodeURIComponent(server) +
           '&from=' + encodeURIComponent(from.value) + '&to=' + encodeURIComponent(to.value));
         renderTravel(result, diff);
+        result.append(buildFromHere(status, server, moments, [from.value, to.value]));
       } catch (err) {
         problem(result, err);
       } finally {
@@ -579,6 +820,38 @@ async function refreshTravel() {
   } catch (err) {
     problem(host, err);
   }
+}
+
+// Seeing that a place changed and then being unable to go back to it is the
+// screen stopping one step short of what it just demonstrated. The export has
+// always taken a moment; it was only ever sent "now", so the one thing a world
+// downloader structurally cannot do was visible here and reachable nowhere.
+function buildFromHere(status, server, moments, chosen) {
+  const card = el('section', 'card');
+  card.append(el('h2', null, 'Go back to one of these'));
+
+  const declared = status.servers.some((s) => s.id === server && s.declared);
+  if (!declared) {
+    card.append(el('p', 'card-lead',
+      'Nothing has been said yet about what may happen to what you recorded on ' + server +
+      '. Decide that first, and either of these moments can be made into a world.'));
+    return card;
+  }
+
+  card.append(el('p', 'card-lead',
+    'A world written from one of these moments holds what had been seen by then, ' +
+    'and nothing that was only seen afterwards.'));
+
+  for (const at of chosen) {
+    const button = el('button', 'fix', 'Make a world as it was on ' + momentLabel(moments, at));
+    button.addEventListener('click', () => {
+      pendingMoment = at;
+      chosenServer = server;
+      show('world');
+    });
+    card.append(button);
+  }
+  return card;
 }
 
 function labelled(text, control) {
@@ -646,4 +919,70 @@ function drawMap(chunks) {
 setInterval(() => { call('/api/alive').catch(() => {}); }, 10000);
 call('/api/alive').catch(() => {});
 
-show('setup');
+// Before you start --------------------------------------------------------
+
+// Shown once, on a machine where nobody has read it. Every launch would make it
+// something people learn to click past, and once is what "explicitly told"
+// means; the rail keeps a way back to it for the rest of the time.
+const noticeBox = document.getElementById('notice');
+const noticeAccept = document.getElementById('notice-accept');
+const noticeClose = document.getElementById('notice-close');
+
+function renderNotice(answer, alreadyRead) {
+  const body = document.getElementById('notice-body');
+  body.replaceChildren();
+  for (const part of answer.paragraphs || []) {
+    const block = el('section', 'notice-part');
+    block.append(el('h2', null, part.heading));
+    block.append(el('p', null, part.body));
+    body.append(block);
+  }
+  noticeAccept.hidden = alreadyRead;
+  noticeClose.hidden = !alreadyRead;
+  noticeBox.hidden = false;
+  (alreadyRead ? noticeClose : noticeAccept).focus();
+}
+
+noticeAccept.addEventListener('click', async () => {
+  noticeAccept.disabled = true;
+  try {
+    await call('/api/notice', { method: 'POST' });
+    noticeBox.hidden = true;
+  } catch (err) {
+    // Being unable to write it down is no reason to stand in somebody's way, so
+    // the sheet closes either way. Saying so belongs here rather than on the
+    // screen behind it, which may not be the one they are looking at.
+    document.getElementById('notice-body').prepend(
+      banner('todo', 'This could not be noted as read: ' + err.message,
+        'You can carry on; it will be shown again next time.'));
+    noticeAccept.hidden = true;
+    noticeClose.hidden = false;
+    noticeClose.focus();
+  } finally {
+    noticeAccept.disabled = false;
+  }
+});
+noticeClose.addEventListener('click', () => { noticeBox.hidden = true; });
+
+document.getElementById('notice-open').addEventListener('click', async () => {
+  try {
+    renderNotice(await call('/api/notice'), true);
+  } catch (err) {
+    problem(document.getElementById('checks'), err);
+  }
+});
+
+async function start() {
+  show('setup');
+  try {
+    const answer = await call('/api/notice');
+    if (!answer.accepted) renderNotice(answer, false);
+  } catch (err) {
+    // The application still works; what it must not do is carry on as though it
+    // had said something it did not manage to say.
+    document.getElementById('checks').prepend(
+      banner('todo', 'The notice about what this keeps could not be shown: ' + err.message,
+        'It is in the NOTICE file beside the application.'));
+  }
+}
+start();

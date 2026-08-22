@@ -7,6 +7,21 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<!-- Shown before anything else on a machine where nobody has read it, and
+     reachable afterwards from the bottom of the rail. It is the first thing
+     the application says because it is the part somebody needs in order to
+     decide whether to use it at all. -->
+<div class="notice" id="notice" hidden>
+  <div class="notice-sheet" role="dialog" aria-modal="true" aria-labelledby="notice-title">
+    <h1 id="notice-title">Before you start</h1>
+    <div id="notice-body"></div>
+    <footer class="notice-foot">
+      <button class="primary" id="notice-accept">I have read this</button>
+      <button class="fix" id="notice-close" hidden>Close</button>
+    </footer>
+  </div>
+</div>
+
 <div class="frame">
   <nav class="rail">
     <div class="mark">
@@ -19,6 +34,7 @@
     <button class="step" data-screen="declare"><span class="step-index">4</span><span class="step-text">Decide<small>What may be shared</small></span></button>
     <button class="step" data-screen="world"><span class="step-index">5</span><span class="step-text">Make a world<small>Walk around in it</small></span></button>
     <button class="step" data-screen="travel"><span class="step-index">6</span><span class="step-text">Time travel<small>See it change</small></span></button>
+    <button class="rail-foot" id="notice-open">What this keeps, and whose responsibility it is</button>
   </nav>
 
   <main class="stage">
