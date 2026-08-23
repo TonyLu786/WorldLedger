@@ -295,3 +295,17 @@ button:disabled { opacity: 0.55; cursor: default; filter: none; }
 /* A card can offer more than one thing to do -- two moments to go back to --
    so they wrap and keep their distance instead of touching. */
 .card .fix { margin: 8px 8px 0 0; }
+
+/* Asking ------------------------------------------------------------------ */
+
+.ask-lead { margin: 4px 0 0; color: var(--ink-soft); font-size: 14px; max-width: 62ch; }
+.ask-lead[hidden] { display: none; }
+
+#ask-detail { margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+#ask-detail:empty { display: none; }
+.ask-row { display: block; padding: 9px 13px; background: var(--paper); }
+.ask-row + .ask-row { border-top: 1px solid var(--line); }
+.ask-row-title { display: block; font-size: 13px; font-weight: 550; }
+.ask-row-detail { display: block; font-size: 12px; color: var(--ink-soft); word-break: break-all; }
+
+button.primary.is-danger { background: var(--stop); }

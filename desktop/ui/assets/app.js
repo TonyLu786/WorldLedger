@@ -44,6 +44,59 @@ function problem(host, err) {
   host.replaceChildren(banner('todo', err.message, err.next || ''));
 }
 
+// Asking ------------------------------------------------------------------
+
+// Every consequential thing here used to be agreed to in window.confirm, which
+// is wrong on three counts. It heads the question with "127.0.0.1:53211 says",
+// so the one moment this application most needs somebody to read looks like a
+// page misbehaving. It renders a list of file paths as one run of text. And it
+// makes consent depend on script dialogs being switched on in whatever is
+// showing the page, which is not something a window should have to rely on.
+//
+// This returns a promise, so callers read as they did before. Escape and Cancel
+// both answer no: a sheet somebody cannot dismiss is one they learn to click
+// through.
+function ask({ title, lead, rows, confirm: confirmText, danger }) {
+  const box = document.getElementById('ask');
+  const yes = document.getElementById('ask-yes');
+  const no = document.getElementById('ask-no');
+
+  document.getElementById('ask-title').textContent = title;
+  const leadNode = document.getElementById('ask-lead');
+  leadNode.textContent = lead || '';
+  leadNode.hidden = !lead;
+
+  const detail = document.getElementById('ask-detail');
+  detail.replaceChildren();
+  for (const row of rows || []) {
+    const line = el('div', 'ask-row');
+    line.append(el('span', 'ask-row-title', row.title));
+    if (row.detail) line.append(el('span', 'ask-row-detail', row.detail));
+    detail.append(line);
+  }
+
+  yes.textContent = confirmText || 'Carry on';
+  yes.classList.toggle('is-danger', Boolean(danger));
+  box.hidden = false;
+  yes.focus();
+
+  return new Promise((resolve) => {
+    const finish = (answer) => {
+      box.hidden = true;
+      yes.removeEventListener('click', onYes);
+      no.removeEventListener('click', onNo);
+      document.removeEventListener('keydown', onKey);
+      resolve(answer);
+    };
+    const onYes = () => finish(true);
+    const onNo = () => finish(false);
+    const onKey = (event) => { if (event.key === 'Escape') finish(false); };
+    yes.addEventListener('click', onYes);
+    no.addEventListener('click', onNo);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 function bytes(n) {
   if (n < 1024) return n + ' B';
   const units = ['KB', 'MB', 'GB'];
@@ -146,8 +199,13 @@ function removeEverything() {
   card.append(go, detail);
 
   go.addEventListener('click', async () => {
-    if (!confirm('This removes Fabric and the mod from your Minecraft, and puts back anything ' +
-      'that was replaced.\n\nYour recordings and your archive are not touched. Carry on?')) {
+    if (!await ask({
+      title: 'Remove Fabric and the mod from your Minecraft?',
+      lead: 'Anything that was replaced is put back. Only files this application wrote are removed.',
+      rows: [{ title: 'Left alone', detail: 'your recordings, your archive, and any other mods' }],
+      confirm: 'Remove',
+      danger: true,
+    })) {
       return;
     }
     go.disabled = true;
@@ -203,9 +261,13 @@ function fixEverything(report) {
         go.disabled = false;
         return;
       }
-      const list = plan.steps.map((s) => '• ' + s.title + '\n     ' + s.target).join('\n');
-      if (!confirm('This will write these files into your Minecraft:\n\n' + list +
-        '\n\nAnything replaced is kept, and Remove puts it all back. Carry on?')) {
+      const agreed = await ask({
+        title: 'This will write ' + plan.steps.length + ' files into your Minecraft',
+        lead: 'Nothing else is touched. Anything replaced is kept, and Remove puts it all back.',
+        rows: plan.steps.map((s) => ({ title: s.title, detail: s.target })),
+        confirm: 'Write these files',
+      });
+      if (!agreed) {
         go.disabled = false;
         return;
       }
@@ -312,10 +374,16 @@ function clearKept(status) {
   card.append(go, detail);
 
   go.addEventListener('click', async () => {
-    if (!confirm('This deletes ' + status.spool.imported + ' recording(s) that have already been ' +
-      'brought in, freeing ' + bytes(status.spool.imported_bytes) + '.\n\n' +
-      'Your archive is not touched, and neither is anything still waiting to be brought in. ' +
-      'This cannot be undone. Carry on?')) {
+    if (!await ask({
+      title: 'Delete ' + status.spool.imported + ' recordings that have already been brought in?',
+      lead: 'This frees ' + bytes(status.spool.imported_bytes) + ' and cannot be undone.',
+      rows: [
+        { title: 'Deleted', detail: status.spool.imported + ' recording(s) already added to your archive' },
+        { title: 'Left alone', detail: 'your archive, anything still waiting, and anything set aside as unreadable' },
+      ],
+      confirm: 'Delete them',
+      danger: true,
+    })) {
       return;
     }
     go.disabled = true;
@@ -699,9 +767,17 @@ async function refreshWorld() {
 
       const button = el('button', 'fix', 'Write into this');
       button.addEventListener('click', async () => {
-        if (world.sizeable && !confirm(
-          'This world is ' + bytes(world.bytes) + ', which usually means you have played in it.\n\n' +
-          'Your recordings will be written over what is there. Carry on?')) {
+        if (world.sizeable && !await ask({
+          title: 'Write into ' + world.name + '?',
+          lead: 'It is ' + bytes(world.bytes) + ', which usually means somebody has played in it. ' +
+            'Where your recordings overlap what is there, yours are written over it.',
+          rows: [
+            { title: 'Writing', detail: chosenServer },
+            { title: 'Into', detail: world.path },
+          ],
+          confirm: 'Write into it anyway',
+          danger: true,
+        })) {
           return;
         }
         button.disabled = true;

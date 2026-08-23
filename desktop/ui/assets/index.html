@@ -22,6 +22,23 @@
   </div>
 </div>
 
+<!-- Consequential things are agreed to here rather than in window.confirm.
+     A browser dialog puts "127.0.0.1:53211 says" above the one question this
+     application most needs somebody to read, formats a list of file paths as a
+     wall of text, and makes the whole consent step depend on script dialogs
+     being switched on in whatever is showing the page. -->
+<div class="notice" id="ask" hidden>
+  <div class="notice-sheet" role="dialog" aria-modal="true" aria-labelledby="ask-title">
+    <h1 id="ask-title"></h1>
+    <p class="ask-lead" id="ask-lead"></p>
+    <div id="ask-detail"></div>
+    <footer class="notice-foot">
+      <button class="primary" id="ask-yes">Carry on</button>
+      <button class="fix" id="ask-no">Cancel</button>
+    </footer>
+  </div>
+</div>
+
 <div class="frame">
   <nav class="rail">
     <div class="mark">

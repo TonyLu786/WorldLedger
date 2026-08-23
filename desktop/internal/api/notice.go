@@ -75,6 +75,10 @@ var noticeText = []noticeParagraph{
 	},
 }
 
+// NoticeText is what the application says for itself, exported so that what it
+// must not stop saying can be asserted from outside this package.
+func NoticeText() []noticeParagraph { return noticeText }
+
 // noticePath is where acceptance is recorded. It sits with the archive rather
 // than in the browser's storage: a window's storage can be cleared by things
 // that have nothing to do with this application, and asking somebody the same
