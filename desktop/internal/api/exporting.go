@@ -44,6 +44,10 @@ type exportAnswer struct {
 	WorldDir    string   `json:"world_dir"`
 	Unknown     int      `json:"unknown"`
 	Withheld    int      `json:"withheld,omitempty"`
+	// Kept is how many chunks were already in the files this wrote into and
+	// were left as they were. It is the answer to the question somebody
+	// actually has about writing into a world they care about.
+	Kept int `json:"kept"`
 }
 
 func handleExport(w http.ResponseWriter, r *http.Request) {
@@ -160,6 +164,7 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		Chunks:      report.Chunks,
 		RegionFiles: shortNames(report.RegionFiles),
 		WorldDir:    request.WorldDir,
+		Kept:        report.Kept,
 		Unknown:     snapshot.Summary.Unknown,
 		Withheld:    inputs.Withheld,
 	}

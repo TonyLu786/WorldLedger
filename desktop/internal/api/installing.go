@@ -47,6 +47,21 @@ func handlePlan(w http.ResponseWriter, r *http.Request) {
 			"install Minecraft and play it once, then come back")
 		return
 	}
+	// Refused here rather than after the plan has been shown and agreed to.
+	//
+	// A build from source carries no address for the mod, so installing was
+	// always going to fail. It failed at the end: somebody typed their name,
+	// read five file paths, agreed to all five, and then got a line of small
+	// text. Consent had been collected for something that could not happen,
+	// which is worse than not asking, and the same refusal a step earlier costs
+	// nothing and is true at the moment it is said.
+	if ModSource == "" {
+		app.WriteJSON(w, http.StatusOK, installer.Plan{
+			Refusal: "this build of the application does not know where to get the mod from, " +
+				"so it cannot set anything up. Use a released version, which carries that address.",
+		})
+		return
+	}
 	contributor := r.URL.Query().Get("contributor")
 	app.WriteJSON(w, http.StatusOK,
 		installer.BuildPlan(install, health.Inspect(install), ModSource, contributor))

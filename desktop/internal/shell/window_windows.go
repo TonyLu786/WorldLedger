@@ -30,13 +30,19 @@ func runWindow(url string) (note string, ran bool) {
 		}
 	}()
 
+	// Before the window exists, and only useful before it exists.
+	declareDPIAware()
+	scale := windowScale()
+
 	view := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     false,
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{
-			Title:  "WorldLedger",
-			Width:  1100,
-			Height: 760,
+			Title: "WorldLedger",
+			// Asked for in real pixels, so a display scaled above 100% needs a
+			// bigger number for the same window.
+			Width:  uint(1100 * scale),
+			Height: uint(760 * scale),
 			Center: true,
 		},
 	})

@@ -276,7 +276,7 @@ func bindWorldFlags(fs *flag.FlagSet, request *worldRequest) {
 	fs.StringVar(&request.dimension, "dimension", "minecraft:overworld", "dimension id")
 	fs.StringVar(&request.moment, "at", "", "RFC3339 reconstruction time (default now)")
 	fs.StringVar(&request.into, "into", "", "existing Minecraft world directory")
-	fs.BoolVar(&request.overwrite, "overwrite", false, "replace existing region files")
+	fs.BoolVar(&request.overwrite, "overwrite", false, "write into region files that already exist, replacing only the chunks this export has")
 }
 
 // cmdExport writes the observed state unchanged. It never approximates, so the

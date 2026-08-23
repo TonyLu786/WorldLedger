@@ -769,11 +769,15 @@ async function refreshWorld() {
       button.addEventListener('click', async () => {
         if (world.sizeable && !await ask({
           title: 'Write into ' + world.name + '?',
-          lead: 'It is ' + bytes(world.bytes) + ', which usually means somebody has played in it. ' +
-            'Where your recordings overlap what is there, yours are written over it.',
+          lead: 'It is ' + bytes(world.bytes) + ', which usually means somebody has played in it.',
           rows: [
             { title: 'Writing', detail: chosenServer },
             { title: 'Into', detail: world.path },
+            {
+              title: 'Where the two meet',
+              detail: 'a place you recorded that also exists there is replaced by yours; ' +
+                'everywhere else in that world is left exactly as it is',
+            },
           ],
           confirm: 'Write into it anyway',
           danger: true,
@@ -787,14 +791,7 @@ async function refreshWorld() {
             method: 'POST',
             body: JSON.stringify({ server: chosenServer, world_dir: world.path, at: when.value }),
           });
-          const moment = when.value ? ' as it was on ' + momentLabel(moments, when.value) : '';
-          host.replaceChildren(banner('good',
-            'Wrote ' + result.chunks + ' places from ' + chosenServer + moment + ' into ' + world.name,
-            'Open Minecraft and play that world. Anything nobody saw is left as the empty world made it.'));
-          if (result.withheld) {
-            host.append(el('p', 'quiet',
-              result.withheld + ' recording(s) were held back by a redaction and are not in it.'));
-          }
+          host.replaceChildren(finished(result, world, when.value ? momentLabel(moments, when.value) : ''));
         } catch (err) {
           button.disabled = false;
           button.textContent = 'Write into this';
@@ -813,6 +810,47 @@ function howToMakeOne(answer) {
   const list = el('ol', 'howto');
   for (const line of answer.how_to_make || []) list.append(el('li', null, line));
   return list;
+}
+
+// The end of the path, which used to be one green line where the whole screen
+// had been.
+//
+// Somebody walked all six steps and said afterwards that they could not tell
+// what had happened. They were right: the screen emptied itself and left a
+// sentence, in a place where the reasonable questions are what went in, what was
+// already there, where it is, and what to do now. Those are four different
+// answers and none of them fits in a banner.
+function finished(result, world, moment) {
+  const done = document.createDocumentFragment();
+  done.append(banner('good', 'Your world is ready',
+    'It is called ' + world.name + '. Open Minecraft, choose Singleplayer, and play it.'));
+
+  const facts = el('div', 'facts');
+  addFact(facts, 'Places written', String(result.chunks) + ' chunk(s) from ' + chosenServer);
+  if (moment) addFact(facts, 'As it was on', moment);
+  // The number that answers "did this eat my world", which is the question the
+  // export used to leave hanging because it did not know the answer itself.
+  if (result.kept) {
+    addFact(facts, 'Already there, left alone', String(result.kept) + ' chunk(s)');
+  }
+  if (result.unknown) {
+    addFact(facts, 'Recorded but unreadable', String(result.unknown) + ' chunk(s), not written');
+  }
+  if (result.withheld) {
+    addFact(facts, 'Held back by a redaction', String(result.withheld) + ' recording(s)');
+  }
+  addFact(facts, 'Files written', (result.region_files || []).join(', ') || 'none');
+  addFact(facts, 'World folder', result.world_dir || world.path);
+  done.append(facts);
+
+  done.append(el('p', 'quiet',
+    'Anywhere nobody went is left exactly as the empty world generated it, because an archive ' +
+    'that fills in what it never saw is guessing. Nothing else in that world was touched.'));
+
+  const again = el('button', 'fix', 'Write another world');
+  again.addEventListener('click', refreshWorld);
+  done.append(again);
+  return done;
 }
 
 // Time travel --------------------------------------------------------------

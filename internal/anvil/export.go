@@ -62,6 +62,11 @@ type ExportRequest struct {
 type ExportReport struct {
 	RegionFiles []string `json:"region_files"`
 	Chunks      int      `json:"chunks"`
+	// Kept counts chunks that were already in the region files this wrote into
+	// and were left as they were. It is reported rather than assumed, because
+	// the number a person needs is not how many chunks arrived but how many of
+	// theirs are still there.
+	Kept int `json:"kept"`
 }
 
 // Export writes region files into an existing world directory. It deliberately
@@ -113,7 +118,8 @@ func Export(chunks []PreparedChunk, request ExportRequest) (ExportReport, error)
 		path := filepath.Join(regionDir, RegionFileName(key[0], key[1]))
 		if !request.Overwrite {
 			if _, err := os.Stat(path); err == nil {
-				return ExportReport{}, fmt.Errorf("%s already exists; pass --overwrite to replace it", path)
+				return ExportReport{}, fmt.Errorf(
+					"%s already exists; pass --overwrite to write into it, which replaces only the chunks this export has", path)
 			} else if !os.IsNotExist(err) {
 				return ExportReport{}, err
 			}
@@ -125,6 +131,28 @@ func Export(chunks []PreparedChunk, request ExportRequest) (ExportReport, error)
 		return ExportReport{}, err
 	}
 	report := ExportReport{RegionFiles: paths, Chunks: len(chunks)}
+	for index, key := range keys {
+		// A region file already there holds up to 1,024 chunks and this export
+		// may have one of them. Laying the file out from what was given and
+		// writing it over the old one deletes the rest, which is data this
+		// archive never observed and has no standing to remove.
+		//
+		// Reading it first is done before anything is written, so a file that
+		// cannot be understood stops the export rather than being replaced by
+		// a smaller one.
+		existing, err := os.ReadFile(paths[index])
+		if err != nil && !os.IsNotExist(err) {
+			return ExportReport{}, fmt.Errorf("%s: %w", paths[index], err)
+		}
+		if len(existing) > 0 {
+			kept, err := regions[key].Adopt(existing)
+			if err != nil {
+				return ExportReport{}, fmt.Errorf(
+					"%s could not be read, so writing it would have discarded what it holds: %w", paths[index], err)
+			}
+			report.Kept += kept
+		}
+	}
 	for index, key := range keys {
 		if err := writeFileAtomic(paths[index], regions[key].Bytes()); err != nil {
 			return ExportReport{}, err

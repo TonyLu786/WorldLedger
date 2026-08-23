@@ -36,10 +36,75 @@ func RegionFileName(regionX, regionZ int32) string {
 type Region struct {
 	X, Z    int32
 	payload map[int][]byte
+	// stamped carries the per-chunk timestamps of chunks adopted from a file
+	// that already existed. Chunks this export wrote have none, which is what
+	// the writer has always produced and what makes an export reproducible.
+	stamped map[int][]byte
 }
 
 func NewRegion(regionX, regionZ int32) *Region {
-	return &Region{X: regionX, Z: regionZ, payload: map[int][]byte{}}
+	return &Region{X: regionX, Z: regionZ, payload: map[int][]byte{}, stamped: map[int][]byte{}}
+}
+
+// Adopt keeps the chunks an existing region file holds that this export does
+// not supply.
+//
+// Without it, writing one chunk into a region destroys the other 1,023 that
+// file could hold, because a region is laid out from what it was given and
+// written over whatever was there. That is how an export into a world somebody
+// had played in deleted terrain nobody asked it to touch: the region file is
+// the unit on disk, and the chunk is the unit anybody thinks in.
+//
+// Adopted chunks are copied as raw frames. They are not decompressed, parsed,
+// re-encoded or validated, because this archive did not observe them and has no
+// business having an opinion about their contents -- it only has to not lose
+// them.
+func (r *Region) Adopt(existing []byte) (int, error) {
+	if len(existing) == 0 {
+		return 0, nil
+	}
+	if len(existing) < headerSectors*sectorBytes {
+		return 0, fmt.Errorf("region (%d,%d): the file is %d bytes, too short to hold a header", r.X, r.Z, len(existing))
+	}
+
+	adopted := 0
+	for slot := 0; slot < regionChunks; slot++ {
+		entry := slot * 4
+		offset := int(existing[entry])<<16 | int(existing[entry+1])<<8 | int(existing[entry+2])
+		sectors := int(existing[entry+3])
+		if offset == 0 && sectors == 0 {
+			continue
+		}
+		// A chunk this export wrote wins, which is the whole point of writing
+		// it. Everything else is somebody else's and is kept as it is.
+		if _, ours := r.payload[slot]; ours {
+			continue
+		}
+		if offset < headerSectors || sectors == 0 {
+			return adopted, fmt.Errorf("region (%d,%d): chunk slot %d points at sector %d, which is inside the header",
+				r.X, r.Z, slot, offset)
+		}
+		start := offset * sectorBytes
+		end := start + sectors*sectorBytes
+		if end > len(existing) {
+			return adopted, fmt.Errorf("region (%d,%d): chunk slot %d runs to byte %d of a %d byte file",
+				r.X, r.Z, slot, end, len(existing))
+		}
+		length := int(existing[start])<<24 | int(existing[start+1])<<16 | int(existing[start+2])<<8 | int(existing[start+3])
+		if length <= 0 || 4+length > sectors*sectorBytes {
+			return adopted, fmt.Errorf("region (%d,%d): chunk slot %d declares a %d byte frame in %d sector(s)",
+				r.X, r.Z, slot, length, sectors)
+		}
+		frame := make([]byte, 4+length)
+		copy(frame, existing[start:start+4+length])
+		r.payload[slot] = frame
+
+		stamp := make([]byte, 4)
+		copy(stamp, existing[sectorBytes+entry:sectorBytes+entry+4])
+		r.stamped[slot] = stamp
+		adopted++
+	}
+	return adopted, nil
 }
 
 func (r *Region) Len() int {
@@ -108,6 +173,12 @@ func (r *Region) Bytes() []byte {
 		locations[entry+1] = byte(nextSector >> 8)
 		locations[entry+2] = byte(nextSector)
 		locations[entry+3] = byte(sectors)
+		// An adopted chunk keeps the time the game last wrote it. Chunks this
+		// export produced keep none, which is what has always been written and
+		// is what lets two exports of the same archive compare byte for byte.
+		if stamp, kept := r.stamped[slot]; kept {
+			copy(timestamps[entry:entry+4], stamp)
+		}
 
 		padded := make([]byte, sectors*sectorBytes)
 		copy(padded, frame)
