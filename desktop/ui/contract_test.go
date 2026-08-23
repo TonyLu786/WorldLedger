@@ -184,6 +184,34 @@ func TestThePageOnlyReadsSpoolFieldsThatExist(t *testing.T) {
 	}
 }
 
+// The two overlays are deliberately one thing wearing two ids, and something
+// has to keep them that way.
+//
+// It is not tidiness. The native window is expensive to exercise -- doing it
+// takes over somebody's screen -- so what has been seen of the notice rendering
+// and answering there is what stands behind the confirmation sheet as well.
+// That transfer is only honest while the two are the same element with the same
+// class, which is a fact a test can hold rather than an argument that quietly
+// stops being true.
+func TestTheTwoOverlaysAreTheSameThing(t *testing.T) {
+	page, err := assets.ReadFile("assets/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	markup := string(page)
+	for _, want := range []string{
+		`<div class="notice" id="notice"`,
+		`<div class="notice" id="ask"`,
+	} {
+		if !strings.Contains(markup, want) {
+			t.Errorf("the overlays no longer share their outer class: %q is not in the page", want)
+		}
+	}
+	if sheets := strings.Count(markup, `class="notice-sheet"`); sheets != 2 {
+		t.Errorf("%d element(s) use the sheet class, want the notice and the confirmation", sheets)
+	}
+}
+
 // The notice is the one response whose content is the point rather than a
 // number, so what it carries is checked rather than only that it is answered.
 func TestTheNoticeSaysTheThingsItExistsToSay(t *testing.T) {
