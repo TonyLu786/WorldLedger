@@ -258,6 +258,12 @@ func (r worldRequest) write(snapshot epoch.Snapshot, prepared []anvil.PreparedCh
 	for _, path := range report.RegionFiles {
 		fmt.Printf("  %s\n", path)
 	}
+	// Said even when it is none, because the question it answers -- what
+	// happened to what was already in that world -- is one somebody has whether
+	// or not the answer is reassuring.
+	if report.Kept > 0 {
+		fmt.Printf("%d chunk(s) already in those files were left as they were\n", report.Kept)
+	}
 	fmt.Printf("\ncorroborated %d  single-source %d  superseded %d  conflict %d\n",
 		snapshot.Summary.Corroborated, snapshot.Summary.SingleSource,
 		snapshot.Summary.Superseded, snapshot.Summary.Conflict)

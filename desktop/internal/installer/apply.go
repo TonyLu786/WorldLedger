@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -127,7 +128,11 @@ func Apply(plan Plan, fetcher Fetcher, backupDir string) (Manifest, error) {
 					"%s: what arrived from %s is not a mod file", step.Title, step.Source)
 			}
 		case WriteContributor:
-			payload = captureProperties(plan.Contributor)
+			existing, err := os.ReadFile(step.Target)
+			if err != nil && !os.IsNotExist(err) {
+				return manifest, fmt.Errorf("%s: %w", step.Title, err)
+			}
+			payload = captureProperties(plan.Contributor, existing)
 		case AddLauncherEntry:
 			payload, err = launcherEntry(step.Target, LoaderVersionID())
 			if err != nil {
@@ -319,12 +324,58 @@ func removeLauncherEntry(path, versionID string) error {
 	return nil
 }
 
-// captureProperties is the file the adapter would otherwise write on first run,
-// with the one value it cannot work out on its own already filled in.
-func captureProperties(contributor string) []byte {
-	return []byte("# WorldLedger capture adapter\n" +
-		"# Written by the WorldLedger desktop application.\n" +
-		"contributor=" + contributor + "\n")
+// captureProperties fills in the one value the adapter cannot work out on its
+// own, and changes nothing else.
+//
+// Handing back a fresh three-line file was the same mistake an export made with
+// region files, in miniature: this step runs whenever the contributor is blank,
+// and a blank contributor is exactly the state of somebody who installed the mod
+// themselves, started the game once, and tuned coalesce_ticks or queue_capacity
+// before getting round to their name. Replacing the file threw all of that away
+// without saying so.
+//
+// So an existing file is edited: the contributor line is set wherever it is, and
+// every other line -- settings, comments, blank lines, whatever somebody added
+// of their own -- is passed through as it stands. Only an absent or contributed
+// file gets written from scratch.
+func captureProperties(contributor string, existing []byte) []byte {
+	if len(bytes.TrimSpace(existing)) == 0 {
+		return []byte("# WorldLedger capture adapter\n" +
+			"# Written by the WorldLedger desktop application.\n" +
+			"contributor=" + contributor + "\n")
+	}
+
+	// The line ending is whatever the file already uses. Rewriting a file that
+	// used CRLF into LF is a whole-file change in anything that looks at it.
+	newline := "\n"
+	if bytes.Contains(existing, []byte("\r\n")) {
+		newline = "\r\n"
+	}
+	lines := strings.Split(strings.ReplaceAll(string(existing), "\r\n", "\n"), "\n")
+
+	replaced := false
+	for index, line := range lines {
+		trimmed := strings.TrimLeft(line, " \t")
+		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "!") {
+			continue
+		}
+		name, _, found := strings.Cut(trimmed, "=")
+		if !found || strings.TrimSpace(name) != "contributor" {
+			continue
+		}
+		lines[index] = "contributor=" + contributor
+		replaced = true
+		break
+	}
+	if !replaced {
+		// A file with no contributor line at all: add one rather than assume
+		// where it should have been.
+		if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+			lines = lines[:len(lines)-1]
+		}
+		lines = append(lines, "contributor="+contributor, "")
+	}
+	return []byte(strings.Join(lines, newline))
 }
 
 // launcherEntry adds an installation without disturbing the ones already there.

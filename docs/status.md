@@ -87,7 +87,13 @@ Three things were wrong at once and all three are fixed:
 - **It was measured on the data that exposed it.** Writing the 6 chunks the archive holds for `top.earthmc.net` into a copied world whose region file held 380 reported 374 kept, and the world's chunk count across all six region files was 552 before and 552 after. Before the fix the same operation left that file with 6.
 - **The confirmation was reassuringly wrong.** It said recordings are written over "where they overlap what is there", which describes chunks and was true of nothing. It now says a place you recorded that also exists there is replaced and everywhere else is left alone, which is what the code does.
 
-`ExportReport` carries `Kept`, and the window reports it, because "did this eat my world" is the question somebody actually has and the export previously could not answer it.
+`ExportReport` carries `Kept`, and both the window and the command line report it, because "did this eat my world" is the question somebody actually has and the export previously could not answer it. `convert` shares the same writer, so it is covered by the same fix. On the command line, exporting the six chunks the archive holds into a copy of that world prints `374 chunk(s) already in those files were left as they were`, exits 0, and leaves the world's 552 chunks at 552.
+
+**Everywhere else this project writes into a file it did not create.** The defect above is a shape, not an incident — laying a file out from only what we have and writing it over what somebody else put there — so the other three places were checked for the same thing.
+
+- `capture.properties` had it, smaller. That step runs whenever the contributor is blank, and blank is exactly the state of somebody who installed the mod themselves, started the game once, and tuned `coalesce_ticks` or `queue_capacity` before getting round to their name. A fresh three-line file replaced all of it. It now edits the contributor line where it stands and passes every other line through — settings, comments, blank lines, the file's own choice of line ending — and only writes from scratch when there is no file. A commented-out `contributor` is not mistaken for the setting.
+- `launcher_profiles.json` did not have it: the entry is added to the document that is there and removed by deleting one key, and a test has covered the launcher's own installations surviving since that path was written.
+- The spool has the destructive operation but not the defect: clearing removes only bundles marked as already imported, and `spool.Discard` checks each name itself rather than trusting the caller, so a ready bundle offered to it fails the whole call before anything is removed.
 
 **Two more things that person found, which the walkthrough before them had not.**
 

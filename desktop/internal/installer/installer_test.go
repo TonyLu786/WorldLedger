@@ -505,3 +505,73 @@ func TestUninstallingAnEntryThatIsAlreadyGoneIsNotAProblem(t *testing.T) {
 		}
 	}
 }
+
+// The same mistake an export made with region files, in miniature: this step
+// runs whenever the contributor is blank, and blank is exactly the state of
+// somebody who installed the mod themselves, played once, and tuned the capture
+// before getting round to their name.
+
+func TestSettingTheNameKeepsEverythingElseInTheFile(t *testing.T) {
+	theirs := "# mine\n" +
+		"server_id=play.example.org\n" +
+		"coalesce_ticks=40\n" +
+		"contributor=\n" +
+		"queue_capacity=256\n" +
+		"max_snapshots_per_tick=3\n"
+
+	got := string(captureProperties("alice", []byte(theirs)))
+
+	for _, keep := range []string{
+		"# mine", "server_id=play.example.org", "coalesce_ticks=40",
+		"queue_capacity=256", "max_snapshots_per_tick=3",
+	} {
+		if !strings.Contains(got, keep) {
+			t.Errorf("%q was dropped:\n%s", keep, got)
+		}
+	}
+	if !strings.Contains(got, "contributor=alice") {
+		t.Errorf("the name was not set:\n%s", got)
+	}
+	if strings.Count(got, "contributor=") != 1 {
+		t.Errorf("the file has %d contributor lines:\n%s", strings.Count(got, "contributor="), got)
+	}
+}
+
+func TestAFileWithNoNameLineGainsOneWithoutLosingTheRest(t *testing.T) {
+	got := string(captureProperties("bob", []byte("coalesce_ticks=40\nqueue_capacity=256\n")))
+	if !strings.Contains(got, "coalesce_ticks=40") || !strings.Contains(got, "queue_capacity=256") {
+		t.Errorf("settings were dropped:\n%s", got)
+	}
+	if !strings.Contains(got, "contributor=bob") {
+		t.Errorf("no name was added:\n%s", got)
+	}
+}
+
+// A commented-out contributor is not the setting. Editing it would leave the
+// real value unset while looking as though it had been dealt with.
+func TestACommentedOutNameIsNotMistakenForTheSetting(t *testing.T) {
+	got := string(captureProperties("carol", []byte("#contributor=someone-else\ncoalesce_ticks=40\n")))
+	if !strings.Contains(got, "#contributor=someone-else") {
+		t.Errorf("the comment was edited:\n%s", got)
+	}
+	if !strings.Contains(got, "\ncontributor=carol") {
+		t.Errorf("no real setting was added:\n%s", got)
+	}
+}
+
+func TestTheFilesOwnLineEndingsSurvive(t *testing.T) {
+	got := string(captureProperties("dave", []byte("coalesce_ticks=40\r\ncontributor=\r\n")))
+	if strings.Contains(strings.ReplaceAll(got, "\r\n", ""), "\n") {
+		t.Errorf("a CRLF file came back with bare newlines in it: %q", got)
+	}
+	if !strings.Contains(got, "contributor=dave") {
+		t.Errorf("the name was not set: %q", got)
+	}
+}
+
+func TestAnAbsentFileIsWrittenFromScratch(t *testing.T) {
+	got := string(captureProperties("erin", nil))
+	if !strings.Contains(got, "contributor=erin") {
+		t.Errorf("a fresh file does not carry the name: %q", got)
+	}
+}
