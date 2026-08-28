@@ -57,6 +57,22 @@ type Server struct {
 	Chunks      int    `json:"chunks"`
 	Disposition string `json:"disposition,omitempty"`
 	Declared    bool   `json:"declared"`
+	// Dimensions are the worlds recorded on that server, with the count for
+	// each.
+	//
+	// The page never sent one, so export, moments and travel all defaulted to
+	// the overworld while this count summed every dimension. A player whose
+	// evening was in the Nether was told "800 places recorded" and then, on the
+	// next screen, that there was nothing recorded at that moment -- three
+	// screens disagreeing about the same archive, and none of them ever saying
+	// the word "overworld".
+	Dimensions []Dimension `json:"dimensions"`
+}
+
+// Dimension is one world of one server.
+type Dimension struct {
+	ID     string `json:"id"`
+	Chunks int    `json:"chunks"`
 }
 
 type SpoolState struct {
@@ -137,6 +153,9 @@ func describeServers(a archive.Archive, manifest archive.Manifest) []Server {
 		server := Server{ID: entry.Server}
 		for _, dimension := range entry.Dimensions {
 			server.Chunks += dimension.Chunks
+			server.Dimensions = append(server.Dimensions, Dimension{
+				ID: dimension.Dimension, Chunks: dimension.Chunks,
+			})
 		}
 		if declared, found, err := store.Lookup(entry.Server); err == nil && found {
 			server.Declared = true

@@ -224,6 +224,21 @@ func reachabilityAdvice(err error) string {
 // back should not claim a file that is not there.
 func saveManifest(dir string, manifest installer.Manifest) string {
 	path := manifestPath(dir)
+	// Added to what is already recorded, not written over it.
+	//
+	// A plan only contains steps for what is missing, so a second set-up is
+	// usually one step. Replacing the record with that one step is how Remove
+	// came to remove a single jar and report "Your Minecraft is back to what it
+	// was" while the Fabric profile, the launcher entry, Fabric API and
+	// capture.properties all stayed -- and the play screen sends people back to
+	// Set up for exactly the case that causes it, a launcher that replaced the
+	// mods folder.
+	if previous, err := os.ReadFile(path); err == nil {
+		var held installer.Manifest
+		if json.Unmarshal(previous, &held) == nil {
+			manifest = mergeManifests(held, manifest)
+		}
+	}
 	body, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return ""
@@ -235,4 +250,70 @@ func saveManifest(dir string, manifest installer.Manifest) string {
 		return ""
 	}
 	return path
+}
+
+// mergeManifests keeps everything an earlier set-up recorded and adds what this
+// one did.
+//
+// Where both touched the same file the two halves come from different places,
+// and getting that backwards undoes the wrong thing. The digest has to be the
+// new one, because that is what is on disk now and an uninstall compares against
+// it before removing anything -- keeping the old digest would make every
+// reinstalled file look changed by somebody else and be left behind. The backup
+// has to be the oldest one, because that is what was there before this
+// application first touched the file; the later backup is a copy of our own
+// previous install, and restoring that would leave the player with our file
+// rather than theirs.
+func mergeManifests(held, fresh installer.Manifest) installer.Manifest {
+	out := fresh
+	out.Records = nil
+
+	freshByPath := make(map[string]installer.Record, len(fresh.Records))
+	for _, record := range fresh.Records {
+		freshByPath[record.Path] = record
+	}
+
+	seen := map[string]struct{}{}
+	for _, earlier := range held.Records {
+		if _, done := seen[earlier.Path]; done {
+			continue
+		}
+		seen[earlier.Path] = struct{}{}
+		if now, again := freshByPath[earlier.Path]; again {
+			now.Backup = earlier.Backup
+			out.Records = append(out.Records, now)
+			continue
+		}
+		out.Records = append(out.Records, earlier)
+	}
+	for _, record := range fresh.Records {
+		if _, done := seen[record.Path]; done {
+			continue
+		}
+		seen[record.Path] = struct{}{}
+		out.Records = append(out.Records, record)
+	}
+
+	// Deepest last, so an uninstall removes children before parents. Both lists
+	// already hold that order, and neither is long enough for the duplicate
+	// check to be worth more than a linear scan.
+	out.Directories = held.Directories
+	for _, dir := range fresh.Directories {
+		known := false
+		for _, existing := range out.Directories {
+			if existing == dir {
+				known = true
+				break
+			}
+		}
+		if !known {
+			out.Directories = append(out.Directories, dir)
+		}
+	}
+	// The earliest install is when this application first wrote into that
+	// Minecraft, which is what the record is a record of.
+	if !held.InstalledAt.IsZero() && held.InstalledAt.Before(out.InstalledAt) {
+		out.InstalledAt = held.InstalledAt
+	}
+	return out
 }

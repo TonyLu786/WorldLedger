@@ -1,10 +1,27 @@
 'use strict';
 
 // The token arrives in the address and is taken out of it immediately, so it
-// does not end up in history or in a link somebody copies. It lives in a
-// variable for the life of the page and is never written to storage: a session
-// token that outlives its session is just a password nobody chose.
-const token = new URLSearchParams(location.search).get('token') || '';
+// does not end up in history or in a link somebody copies.
+//
+// It is kept in sessionStorage rather than only in a variable, because a
+// variable does not survive a reload and the address no longer carries it. That
+// left the most natural recovery action there is -- pressing F5 on a screen that
+// looks stuck -- turning every request into a 401 with no way back, and in
+// browser mode killing the program forty-five seconds later when the keepalive
+// stopped arriving too.
+//
+// sessionStorage is not the thing the original note was about. It is emptied
+// when the tab closes and is not shared with any other tab, so the token still
+// does not outlive its session; and a token only ever works for the server that
+// minted it, so a stale one is inert.
+const STORED_TOKEN = 'worldledger-session-token';
+const fromAddress = new URLSearchParams(location.search).get('token') || '';
+if (fromAddress) {
+  try { sessionStorage.setItem(STORED_TOKEN, fromAddress); } catch (err) { /* private mode */ }
+}
+let remembered = '';
+try { remembered = sessionStorage.getItem(STORED_TOKEN) || ''; } catch (err) { /* private mode */ }
+const token = fromAddress || remembered;
 if (location.search) {
   history.replaceState(null, '', location.pathname);
 }
@@ -660,6 +677,56 @@ function serverChooser(servers, onChange) {
 // two sources on one screen without them looking like two different kinds of
 // thing. Following the machine's locale here instead produced a world list
 // dated one way and a moment list dated another, in the same sentence.
+// Which world of that server, remembered alongside it.
+//
+// The page never sent a dimension, so export, moments and travel all quietly
+// meant the overworld while the server's chunk count summed every dimension.
+// Somebody whose evening was in the Nether was shown eight hundred places
+// recorded and then told there was nothing recorded at that moment.
+let chosenDimension = '';
+
+function dimensionsOf(servers) {
+  const server = servers.find((s) => s.id === chosenServer);
+  return (server && server.dimensions) || [];
+}
+
+// A dimension identifier is written for a machine. The three vanilla ones are
+// the ones almost everybody will ever see, and a modded one is shown as it is
+// rather than guessed at.
+const worldNames = {
+  'minecraft:overworld': 'Overworld',
+  'minecraft:the_nether': 'The Nether',
+  'minecraft:the_end': 'The End',
+};
+function worldName(id) {
+  return worldNames[id] || id;
+}
+
+function dimensionChooser(servers, onChange) {
+  const available = dimensionsOf(servers);
+  if (!available.some((d) => d.id === chosenDimension)) {
+    let best = available[0];
+    for (const dimension of available) if (dimension.chunks > best.chunks) best = dimension;
+    chosenDimension = best ? best.id : '';
+  }
+  const select = el('select');
+  for (const dimension of available) {
+    const option = el('option', null, worldName(dimension.id) + ' — ' + dimension.chunks + ' places');
+    option.value = dimension.id;
+    select.append(option);
+  }
+  select.value = chosenDimension;
+  select.addEventListener('change', () => {
+    chosenDimension = select.value;
+    onChange();
+  });
+  if (available.length < 2) select.disabled = true;
+  const field = el('label', 'scope-field');
+  field.append(el('span', null, 'World'));
+  field.append(select);
+  return field;
+}
+
 function whenText(iso) {
   if (!iso) return '';
   const at = new Date(iso);
@@ -672,7 +739,8 @@ function whenText(iso) {
 async function momentsFor(server) {
   if (!server) return [];
   try {
-    return (await call('/api/moments?server=' + encodeURIComponent(server))).moments || [];
+    return (await call('/api/moments?server=' + encodeURIComponent(server) +
+      '&dimension=' + encodeURIComponent(chosenDimension))).moments || [];
   } catch (err) {
     // A missing list of moments costs the choice of one, not the screen.
     return [];
@@ -706,6 +774,7 @@ async function refreshWorld() {
 
     const scope = el('div', 'scope');
     scope.append(serverChooser(ready, refreshWorld));
+    scope.append(dimensionChooser(ready, refreshWorld));
 
     // Which moment is the whole reason for keeping every observation rather
     // than one snapshot, and the window could only ever write "now". The list
@@ -789,7 +858,10 @@ async function refreshWorld() {
         try {
           const result = await call('/api/export', {
             method: 'POST',
-            body: JSON.stringify({ server: chosenServer, world_dir: world.path, at: when.value }),
+            body: JSON.stringify({
+              server: chosenServer, dimension: chosenDimension,
+              world_dir: world.path, at: when.value,
+            }),
           });
           host.replaceChildren(finished(result, world, when.value ? momentLabel(moments, when.value) : ''));
         } catch (err) {
@@ -875,6 +947,7 @@ async function refreshTravel() {
 
     const scope = el('div', 'scope');
     scope.append(serverChooser(status.servers, refreshTravel));
+    scope.append(dimensionChooser(status.servers, refreshTravel));
     host.append(scope);
 
     const server = chosenServer;
@@ -921,6 +994,7 @@ async function refreshTravel() {
       go.disabled = true;
       try {
         const diff = await call('/api/travel?server=' + encodeURIComponent(server) +
+          '&dimension=' + encodeURIComponent(chosenDimension) +
           '&from=' + encodeURIComponent(from.value) + '&to=' + encodeURIComponent(to.value));
         renderTravel(result, diff);
         result.append(buildFromHere(status, server, moments, [from.value, to.value]));

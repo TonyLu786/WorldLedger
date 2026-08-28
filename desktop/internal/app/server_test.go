@@ -203,3 +203,49 @@ func TestEveryFailureCarriesSomethingToDoAboutIt(t *testing.T) {
 		t.Error("the failure does not say what to do about it")
 	}
 }
+
+// The four rejections above were the only failures in this application that
+// came back as bare text, so the page could say "the application answered 401"
+// and nothing else. That mattered most for the token: pressing F5 on a screen
+// that looks stuck is the most natural recovery action there is, and it used to
+// produce exactly that dead end.
+func TestEveryRejectionSaysWhatToDoAboutIt(t *testing.T) {
+	s := newTestServer(t)
+	_, port, err := net.SplitHostPort(s.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct {
+		what    string
+		method  string
+		headers map[string]string
+		status  int
+	}{
+		{"no token", http.MethodGet, nil, http.StatusUnauthorized},
+		{"another host", http.MethodGet,
+			map[string]string{"Host": "attacker.example:" + port, TokenHeader: s.Token()},
+			http.StatusMisdirectedRequest},
+		{"a preflight", http.MethodOptions, nil, http.StatusMethodNotAllowed},
+		{"another origin", http.MethodGet,
+			map[string]string{"Origin": "http://attacker.example", TokenHeader: s.Token()},
+			http.StatusForbidden},
+	} {
+		response := do(t, s, c.method, "/api/ping", c.headers)
+		if response.StatusCode != c.status {
+			t.Errorf("%s: status %d, want %d", c.what, response.StatusCode, c.status)
+			continue
+		}
+		var failure Failure
+		if err := decode(t, response, &failure); err != nil {
+			t.Errorf("%s: the rejection is not a failure the page can read: %v", c.what, err)
+			continue
+		}
+		if failure.Problem == "" {
+			t.Errorf("%s: the rejection does not say what went wrong", c.what)
+		}
+		if failure.Next == "" {
+			t.Errorf("%s: the rejection does not say what to do about it", c.what)
+		}
+	}
+}

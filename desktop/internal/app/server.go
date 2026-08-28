@@ -125,17 +125,23 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		// A request whose Host is not the address we are listening on reached us
 		// under some other name, which is the shape of a rebinding attempt.
 		if !s.hostIsOurs(r.Host) {
-			http.Error(w, "unexpected host", http.StatusMisdirectedRequest)
+			WriteFailure(w, http.StatusMisdirectedRequest,
+				"this request arrived under a name that is not this application",
+				"open WorldLedger from its own window or from the address it printed")
 			return
 		}
 		// No cross-origin use is ever legitimate here, so the preflight that
 		// would make one possible is refused rather than configured.
 		if r.Method == http.MethodOptions {
-			http.Error(w, "not allowed", http.StatusMethodNotAllowed)
+			WriteFailure(w, http.StatusMethodNotAllowed,
+				"this application answers only its own page",
+				"nothing to do; no other site may call it")
 			return
 		}
 		if origin := r.Header.Get("Origin"); origin != "" && !s.originIsOurs(origin) {
-			http.Error(w, "not allowed", http.StatusForbidden)
+			WriteFailure(w, http.StatusForbidden,
+				"this request came from another site",
+				"nothing to do; no other site may call it")
 			return
 		}
 
@@ -144,7 +150,14 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			// worth more than reasoning about whether this particular one leaks.
 			presented := r.Header.Get(TokenHeader)
 			if subtle.ConstantTimeCompare([]byte(presented), []byte(s.token)) != 1 {
-				http.Error(w, "not authorised", http.StatusUnauthorized)
+				// Answered the way every other failure here is answered. These
+				// four rejections were the only ones in the application that
+				// came back as bare text, so the page could only report "the
+				// application answered 401" and had nothing to tell anybody to
+				// do about it.
+				WriteFailure(w, http.StatusUnauthorized,
+					"this page is not showing an application that is still running",
+					"close this tab and start WorldLedger again")
 				return
 			}
 		}
