@@ -38,8 +38,28 @@ final class CaptureCoordinator {
 	 * How long a final flush may wait, in total, for the writer to accept the
 	 * chunks a disconnect released at once. Bounded so that leaving a server is
 	 * never delayed indefinitely by a slow disk.
+	 *
+	 * <p>Waiting is right here because there is no gameplay left to protect.
+	 * That is the whole reason this exists: refusing a job at disconnect saves
+	 * nothing and destroys observed state.
 	 */
 	private static final Duration FINAL_FLUSH_BUDGET = Duration.ofSeconds(10);
+
+	/**
+	 * How long the same flush may wait when it runs at a dimension transition.
+	 *
+	 * <p>It is a different number because it is a different trade, and using the
+	 * disconnect budget for both was wrong in the direction that hurts. A player
+	 * stepping through a nether portal is still playing, on the thread that
+	 * draws their frames, and a slow disk could hold them there for ten seconds.
+	 *
+	 * <p>So the transition behaves like play rather than like leaving: it waits
+	 * briefly, and what will not fit is counted as dropped coverage instead of
+	 * freezing the game to keep it. Coverage lost this way is reported; a
+	 * ten-second stall in the middle of a portal is not something the player can
+	 * be compensated for at all.
+	 */
+	private static final Duration TRANSITION_FLUSH_BUDGET = Duration.ofSeconds(1);
 
 	private static final class ActiveSession {
 		private final String id = UUID.randomUUID().toString();
@@ -260,7 +280,7 @@ final class CaptureCoordinator {
 		if (session == null || session.level == level) {
 			return;
 		}
-		flushAll("dimension-transition");
+		flushAll("dimension-transition", TRANSITION_FLUSH_BUDGET);
 		dirtyChunks.clear();
 		blockEntities.clear();
 		session.level = level;
@@ -401,7 +421,7 @@ final class CaptureCoordinator {
 		if (session == null) {
 			return;
 		}
-		flushAll("final-disconnect");
+		flushAll("final-disconnect", FINAL_FLUSH_BUDGET);
 		LOGGER.info(
 				"Capture session {} ended; enqueued={} writer_pending={} dropped={} snapshot_failed={}",
 				session.id,
@@ -463,7 +483,7 @@ final class CaptureCoordinator {
 		}
 	}
 
-	private void flushAll(String trigger) {
+	private void flushAll(String trigger, Duration budget) {
 		if (session == null || session.level == null) {
 			return;
 		}
@@ -473,7 +493,7 @@ final class CaptureCoordinator {
 		// allowed to wait for the writer, under one budget shared by the whole
 		// flush so that a slow disk delays leaving a server by a bounded amount
 		// rather than by the number of chunks in view.
-		long deadline = System.nanoTime() + FINAL_FLUSH_BUDGET.toNanos();
+		long deadline = System.nanoTime() + budget.toNanos();
 		for (DirtyChunkTracker.Claim claim : claims) {
 			LevelChunk chunk = session.level.getChunkSource().getChunkNow(claim.chunk().x(), claim.chunk().z());
 			if (chunk == null) {
