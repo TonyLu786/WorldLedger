@@ -61,6 +61,14 @@ jobs:
           test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
           go vet ./...
           go test -count=1 ./...
+          # The core gets a race run and this module did not, which was the
+          # wrong way round: the concurrency is here. A loopback server with
+          # handlers answering at once, a watchdog counting held work against a
+          # ticker, and an import that must outlive a quiet page are all in this
+          # module, and its tests start real servers, so the detector has
+          # something to watch. It needs cgo, which is why it runs on Linux and
+          # not in the Windows job.
+          go test -race -count=1 ./...
       - name: Build the commands the release ships
         run: |
           go build -trimpath -o "${RUNNER_TEMP}/worldledger" ./cmd/worldledger

@@ -158,6 +158,13 @@ func (f Fingerprint) lines() []string {
 // ordinary diff when the tooling is not to hand, and so a committed reference
 // reviews as text rather than as an opaque blob.
 func (f Fingerprint) WriteText(w io.Writer) error {
+	// The root is derived from the entries below it, so writing one that does
+	// not match them is never what anybody wants, and writing an empty one
+	// produces a file this package's own parser refuses. Computing it here
+	// makes the method total: whatever is written can be read back.
+	if f.Root == "" {
+		f.Root = f.computeRoot()
+	}
 	buffer := bufio.NewWriter(w)
 	if _, err := fmt.Fprintf(buffer, "%s\n", f.Schema); err != nil {
 		return err
