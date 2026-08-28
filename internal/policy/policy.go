@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/worldledger/worldledger-mc/internal/atomicfile"
 	"github.com/worldledger/worldledger-mc/internal/model"
 )
 
@@ -169,7 +170,7 @@ func (s Store) Declare(declared ServerPolicy) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path(declared.Server), append(encoded, '\n'), 0o644)
+	return atomicfile.Write(s.path(declared.Server), append(encoded, '\n'), 0o644)
 }
 
 func (s Store) List() ([]ServerPolicy, error) {

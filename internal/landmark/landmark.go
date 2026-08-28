@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/worldledger/worldledger-mc/internal/atomicfile"
 	"github.com/worldledger/worldledger-mc/internal/model"
 )
 
@@ -137,7 +138,7 @@ func (s Store) Declare(landmark Landmark) (Landmark, error) {
 	if err != nil {
 		return Landmark{}, err
 	}
-	if err := os.WriteFile(s.path(landmark.ID), append(encoded, '\n'), 0o644); err != nil {
+	if err := atomicfile.Write(s.path(landmark.ID), append(encoded, '\n'), 0o644); err != nil {
 		return Landmark{}, err
 	}
 	return landmark, nil

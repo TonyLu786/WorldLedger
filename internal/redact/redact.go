@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/worldledger/worldledger-mc/internal/atomicfile"
 	"github.com/worldledger/worldledger-mc/internal/model"
 )
 
@@ -201,7 +202,7 @@ func (s Store) Declare(redaction Redaction) (Redaction, error) {
 	if err != nil {
 		return Redaction{}, err
 	}
-	if err := os.WriteFile(s.path(redaction.ID), append(encoded, '\n'), 0o644); err != nil {
+	if err := atomicfile.Write(s.path(redaction.ID), append(encoded, '\n'), 0o644); err != nil {
 		return Redaction{}, err
 	}
 	return redaction, nil

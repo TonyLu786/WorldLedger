@@ -54,8 +54,10 @@ func TestATemporaryLeftInTheIndexDoesNotBreakTheArchive(t *testing.T) {
 		t.Errorf("manifest reports %d observation(s), want 1", manifest.Observations)
 	}
 
-	// And the residue is gone, rather than stepped over forever: an abandoned
-	// object temporary can be tens of megabytes.
+	// And the residue is gone, rather than stepped over forever. These are safe
+	// to remove because commitIndex writes them under the archive lock that
+	// opening also holds, which is exactly what is not true of the object
+	// store's temporaries.
 	for _, column := range columns {
 		if _, err := os.Stat(filepath.Join(column, ".tmp-1234")); !os.IsNotExist(err) {
 			t.Errorf("%s still holds the abandoned temporary", column)

@@ -33,6 +33,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/worldledger/worldledger-mc/internal/atomicfile"
 )
 
 const (
@@ -246,7 +248,7 @@ func (s IdentityStore) Register(identity Identity) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(s.Root, identity.Fingerprint()+".json"), append(encoded, '\n'), 0o644)
+	return atomicfile.Write(filepath.Join(s.Root, identity.Fingerprint()+".json"), append(encoded, '\n'), 0o644)
 }
 
 func (s IdentityStore) Remove(fingerprint string) (bool, error) {
@@ -362,7 +364,7 @@ func (s Store) Put(attestation Attestation) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(encoded, '\n'), 0o644)
+	return atomicfile.Write(path, append(encoded, '\n'), 0o644)
 }
 
 // For returns every attestation stored for one observation.
