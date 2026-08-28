@@ -9,7 +9,7 @@ import (
 
 // A plan only contains steps for what is missing, so a second set-up is usually
 // one step. Writing that over the record is how Remove came to remove a single
-// jar and report "Your Minecraft is back to what it was" -- and the play screen
+// jar and report "Your Minecraft is back to what it was", while the play screen
 // sends people back to Set up for exactly the case that causes it, a launcher
 // that replaced the mods folder.
 

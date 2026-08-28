@@ -366,8 +366,8 @@ func readObject(source ObjectSource, ref model.BlobRef) ([]byte, error) {
 // The temporary name is unique rather than the target's with ".tmp" on the end.
 // A fixed name is only safe while one writer exists at a time, and there is no
 // such guarantee here: the desktop application's export lock is in-process, so a
-// command line export and the window running together -- or two exports into the
-// same world -- opened the same temporary with O_TRUNC, interleaved their bytes,
+// command line export and the window running together, or two exports into the
+// same world, opened the same temporary with O_TRUNC, interleaved their bytes,
 // and both renamed the mixture over a region file in somebody's save.
 //
 // The contents are forced to disk before the rename. This writes into a world

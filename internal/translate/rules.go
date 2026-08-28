@@ -90,7 +90,7 @@ type Rules struct {
 	// Two things follow from that word, and both are enforced or relied on
 	// elsewhere, so a rule that is not really a rename does damage quietly.
 	// The source's block state properties are carried onto the replacement
-	// unconditionally, because the same block has the same properties -- unlike
+	// unconditionally, because the same block has the same properties, unlike
 	// a substitution, which drops them unless KeepProperties says otherwise.
 	// And a rename is not counted as a loss, because nothing was lost.
 	//

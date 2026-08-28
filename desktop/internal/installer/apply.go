@@ -335,8 +335,8 @@ func removeLauncherEntry(path, versionID string) error {
 // without saying so.
 //
 // So an existing file is edited: the contributor line is set wherever it is, and
-// every other line -- settings, comments, blank lines, whatever somebody added
-// of their own -- is passed through as it stands. Only an absent or contributed
+// every other line is passed through as it stands: settings, comments, blank
+// lines, whatever somebody added of their own. Only an absent or contributed
 // file gets written from scratch.
 func captureProperties(contributor string, existing []byte) []byte {
 	if len(bytes.TrimSpace(existing)) == 0 {

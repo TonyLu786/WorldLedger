@@ -57,7 +57,7 @@ func (a Archive) RemoveObservations(ids []string) (PurgeResult, error) {
 	// their component digests cannot be recovered from an id. That was the hole:
 	// a crash between removing an observation and removing its objects left a
 	// replay that could find nothing to do, so it discarded the journal and the
-	// bytes somebody had asked to have removed stayed on disk -- after the
+	// bytes somebody had asked to have removed stayed on disk, after the
 	// command had already reported success, and with the integrity check clean,
 	// because fsck never enumerates objects nothing references.
 	doomed, err := a.doomedRefsLocked(ids)

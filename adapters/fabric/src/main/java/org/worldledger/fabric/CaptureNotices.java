@@ -116,7 +116,7 @@ public final class CaptureNotices {
 			// The one case where being vague would matter most. A player who
 			// blanks their name mid-session is asking to stop, and this used to
 			// answer "capture stays off" flatly while the running session kept
-			// recording under the name it took at join -- the setting changed,
+			// recording under the name it took at join. The setting changed,
 			// the session's copy of it did not.
 			//
 			// The session is now ended for them, so the sentence is true when it

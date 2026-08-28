@@ -230,7 +230,7 @@ func saveManifest(dir string, manifest installer.Manifest) string {
 	// usually one step. Replacing the record with that one step is how Remove
 	// came to remove a single jar and report "Your Minecraft is back to what it
 	// was" while the Fabric profile, the launcher entry, Fabric API and
-	// capture.properties all stayed -- and the play screen sends people back to
+	// capture.properties all stayed. The play screen sends people back to
 	// Set up for exactly the case that causes it, a launcher that replaced the
 	// mods folder.
 	if previous, err := os.ReadFile(path); err == nil {
@@ -258,7 +258,7 @@ func saveManifest(dir string, manifest installer.Manifest) string {
 // Where both touched the same file the two halves come from different places,
 // and getting that backwards undoes the wrong thing. The digest has to be the
 // new one, because that is what is on disk now and an uninstall compares against
-// it before removing anything -- keeping the old digest would make every
+// it before removing anything. Keeping the old digest would make every
 // reinstalled file look changed by somebody else and be left behind. The backup
 // has to be the oldest one, because that is what was there before this
 // application first touched the file; the later backup is a copy of our own

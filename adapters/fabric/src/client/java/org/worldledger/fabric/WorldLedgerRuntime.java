@@ -110,8 +110,8 @@ public final class WorldLedgerRuntime {
 	 *
 	 * <p>Nothing this mod does is worth that. Capture is a passenger: it records
 	 * what the client was shown, and a session that records nothing is a session
-	 * that recorded nothing. A player losing their connection -- or their
-	 * afternoon -- because a chunk could not be read is the one outcome that is
+	 * that recorded nothing. A player losing their connection, or their
+	 * afternoon, because a chunk could not be read is the one outcome that is
 	 * worse than not capturing at all.
 	 *
 	 * <p>Errors are not caught. An OutOfMemoryError or a linkage failure is not

@@ -93,7 +93,7 @@ func translateForTarget(prepared []anvil.PreparedChunk, dimensionID string, opti
 	// Refusal was decided inside the translator, which only sees blocks, biomes
 	// and the build range. Block entities are dropped out here, so a conversion
 	// whose only loss was every chest, sign and furnace in the world reported
-	// them and then wrote the world anyway -- under the one policy whose entire
+	// them and then wrote the world anyway, under the one policy whose entire
 	// purpose is to write nothing and tell you what would have gone.
 	if report.Policy == translate.PolicyReport && droppedBlockEntities > 0 {
 		return nil, 0, fmt.Errorf(

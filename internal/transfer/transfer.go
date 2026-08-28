@@ -94,7 +94,7 @@ func Send(a archive.Archive, peer archive.Fingerprint, peerManifest *archive.Man
 	// Withdrawn observations do not leave.
 	//
 	// Every other path that builds something to hand over filters these, and
-	// this one did not -- which made it the only way a contributor who had
+	// this one did not, which made it the only way a contributor who had
 	// withdrawn consent could still be sent to a peer, record and bytes, with
 	// nothing printed. It is also the path where it matters most: an export
 	// writes a world onto the operator's own disk, and this hands data to
@@ -169,8 +169,8 @@ func Send(a archive.Archive, peer archive.Fingerprint, peerManifest *archive.Man
 		//
 		// Leaving them behind made the exchange the one place attribution
 		// stopped meaning anything. Anybody can write a record naming somebody
-		// else -- an id is a hash of the record, so a made-up one is perfectly
-		// well formed -- and a signature is what tells the two apart. With the
+		// else, since an id is a hash of the record and a made-up one is perfectly
+		// well formed. A signature is what tells the two apart, and with the
 		// signatures staying home, an honestly transferred record and a
 		// fabricated one both arrived unsigned and read identically.
 		//

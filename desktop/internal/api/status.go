@@ -63,7 +63,7 @@ type Server struct {
 	// The page never sent one, so export, moments and travel all defaulted to
 	// the overworld while this count summed every dimension. A player whose
 	// evening was in the Nether was told "800 places recorded" and then, on the
-	// next screen, that there was nothing recorded at that moment -- three
+	// next screen, that there was nothing recorded at that moment. Three
 	// screens disagreeing about the same archive, and none of them ever saying
 	// the word "overworld".
 	Dimensions []Dimension `json:"dimensions"`
@@ -184,7 +184,7 @@ func readSpoolState() *SpoolState {
 		}
 		// A folder that cannot be read is not an empty folder. Returning zero
 		// counts made the play screen say "Nothing new since last time" about a
-		// folder it had failed to open -- while the import screen, given the
+		// folder it had failed to open, while the import screen, given the
 		// same folder, said so honestly. Two screens disagreeing about one
 		// directory, and the reassuring one was wrong.
 		return &SpoolState{Dir: dir, Unreadable: err.Error()}

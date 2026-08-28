@@ -16,7 +16,7 @@ import (
 // into, because a rename across filesystems is not atomic. The index
 // enumeration refused every entry it did not recognise, so a crash in that
 // window made every read of the archive fail forever with "unexpected entry in
-// chunk index" -- while fsck, which only looks at .idx files, said nothing.
+// chunk index", while fsck, which only looks at .idx files, said nothing.
 func TestATemporaryLeftInTheIndexDoesNotBreakTheArchive(t *testing.T) {
 	dir := t.TempDir()
 	a, err := Init(dir)

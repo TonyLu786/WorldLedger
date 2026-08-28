@@ -15,7 +15,7 @@ import (
 // A transfer bundle is the only thing this project builds that goes to another
 // party. Every other path that assembles something to hand over filters
 // withdrawn observations; this one did not, so it was the one way a contributor
-// who had withdrawn consent still reached a peer -- record and component bytes,
+// who had withdrawn consent still reached a peer, record and component bytes,
 // with nothing printed about it.
 
 func withdraw(t *testing.T, a archive.Archive, contributor string) {

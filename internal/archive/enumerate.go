@@ -132,7 +132,7 @@ func (a Archive) chunksLocked(serverID, dimension string) ([]model.ChunkRef, err
 // The temporary has to be created in the directory it will be renamed into,
 // because a rename across filesystems is not atomic. That means a crash leaves
 // a stray name inside a directory the index enumerates, and the enumeration
-// refused every entry it did not recognise -- so one badly timed power loss
+// refused every entry it did not recognise, so one badly timed power loss
 // made every read of that archive fail, permanently, with "unexpected entry in
 // chunk index". `fsck` reported the archive clean throughout, because it skips
 // what is not an index file.
