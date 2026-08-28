@@ -88,6 +88,20 @@ func translateForTarget(prepared []anvil.PreparedChunk, dimensionID string, opti
 	if translator.Refused() {
 		return nil, 0, errors.New("the target release cannot represent some observed state; nothing was written (choose --on-unrepresentable skip-chunk or fill, or supply --rules)")
 	}
+	// A dropped block entity is a loss, and `report` means do not write.
+	//
+	// Refusal was decided inside the translator, which only sees blocks, biomes
+	// and the build range. Block entities are dropped out here, so a conversion
+	// whose only loss was every chest, sign and furnace in the world reported
+	// them and then wrote the world anyway -- under the one policy whose entire
+	// purpose is to write nothing and tell you what would have gone.
+	if report.Policy == translate.PolicyReport && droppedBlockEntities > 0 {
+		return nil, 0, fmt.Errorf(
+			"%d block entit(ies) would be dropped and nothing was written; "+
+				"pass --keep-block-entities to carry them across unchanged, or choose "+
+				"--on-unrepresentable skip-chunk or fill",
+			droppedBlockEntities)
+	}
 	fmt.Printf("converted world targets Minecraft %s (data version %d)\n\n", profile.Version, profile.DataVersion)
 	return translated, profile.DataVersion, nil
 }

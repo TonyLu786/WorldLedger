@@ -86,6 +86,20 @@ type Rules struct {
 	From   string `json:"from,omitempty"`
 	To     string `json:"to,omitempty"`
 	// Renames are identity preserving: the same block under a new identifier.
+	//
+	// Two things follow from that word, and both are enforced or relied on
+	// elsewhere, so a rule that is not really a rename does damage quietly.
+	// The source's block state properties are carried onto the replacement
+	// unconditionally, because the same block has the same properties -- unlike
+	// a substitution, which drops them unless KeepProperties says otherwise.
+	// And a rename is not counted as a loss, because nothing was lost.
+	//
+	// Neither holds for a rule that is really a substitution wearing a rename's
+	// name. Validate refuses the case it can detect, two sources becoming one
+	// block; it cannot detect a replacement that does not share the source's
+	// properties, because a release profile records block identifiers and not
+	// their states. Use a substitution whenever the replacement is a different
+	// block.
 	Renames map[string]string `json:"renames,omitempty"`
 	// Substitutions are approximations chosen by the operator.
 	Substitutions      map[string]Substitution `json:"substitutions,omitempty"`
@@ -114,6 +128,32 @@ func LoadRules(path string) (Rules, error) {
 // have. Catching a typo or an impossible mapping here is far better than
 // discovering it as an unreadable chunk.
 func (r Rules) Validate(target mcprofile.Profile) error {
+	// Two renames onto one block is a merge, and a merge is not a rename.
+	//
+	// A rename asserts that this is the same block under a different name, which
+	// is why it carries the source's properties and why it is not counted as a
+	// loss. Two sources arriving at one name breaks both halves of that: the
+	// palette rebuild collapses them, the world can no longer tell them apart,
+	// and the run reported "translated with no loss".
+	//
+	// It is also an easy mistake rather than an exotic one. The shipped rename
+	// table has the chain kelp_top -> kelp -> kelp_plant, and an operator
+	// reversing it for a downgrade produces exactly this.
+	//
+	// A merge is a substitution: that is what substitutions are for, they are
+	// counted as lossy, and they do not carry properties unless asked.
+	mergedInto := map[string]string{}
+	for _, source := range sortedKeys(r.Renames) {
+		replacement := r.Renames[source]
+		if first, seen := mergedInto[replacement]; seen {
+			return fmt.Errorf(
+				"renames %s and %s both become %s; two blocks becoming one is a loss, "+
+					"so declare it as a substitution rather than a rename",
+				first, source, replacement)
+		}
+		mergedInto[replacement] = source
+	}
+
 	for source, replacement := range r.Renames {
 		if err := checkResourceLocation(source, "rename source"); err != nil {
 			return err
@@ -227,4 +267,15 @@ func summarize(counts map[string]*counter) []Change {
 
 func canonicalOrError(state mcjava.BlockState) (string, error) {
 	return mcjava.CanonicalBlockState(state)
+}
+
+// sortedKeys gives a stable order, so a ruleset with two mistakes in it names
+// the same one every time rather than whichever the map iterator reached first.
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for key := range m {
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
 }
