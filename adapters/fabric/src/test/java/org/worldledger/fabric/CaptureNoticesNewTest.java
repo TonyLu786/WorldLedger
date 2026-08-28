@@ -33,7 +33,8 @@ final class CaptureNoticesNewTest {
 	@Test
 	void reloadNamesTheSettingsItCannotChange() {
 		for (String text : new String[] {
-				CaptureNotices.reloaded("alice"), CaptureNotices.reloaded("")}) {
+				CaptureNotices.reloaded("alice", false), CaptureNotices.reloaded("", false),
+				CaptureNotices.reloaded("alice", true), CaptureNotices.reloaded("", true)}) {
 			assertTrue(text.contains("coalesce_ticks"), text);
 			assertTrue(text.contains("queue_capacity"), text);
 			assertTrue(text.contains("restart"), text);
@@ -42,9 +43,35 @@ final class CaptureNoticesNewTest {
 
 	@Test
 	void reloadingWithNoContributorSaysCaptureStaysOff() {
-		String text = CaptureNotices.reloaded("");
+		String text = CaptureNotices.reloaded("", false);
 		assertTrue(text.contains("stays off"), text);
 		assertFalse(text.contains("Capturing as"), text);
+	}
+
+	/**
+	 * The sentence a player reads when they have just decided they do not want
+	 * this server recorded. It used to say capture was off while the running
+	 * session carried on under the name it took at join.
+	 */
+	@Test
+	void blankingTheNameDuringASessionSaysRecordingHasStopped() {
+		String text = CaptureNotices.reloaded("", true);
+		assertTrue(text.contains("stopped"), text);
+		assertFalse(text.contains("stays off"), text);
+		// What was recorded before they changed their mind is not thrown away,
+		// and somebody deciding to stop should not have to wonder.
+		assertTrue(text.contains("already recorded is kept"), text);
+	}
+
+	/**
+	 * The other half of the same truth: a name changed mid-session does not
+	 * apply to the session, because the session took its copy when it started.
+	 */
+	@Test
+	void changingTheNameDuringASessionSaysWhenItApplies() {
+		String text = CaptureNotices.reloaded("bob", true);
+		assertTrue(text.contains("still being recorded"), text);
+		assertTrue(text.contains("next server you join"), text);
 	}
 
 	@Test

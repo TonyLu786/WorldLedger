@@ -155,7 +155,19 @@ final class CaptureCoordinator {
 			return CaptureNotices.reloadFailed(configurationFile, String.valueOf(exception.getMessage()));
 		}
 		LOGGER.info("Reloaded capture configuration from {}", configurationFile);
-		return CaptureNotices.reloaded(configuration.contributor());
+		// Blanking the contributor is how somebody says stop. It only ever
+		// applied from the next join, because the running session took its own
+		// copy of the name when it started -- so the notice said capture was off
+		// while the mod carried on recording this server under the old name.
+		//
+		// Ending the session here flushes what has already been claimed and
+		// keeps it: that was recorded while consent stood, and throwing it away
+		// would punish somebody for changing their mind.
+		boolean running = session != null;
+		if (running && configuration.contributor().isEmpty()) {
+			onDisconnect();
+		}
+		return CaptureNotices.reloaded(configuration.contributor(), running);
 	}
 
 	/**
@@ -489,6 +501,22 @@ final class CaptureCoordinator {
 			Duration enqueueBudget) {
 		ActiveSession current = session;
 		if (current == null || current.level == null) {
+			return false;
+		}
+		// The spool being full stops capture, which is what onSpoolExhausted
+		// says it does and what nothing here used to check.
+		//
+		// The flag was consulted only by the status command and by the next
+		// join, so a session that filled the disk kept going: every dirty chunk
+		// was still snapshotted at full cost on the thread that draws frames,
+		// every write failed immediately, and every one of them was counted as
+		// enqueued. A player was then told at disconnect that the session had
+		// captured four thousand chunks when it had written none.
+		//
+		// Counted as dropped coverage, because that is what it is: state that
+		// was observed and is not being kept.
+		if (spoolExhausted != null) {
+			current.droppedCoverage++;
 			return false;
 		}
 		try {

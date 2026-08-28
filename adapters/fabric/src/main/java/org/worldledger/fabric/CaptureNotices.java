@@ -110,10 +110,28 @@ public final class CaptureNotices {
 	 * Naming them is the difference between a reload a player can rely on and
 	 * one that silently ignores half the file.
 	 */
-	public static String reloaded(String contributor) {
+	public static String reloaded(String contributor, boolean sessionRunning) {
 		String caveat = " coalesce_ticks and queue_capacity still need a client restart.";
 		if (contributor.isEmpty()) {
+			// The one case where being vague would matter most. A player who
+			// blanks their name mid-session is asking to stop, and this used to
+			// answer "capture stays off" flatly while the running session kept
+			// recording under the name it took at join -- the setting changed,
+			// the session's copy of it did not.
+			//
+			// The session is now ended for them, so the sentence is true when it
+			// is said rather than true only from the next join.
+			if (sessionRunning) {
+				return PREFIX + "Reloaded. No contributor is set, so recording has stopped for this server."
+						+ " What was already recorded is kept." + caveat;
+			}
 			return PREFIX + "Reloaded. No contributor is set, so capture stays off." + caveat;
+		}
+		if (sessionRunning) {
+			// Equally true and equally worth saying: the name this session is
+			// recording under was fixed when it started.
+			return PREFIX + "Reloaded. This server is still being recorded under the name it started with;"
+					+ " " + contributor + " applies from the next server you join." + caveat;
 		}
 		return PREFIX + "Reloaded. Capturing as " + contributor
 				+ " from the next server you join." + caveat;
