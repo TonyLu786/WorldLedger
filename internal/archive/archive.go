@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -106,7 +107,47 @@ func Open(root string) (Archive, error) {
 	if err := a.recoverPurges(); err != nil {
 		return Archive{}, fmt.Errorf("recover archive purges: %w", err)
 	}
+	// Under the same exclusive lock, so anything found here belongs to a
+	// process that is gone.
+	a.sweepAbandonedWrites()
 	return a, nil
+}
+
+// sweepAbandonedWrites removes the temporary files an interrupted write leaves
+// behind.
+//
+// A temporary has to be created in the directory it will be renamed into, since
+// a rename across filesystems is not atomic, so a crash leaves one inside the
+// archive's own structure. The index enumeration now steps over them, which is
+// what stops a single power loss from making an archive permanently unreadable,
+// but stepping over them forever means they accumulate: an object temporary can
+// be tens of megabytes and nothing ever looked at that directory again.
+//
+// Errors are ignored on purpose. This is housekeeping of this package's own
+// leftovers, and failing to tidy is not a reason to refuse somebody their
+// archive.
+func (a Archive) sweepAbandonedWrites() {
+	filepath.WalkDir(filepath.Join(a.Root, "index"), func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !entry.IsDir() && isWriteResidue(entry.Name()) {
+			os.Remove(path)
+		}
+		return nil
+	})
+
+	// The object store writes under objects/tmp and removes its own temporary
+	// on every path that returns, which covers everything except the process
+	// not returning at all.
+	tmp := filepath.Join(a.Root, "objects", "tmp")
+	if entries, err := os.ReadDir(tmp); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				os.Remove(filepath.Join(tmp, entry.Name()))
+			}
+		}
+	}
 }
 
 func (a Archive) AddObservation(o model.Observation) error {

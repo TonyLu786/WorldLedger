@@ -83,6 +83,9 @@ func (a Archive) chunksLocked(serverID, dimension string) ([]model.ChunkRef, err
 	normalizedDimension := model.NormalizeToken(dimension)
 	var chunks []model.ChunkRef
 	for _, entry := range entries {
+		if isWriteResidue(entry.Name()) {
+			continue
+		}
 		if !entry.IsDir() {
 			return nil, fmt.Errorf("%s: unexpected file in chunk index", filepath.Join(root, entry.Name()))
 		}
@@ -96,6 +99,9 @@ func (a Archive) chunksLocked(serverID, dimension string) ([]model.ChunkRef, err
 			return nil, err
 		}
 		for _, file := range files {
+			if isWriteResidue(file.Name()) {
+				continue
+			}
 			if file.IsDir() || !strings.HasSuffix(file.Name(), ".idx") {
 				return nil, fmt.Errorf("%s: unexpected entry in chunk index", filepath.Join(column, file.Name()))
 			}
@@ -120,6 +126,22 @@ func (a Archive) chunksLocked(serverID, dimension string) ([]model.ChunkRef, err
 	return chunks, nil
 }
 
+// writeResiduePrefix is what an atomic write leaves behind when the process
+// dies between creating its temporary file and renaming it into place.
+//
+// The temporary has to be created in the directory it will be renamed into,
+// because a rename across filesystems is not atomic. That means a crash leaves
+// a stray name inside a directory the index enumerates, and the enumeration
+// refused every entry it did not recognise -- so one badly timed power loss
+// made every read of that archive fail, permanently, with "unexpected entry in
+// chunk index". `fsck` reported the archive clean throughout, because it skips
+// what is not an index file.
+//
+// Recovery of transactions had always skipped this prefix. The index had not.
+const writeResiduePrefix = ".tmp-"
+
+func isWriteResidue(name string) bool { return strings.HasPrefix(name, writeResiduePrefix) }
+
 func readEncodedNames(root string) ([]string, error) {
 	entries, err := os.ReadDir(root)
 	if os.IsNotExist(err) {
@@ -130,6 +152,9 @@ func readEncodedNames(root string) ([]string, error) {
 	}
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
+		if isWriteResidue(entry.Name()) {
+			continue
+		}
 		if !entry.IsDir() {
 			return nil, fmt.Errorf("%s: unexpected file in chunk index", filepath.Join(root, entry.Name()))
 		}

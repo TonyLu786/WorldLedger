@@ -53,11 +53,22 @@ func (a Archive) RemoveObservations(ids []string) (PurgeResult, error) {
 	}
 	defer lock.Close()
 
-	journal, err := a.writePurgeJournal(ids)
+	// Read before writing the journal, because after the observations are gone
+	// their component digests cannot be recovered from an id. That was the hole:
+	// a crash between removing an observation and removing its objects left a
+	// replay that could find nothing to do, so it discarded the journal and the
+	// bytes somebody had asked to have removed stayed on disk -- after the
+	// command had already reported success, and with the integrity check clean,
+	// because fsck never enumerates objects nothing references.
+	doomed, err := a.doomedRefsLocked(ids)
 	if err != nil {
 		return PurgeResult{}, err
 	}
-	result, err := a.applyPurgeLocked(ids)
+	journal, err := a.writePurgeJournal(ids, doomed)
+	if err != nil {
+		return PurgeResult{}, err
+	}
+	result, err := a.applyPurgeLocked(ids, doomed)
 	if err != nil {
 		return PurgeResult{}, err
 	}
@@ -70,14 +81,24 @@ func (a Archive) RemoveObservations(ids []string) (PurgeResult, error) {
 	return result, nil
 }
 
-func (a Archive) writePurgeJournal(ids []string) (string, error) {
+// purgeJournal is what a purge writes down before it starts.
+//
+// It carries the object references as well as the ids, because the ids alone
+// stop meaning anything the moment the observations are removed, and finishing
+// an interrupted purge is the whole reason the journal exists.
+type purgeJournal struct {
+	IDs  []string                 `json:"ids"`
+	Refs map[string]model.BlobRef `json:"refs,omitempty"`
+}
+
+func (a Archive) writePurgeJournal(ids []string, refs map[string]model.BlobRef) (string, error) {
 	dir := filepath.Join(a.Root, purgeDirectory)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
 	sorted := append([]string(nil), ids...)
 	sort.Strings(sorted)
-	data, err := json.MarshalIndent(sorted, "", " ")
+	data, err := json.MarshalIndent(purgeJournal{IDs: sorted, Refs: refs}, "", " ")
 	if err != nil {
 		return "", err
 	}
@@ -90,15 +111,38 @@ func (a Archive) writePurgeJournal(ids []string) (string, error) {
 	return path, nil
 }
 
-func (a Archive) applyPurgeLocked(ids []string) (PurgeResult, error) {
-	removing := make(map[string]struct{}, len(ids))
+// doomedRefsLocked collects the objects the given observations reference, while
+// those observations can still be read.
+//
+// It runs before the journal is written so that the journal can carry the
+// answer. An id on its own is not enough to finish a purge: once the
+// observation file is gone, nothing on disk relates that id to the objects it
+// used, and a replay that reads what is left finds nothing to remove.
+func (a Archive) doomedRefsLocked(ids []string) (map[string]model.BlobRef, error) {
+	refs := map[string]model.BlobRef{}
 	for _, id := range ids {
-		removing[id] = struct{}{}
+		observation, err := a.readObservation(id)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read observation %s: %w", id, err)
+		}
+		for _, ref := range observation.Components {
+			refs[ref.Digest] = ref
+		}
 	}
+	return refs, nil
+}
 
-	// Gather what is being removed before anything is deleted, so the objects
-	// each one referenced are still known afterwards.
-	doomedRefs := map[string]model.BlobRef{}
+// applyPurgeLocked removes the observations and then the objects nothing else
+// references.
+//
+// doomedRefs comes from the journal on a replay and from the caller on a first
+// run, rather than being gathered here. Gathering here was the defect: on a
+// replay the observations are already gone, so nothing was gathered, the object
+// phase was skipped, and the journal was then discarded as finished.
+func (a Archive) applyPurgeLocked(ids []string, doomedRefs map[string]model.BlobRef) (PurgeResult, error) {
 	var result PurgeResult
 	for _, id := range ids {
 		observation, err := a.readObservation(id)
@@ -108,9 +152,6 @@ func (a Archive) applyPurgeLocked(ids []string) (PurgeResult, error) {
 		}
 		if err != nil {
 			return PurgeResult{}, fmt.Errorf("read observation %s: %w", id, err)
-		}
-		for _, ref := range observation.Components {
-			doomedRefs[ref.Digest] = ref
 		}
 		if err := a.removeFromIndexLocked(observation); err != nil {
 			return PurgeResult{}, err
@@ -242,6 +283,24 @@ func (a Archive) observationPath(id string) string {
 	return filepath.Join(a.Root, "observations", id[:2], id+".json")
 }
 
+// looksLikeObservationID reports whether a string can name an observation.
+//
+// It exists because observationPath slices the first two characters and joins
+// the rest into a path. Every caller but one passes an id the archive produced;
+// the exception is the purge journal, which is a file on disk, and a journal
+// holding "a" would take the first two characters of a one-character string.
+func looksLikeObservationID(id string) bool {
+	if len(id) < 2 {
+		return false
+	}
+	for _, c := range id {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // recoverPurges finishes a purge that was interrupted. Without it the archive
 // could be opened in a state its own integrity check rejects.
 func (a Archive) recoverPurges() error {
@@ -253,11 +312,27 @@ func (a Archive) recoverPurges() error {
 	if err != nil {
 		return err
 	}
-	var ids []string
-	if err := json.Unmarshal(data, &ids); err != nil {
-		return fmt.Errorf("%s: invalid purge journal: %w", path, err)
+	var journal purgeJournal
+	if err := json.Unmarshal(data, &journal); err != nil {
+		// A journal written before this carried its references is a bare array
+		// of ids. It can still finish the observation half, which is what it
+		// was able to do then.
+		var ids []string
+		if legacy := json.Unmarshal(data, &ids); legacy != nil {
+			return fmt.Errorf("%s: invalid purge journal: %w", path, err)
+		}
+		journal = purgeJournal{IDs: ids}
 	}
-	if _, err := a.applyPurgeLocked(ids); err != nil {
+	// An id that is not a hex digest cannot name an observation, and it reaches
+	// a path join. The journal is the only input to this that has not already
+	// been validated, so it is validated here rather than trusted for having
+	// been written by us.
+	for _, id := range journal.IDs {
+		if !looksLikeObservationID(id) {
+			return fmt.Errorf("%s: purge journal names %q, which is not an observation id", path, id)
+		}
+	}
+	if _, err := a.applyPurgeLocked(journal.IDs, journal.Refs); err != nil {
 		return fmt.Errorf("replay purge journal: %w", err)
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
