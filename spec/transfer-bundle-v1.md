@@ -23,9 +23,13 @@ receiver to trust where the bundle came from.
   "schema": "worldledger.transfer-bundle/v1",
   "created_at": "2026-08-14T00:00:00Z",
   "observations": ["<observation-id>", "..."],
-  "objects": [{"digest": "<sha256>", "size": 8262}]
+  "objects": [{"digest": "<sha256>", "size": 8262}],
+  "attestations": ["<observation-id>.0.json", "..."]
 }
 ```
+
+`attestations` is optional and absent when nothing carried a signature, so a
+bundle written before signatures travelled is still a valid bundle.
 
 Unknown fields are rejected. `observations` and `objects` list exactly what the
 bundle carries; a declared entry that is absent is an error rather than a
@@ -43,9 +47,33 @@ warning.
   archive after the objects have been stored.
 - A record the archive already holds is skipped. Importing the same bundle twice
   changes nothing.
+- Every attestation must verify against the observation id it names, and must
+  name a record this bundle carries. One that does neither is refused, and the
+  whole receive fails rather than storing the rest.
 
 A bundle from an untrusted peer therefore cannot introduce anything the archive
 would not have accepted from its own adapter.
+
+## What identity does not settle, and what the signatures are for
+
+Recomputing an id proves a record was not altered. It does not prove who wrote
+it: an id is a hash of the record, so a record invented from nothing hashes
+correctly to its own contents, contributor label included. Anybody can mint one
+naming anybody.
+
+That is what the attestations are for, and for a while they did not travel. A
+bundle carried `observations/` and `objects/` and nothing else, so an honestly
+transferred record and a fabricated one both arrived unsigned and read
+identically — the exchange was the one place where attribution stopped meaning
+anything, which is the opposite of what it is for. Signatures now travel in
+`attestations/`, listed in the manifest, verified on arrival against the record
+they name.
+
+This still does not make a contributor label true. It makes an unsigned record
+distinguishable from a signed one, and leaves the question of whose keys are
+recognised where it belongs: a local, attributed decision in the identity
+registry, which reports a valid signature from an unregistered key as exactly
+that rather than as an endorsement.
 
 ## What is negotiated, and why the two halves differ
 

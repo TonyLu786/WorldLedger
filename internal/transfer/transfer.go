@@ -21,11 +21,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/worldledger/worldledger-mc/internal/archive"
+	"github.com/worldledger/worldledger-mc/internal/attest"
 	"github.com/worldledger/worldledger-mc/internal/model"
+	"github.com/worldledger/worldledger-mc/internal/redact"
 )
 
 const Schema = "worldledger.transfer-bundle/v1"
@@ -37,6 +40,10 @@ type Manifest struct {
 	CreatedAt    time.Time   `json:"created_at"`
 	Observations []string    `json:"observations"`
 	Objects      []ObjectRef `json:"objects"`
+	// Attestations are the signatures over the observations above. They travel
+	// so that a record naming a contributor can be told apart from one that was
+	// merely written naming them.
+	Attestations []string `json:"attestations,omitempty"`
 }
 
 type ObjectRef struct {
@@ -49,6 +56,12 @@ type Sent struct {
 	Observations int
 	Objects      int
 	Bytes        int64
+	Attestations int
+	// Withheld counts observations a declared redaction kept out of the bundle.
+	// It is reported rather than left silent: somebody who withdrew consent is
+	// owed the operator being able to see that it took effect, and an operator
+	// who expected 158 records and got 118 is owed the reason.
+	Withheld int
 }
 
 // Send writes a transfer bundle carrying the objects and observation records a
@@ -78,23 +91,59 @@ func Send(a archive.Archive, peer archive.Fingerprint, peerManifest *archive.Man
 		return Sent{}, err
 	}
 
+	// Withdrawn observations do not leave.
+	//
+	// Every other path that builds something to hand over filters these, and
+	// this one did not -- which made it the only way a contributor who had
+	// withdrawn consent could still be sent to a peer, record and bytes, with
+	// nothing printed. It is also the path where it matters most: an export
+	// writes a world onto the operator's own disk, and this hands data to
+	// somebody else.
+	redactions, err := redact.NewStore(a.Root).List()
+	if err != nil {
+		return Sent{}, fmt.Errorf("read redactions: %w", err)
+	}
+
 	wantedChunks, filterChunks := chunksTheyDisagreeAbout(a, peerManifest)
 	selected := observations[:0:0]
+	var sent Sent
 	for _, observation := range observations {
 		if filterChunks {
 			if _, differs := wantedChunks[observation.Chunk]; !differs {
 				continue
 			}
 		}
+		if kept, dropped := redactions.Filter([]model.Observation{observation}); len(kept) == 0 {
+			sent.Withheld += len(dropped)
+			continue
+		}
 		selected = append(selected, observation)
 	}
 
 	if len(negotiation.Offer) == 0 && len(selected) == 0 {
-		return Sent{}, nil
+		// Nothing to send, but what was held back is still worth saying.
+		return Sent{Withheld: sent.Withheld}, nil
 	}
 
+	// The negotiation was computed from this archive's whole fingerprint, which
+	// includes what a redaction withholds. Dropping the records without
+	// dropping their bytes would be the same disclosure with an extra step, so
+	// an object travels only if a record that is travelling references it.
+	//
+	// An object shared between a withheld observation and a kept one is still
+	// sent: it is needed for the kept one, and content addressing means those
+	// are the same bytes rather than a copy belonging to either.
+	needed := map[string]struct{}{}
+	for _, observation := range selected {
+		for _, ref := range observation.Components {
+			needed[ref.Digest] = struct{}{}
+		}
+	}
 	offered := make(map[string]archive.FingerprintComponent, len(negotiation.Offer))
 	for _, component := range negotiation.Offer {
+		if _, wanted := needed[component.Digest]; !wanted {
+			continue
+		}
 		offered[component.Digest] = component
 	}
 
@@ -103,7 +152,6 @@ func Send(a archive.Archive, peer archive.Fingerprint, peerManifest *archive.Man
 	}
 
 	manifest := Manifest{Schema: Schema, CreatedAt: time.Now().UTC()}
-	var sent Sent
 
 	for _, observation := range selected {
 		encoded, err := json.MarshalIndent(observation, "", "  ")
@@ -116,6 +164,37 @@ func Send(a archive.Archive, peer archive.Fingerprint, peerManifest *archive.Man
 		}
 		manifest.Observations = append(manifest.Observations, observation.ID)
 		sent.Observations++
+
+		// Signatures travel with the records they are about.
+		//
+		// Leaving them behind made the exchange the one place attribution
+		// stopped meaning anything. Anybody can write a record naming somebody
+		// else -- an id is a hash of the record, so a made-up one is perfectly
+		// well formed -- and a signature is what tells the two apart. With the
+		// signatures staying home, an honestly transferred record and a
+		// fabricated one both arrived unsigned and read identically.
+		//
+		// Nothing here has to be trusted: Store.Put refuses an attestation that
+		// does not verify against the observation id it names.
+		attestations, err := attest.NewStore(a.Root).For(observation.ID)
+		if err != nil {
+			return Sent{}, fmt.Errorf("read attestations for %s: %w", observation.ID, err)
+		}
+		for _, attestation := range attestations {
+			encoded, err := json.MarshalIndent(attestation, "", "  ")
+			if err != nil {
+				return Sent{}, err
+			}
+			name := observation.ID + "." + strconv.Itoa(sent.Attestations) + ".json"
+			if err := os.MkdirAll(filepath.Join(out, "attestations"), 0o755); err != nil {
+				return Sent{}, err
+			}
+			if err := os.WriteFile(filepath.Join(out, "attestations", name), append(encoded, '\n'), 0o644); err != nil {
+				return Sent{}, err
+			}
+			manifest.Attestations = append(manifest.Attestations, name)
+			sent.Attestations++
+		}
 	}
 
 	digests := make([]string, 0, len(offered))
@@ -201,6 +280,9 @@ type Received struct {
 	Observations int
 	Objects      int
 	AlreadyHeld  int
+	// Attestations are signatures that arrived with the records they sign and
+	// verified against them.
+	Attestations int
 }
 
 // Receive verifies and merges a bundle.
@@ -243,6 +325,13 @@ func Receive(a archive.Archive, dir string) (Received, error) {
 			return Received{}, fmt.Errorf("object %s: %w", object.Digest[:12], err)
 		}
 		received.Objects++
+	}
+
+	// What the bundle declares it carries, so a signature cannot be stored for a
+	// record that is not here.
+	wantedIDs := make(map[string]struct{}, len(manifest.Observations))
+	for _, id := range manifest.Observations {
+		wantedIDs[id] = struct{}{}
 	}
 
 	for _, id := range manifest.Observations {
@@ -290,6 +379,39 @@ func Receive(a archive.Archive, dir string) (Received, error) {
 			return Received{}, fmt.Errorf("observation %s: %w", id[:12], err)
 		}
 		received.Observations++
+	}
+
+	// Signatures last, so that an attestation is only stored for a record the
+	// archive has accepted.
+	//
+	// None of this is trusted. Store.Put re-derives the signed preimage from the
+	// observation id and checks the signature against the key in the
+	// attestation, so a bundle can only add a signature that is genuinely valid.
+	// What it cannot do is add one that makes an unknown key known: whether a
+	// key is recognised is a separate, local, attributed decision, and
+	// `attest verify` reports a valid signature from an unregistered key as
+	// exactly that rather than as an endorsement.
+	attestations := attest.NewStore(a.Root)
+	for _, name := range manifest.Attestations {
+		if strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+			return Received{}, fmt.Errorf("attestation %q: a name may not contain a path", name)
+		}
+		body, err := os.ReadFile(filepath.Join(dir, "attestations", name))
+		if err != nil {
+			return Received{}, fmt.Errorf("attestation %s: %w", name, err)
+		}
+		var attestation attest.Attestation
+		if err := json.Unmarshal(body, &attestation); err != nil {
+			return Received{}, fmt.Errorf("attestation %s: %w", name, err)
+		}
+		if _, wanted := wantedIDs[attestation.ObservationID]; !wanted {
+			return Received{}, fmt.Errorf(
+				"attestation %s signs %s, which this bundle does not carry", name, attestation.ObservationID)
+		}
+		if err := attestations.Put(attestation); err != nil {
+			return Received{}, fmt.Errorf("attestation %s: %w", name, err)
+		}
+		received.Attestations++
 	}
 	return received, nil
 }

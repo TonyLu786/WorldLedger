@@ -16,6 +16,8 @@ func cmdSend(args []string) error {
 	peerFingerprint := fs.String("to", "", "the receiving mirror's fingerprint file")
 	peerManifest := fs.String("their-manifest", "", "the receiving mirror's manifest, so records they already hold are not resent")
 	out := fs.String("out", "", "directory to write the transfer bundle to")
+	mirror := fs.Bool("mirror", false,
+		"the destination is an archive you control yourself, so this is a copy rather than a disclosure")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -25,6 +27,12 @@ func cmdSend(args []string) error {
 
 	a, err := archive.Open(*archivePath)
 	if err != nil {
+		return err
+	}
+	// export and convert both refuse a server nobody has decided about, and they
+	// only write a world onto this machine. This is the command that hands data
+	// to somebody else, and it was the one with no gate at all.
+	if err := requireDistribution(a, *mirror); err != nil {
 		return err
 	}
 	peer, err := readFingerprint(*peerFingerprint)
@@ -46,12 +54,29 @@ func cmdSend(args []string) error {
 		return err
 	}
 	if sent.Observations == 0 && sent.Objects == 0 {
+		if sent.Withheld > 0 {
+			fmt.Printf("no bundle was written: every observation that would have gone is withheld by a declared redaction (%d)\n",
+				sent.Withheld)
+			return nil
+		}
 		fmt.Println("that mirror already holds everything this archive has; no bundle was written")
 		return nil
 	}
 	fmt.Printf("wrote %s\n", *out)
 	fmt.Printf("observations %d\n", sent.Observations)
 	fmt.Printf("objects      %d (%s)\n", sent.Objects, humanBytes(sent.Bytes))
+	// Said whenever it happened, because an operator who expected 158 records
+	// and counted 118 is owed the reason, and because a contributor who
+	// withdrew is owed the operator being able to see that it took effect.
+	if sent.Withheld > 0 {
+		fmt.Printf("withheld     %d (declared redactions; their bytes did not travel either)\n", sent.Withheld)
+	}
+	// Named because it is the difference between a record somebody made and a
+	// record somebody else wrote naming them. Signatures used to stay behind,
+	// which made those two indistinguishable at the far end.
+	if sent.Attestations > 0 {
+		fmt.Printf("signed       %d observation(s) travel with a signature\n", sent.Attestations)
+	}
 	// The object count is usually far below the observation count and reads as
 	// an error until someone explains it. It is the payoff of content
 	// addressing: the peer's fingerprint already listed the component bytes it
@@ -88,6 +113,11 @@ func cmdReceive(args []string) error {
 	}
 	fmt.Printf("merged   %d observation(s)\n", received.Observations)
 	fmt.Printf("objects  %d\n", received.Objects)
+	// Whether a record arrived signed is the question `attest verify` exists to
+	// answer, and it can only answer it if the signature came too.
+	if received.Attestations > 0 {
+		fmt.Printf("signed   %d arrived with a signature that verifies\n", received.Attestations)
+	}
 	if received.AlreadyHeld > 0 {
 		fmt.Printf("already held %d observation(s); a repeated import changes nothing\n", received.AlreadyHeld)
 	}

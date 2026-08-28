@@ -285,7 +285,7 @@ worldledger redact set --archive ./archive --server example.org \
 worldledger redact list --archive ./archive
 ```
 
-Declared redactions are withheld from coverage, export, and convert immediately. `inspect`, `fsck`, and `fingerprint` still see everything: an operator examining their own archive is not what this guards, and a diagnostic that hides data is a diagnostic that lies.
+Declared redactions are withheld from coverage, export, convert, and `send` immediately, and a send reports how many it held back. `inspect`, `fsck`, `fingerprint`, and `manifest` still see everything: an operator examining their own archive is not what this guards, and a diagnostic that hides data is a diagnostic that lies.
 
 Removing the data is a separate, irreversible step, and it will not always remove much:
 

@@ -71,7 +71,7 @@ func cmdRedactSet(args []string) error {
 	fmt.Printf("declared %s\n", declared.ID[:12])
 	fmt.Printf("scope    %s\n", declared.Describe())
 	fmt.Printf("matches  %d observation(s) currently in the archive\n", matched)
-	fmt.Println("\nThese are now withheld from coverage, export, and convert. They are still")
+	fmt.Println("\nThese are now withheld from coverage, export, convert, and send. They are still")
 	fmt.Println("stored. Run 'worldledger redact purge' to remove what can be removed.")
 	return nil
 }

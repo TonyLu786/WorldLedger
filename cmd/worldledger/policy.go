@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/worldledger/worldledger-mc/internal/archive"
@@ -225,4 +227,61 @@ func describePolicy(a archive.Archive, server string) (string, error) {
 	out += fmt.Sprintf("              x %d..%d, z %d..%d\n", assessment.MinX, assessment.MaxX, assessment.MinZ, assessment.MaxZ)
 	out += fmt.Sprintf("exposure      %s - %s\n", assessment.Exposure, assessment.Reason)
 	return out, nil
+}
+
+// requireDistribution gates a transfer bundle on every server it would carry.
+//
+// export and convert require a declaration and then say the declaration governs
+// passing the world on, which is right for a command that writes onto the
+// operator's own disk. This is the passing on, so a declaration existing is not
+// enough: a disposition that says the observations may not be distributed has to
+// stop it.
+//
+// The exception is real and is why this takes a flag rather than refusing
+// outright. Copying an archive to a second machine the same person runs is not a
+// disclosure, and it is the workflow the transfer bundle was built for. Saying
+// so is the operator's assertion, made once, in the open.
+func requireDistribution(a archive.Archive, mirror bool) error {
+	servers, err := a.Servers()
+	if err != nil {
+		return err
+	}
+	if len(servers) == 0 {
+		return nil
+	}
+	store := policy.NewStore(a.Root)
+	now := time.Now().UTC()
+
+	var undeclared, refused []string
+	for _, server := range servers {
+		declared, found, err := store.Lookup(server)
+		if err != nil {
+			return err
+		}
+		if !found {
+			undeclared = append(undeclared, server)
+			continue
+		}
+		if mirror {
+			continue
+		}
+		if allowed, why := declared.DistributionAllowed(now); !allowed {
+			refused = append(refused, fmt.Sprintf("  %s: %s", server, why))
+		}
+	}
+
+	if len(undeclared) > 0 {
+		sort.Strings(undeclared)
+		return fmt.Errorf("nothing has been declared about what may happen to what was recorded on:\n  %s\n\n"+
+			"declare each one before sending it anywhere:\n"+
+			"  worldledger policy set --archive DIR --server SERVER --disposition private|embargoed|research|public --declared-by YOUR-NAME",
+			strings.Join(undeclared, "\n  "))
+	}
+	if len(refused) > 0 {
+		sort.Strings(refused)
+		return fmt.Errorf("these servers' observations may not be distributed:\n%s\n\n"+
+			"if the destination is an archive you run yourself, that is a copy rather than a disclosure; say so with --mirror",
+			strings.Join(refused, "\n"))
+	}
+	return nil
 }

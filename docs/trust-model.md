@@ -89,7 +89,9 @@ The project should support server- and collection-level embargoes, contributor d
 
 ## What withdrawal can and cannot undo
 
-A contributor can ask for their observations to be withheld, and a server operator can ask for an area to be excluded. `worldledger redact` records either as an attributed, dated, reversible declaration, and anything the archive builds for sharing skips the observations it covers.
+A contributor can ask for their observations to be withheld, and a server operator can ask for an area to be excluded. `worldledger redact` records either as an attributed, dated, reversible declaration, and anything the archive builds for sharing skips the observations it covers — including their component bytes, since dropping the record and keeping the bytes would be the same disclosure with an extra step.
+
+That sentence was true of everything except the one path that actually hands data to somebody else. `send` assembled its bundle from every observation and negotiated its objects from an unfiltered fingerprint, so a contributor who had withdrawn consent still travelled, record and bytes, with nothing printed. It filters now, refuses to carry an object that only a withheld record needs, and reports the count it held back. `fingerprint` and `manifest` still describe everything, which matters here because both are written to be handed to a peer: a fingerprint lets them confirm they hold the same bytes for a chunk, so an operator sharing one is sharing a little about what was withdrawn. That is a smaller disclosure than the observation, and it is one somebody should know they are making.
 
 Removing the underlying bytes is a different matter, and the difference is not a limitation of the implementation. Objects are stored by content, so two contributors who observed the same chunk in the same state reference one object. When one of them withdraws, that object is still what the other one saw. Deleting it would destroy an observation that was never theirs to withdraw.
 
