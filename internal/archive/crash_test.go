@@ -63,7 +63,15 @@ func TestATemporaryLeftInTheIndexDoesNotBreakTheArchive(t *testing.T) {
 	}
 }
 
-func TestAnAbandonedObjectTemporaryIsSweptUp(t *testing.T) {
+// The opposite of what this once asserted, and the reason is the incident.
+//
+// Opening an archive used to empty objects/tmp as housekeeping. The object
+// store does not take the archive lock, so a file in there may belong to a
+// write happening right now in another process, and the store closes its
+// temporary before renaming it: for part of every write it is an ordinary
+// closed file that any operating system will let a second process delete. Two
+// CI jobs went red on twelve concurrent processes doing exactly that.
+func TestOpeningAnArchiveLeavesObjectTemporariesAlone(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -72,16 +80,16 @@ func TestAnAbandonedObjectTemporaryIsSweptUp(t *testing.T) {
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	stranded := filepath.Join(tmp, "object-999")
-	if err := os.WriteFile(stranded, make([]byte, 4096), 0o644); err != nil {
+	inFlight := filepath.Join(tmp, "object-999")
+	if err := os.WriteFile(inFlight, make([]byte, 4096), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	if _, err := Open(dir); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(stranded); !os.IsNotExist(err) {
-		t.Error("an object temporary left by a killed import was still there after opening the archive")
+	if _, err := os.Stat(inFlight); err != nil {
+		t.Errorf("opening the archive removed an object temporary that another process may be writing: %v", err)
 	}
 }
 

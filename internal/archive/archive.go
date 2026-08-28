@@ -113,15 +113,29 @@ func Open(root string) (Archive, error) {
 	return a, nil
 }
 
-// sweepAbandonedWrites removes the temporary files an interrupted write leaves
-// behind.
+// sweepAbandonedWrites removes the temporary files an interrupted index write
+// leaves behind.
 //
 // A temporary has to be created in the directory it will be renamed into, since
 // a rename across filesystems is not atomic, so a crash leaves one inside the
-// archive's own structure. The index enumeration now steps over them, which is
-// what stops a single power loss from making an archive permanently unreadable,
-// but stepping over them forever means they accumulate: an object temporary can
-// be tens of megabytes and nothing ever looked at that directory again.
+// archive's own structure. The index enumeration steps over them, which is what
+// stops a single power loss from making an archive permanently unreadable, and
+// this stops them accumulating forever.
+//
+// The index only. Every index temporary is written by commitIndex under the
+// archive lock, which this also holds, so anything found there belongs to a
+// process that is gone.
+//
+// Object temporaries are deliberately left alone, and the reason is worth
+// keeping: the object store does not take the archive lock, so a file under
+// objects/tmp may belong to a write happening right now in another process.
+// Sweeping it was tried and cost two green builds. The window is not the one it
+// looks like either -- the store closes its temporary before renaming it, so for
+// part of every write the file is an ordinary closed file that any operating
+// system will let a second process delete, and the rename then fails with the
+// file simply gone. Tidying a directory is not worth breaking a concurrent
+// import, and nothing here can tell an abandoned object temporary from a live
+// one.
 //
 // Errors are ignored on purpose. This is housekeeping of this package's own
 // leftovers, and failing to tidy is not a reason to refuse somebody their
@@ -136,18 +150,6 @@ func (a Archive) sweepAbandonedWrites() {
 		}
 		return nil
 	})
-
-	// The object store writes under objects/tmp and removes its own temporary
-	// on every path that returns, which covers everything except the process
-	// not returning at all.
-	tmp := filepath.Join(a.Root, "objects", "tmp")
-	if entries, err := os.ReadDir(tmp); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				os.Remove(filepath.Join(tmp, entry.Name()))
-			}
-		}
-	}
 }
 
 func (a Archive) AddObservation(o model.Observation) error {
