@@ -342,7 +342,12 @@ function renderCapture(status) {
   // or whose launcher replaced the mods folder, still has every recording they
   // ever made sitting here, and reading the folder's existence as "you are
   // recording" told them to go and play while nothing was being kept.
-  if (!status.capturing) {
+  if (status.spool.unreadable) {
+    // Said before anything else, because every number below it is zero for a
+    // reason that has nothing to do with what was recorded.
+    host.append(banner('todo', 'The recordings folder could not be read',
+      status.spool.unreadable + ' — nothing here is a count of what you have.'));
+  } else if (!status.capturing) {
     host.append(banner('todo', 'Nothing would be recorded if you played now',
       'Your past recordings are safe and listed below. Go to Set up to put the mod back.'));
   } else if (waiting > 0) {
@@ -508,6 +513,12 @@ document.getElementById('import-run').addEventListener('click', async () => {
       host.append(list);
     }
   } catch (err) {
+    // The button lives in the screen's footer, outside the body this replaces,
+    // so nothing else puts it back. Leaving it disabled and still reading
+    // "Bringing it in…" told somebody it was working underneath an error
+    // message, and only leaving the screen and returning ever fixed it.
+    button.disabled = false;
+    button.textContent = 'Try again';
     problem(host, err);
   }
 });
@@ -736,13 +747,24 @@ function whenText(iso) {
   });
 }
 
+// The last error from momentsFor, so a failure can be told apart from an empty
+// archive. Swallowing it made a damaged archive read as "Nothing recorded for
+// this server. Play and bring in some recordings." -- advice for a situation
+// that was not the one they were in, about an answer the application had never
+// received.
+let momentsFailure = null;
+
 async function momentsFor(server) {
+  momentsFailure = null;
   if (!server) return [];
   try {
     return (await call('/api/moments?server=' + encodeURIComponent(server) +
       '&dimension=' + encodeURIComponent(chosenDimension))).moments || [];
   } catch (err) {
-    // A missing list of moments costs the choice of one, not the screen.
+    // A failed list of moments costs the choice of one, not the screen. What it
+    // must not cost is the difference between "there are none" and "we could
+    // not find out".
+    momentsFailure = err;
     return [];
   }
 }
@@ -800,6 +822,14 @@ async function refreshWorld() {
       scope.append(field);
     }
     host.append(scope);
+    // Without this the chooser simply was not there, and the one thing that
+    // makes this different from a world downloader disappeared with no
+    // explanation. It still writes: "now" is a moment.
+    if (momentsFailure) {
+      host.append(banner('todo',
+        'The list of moments could not be read: ' + momentsFailure.message,
+        (momentsFailure.next || '') + ' You can still write the newest of everything recorded.'));
+    }
 
     const answer = await call('/api/worlds');
     if (!answer.worlds.length) {
@@ -952,6 +982,10 @@ async function refreshTravel() {
 
     const server = chosenServer;
     const moments = await momentsFor(server);
+    if (momentsFailure) {
+      problem(host, momentsFailure);
+      return;
+    }
     if (moments.length < 1) {
       host.append(banner('todo', 'Nothing recorded for ' + server, 'Play and bring in some recordings.'));
       return;

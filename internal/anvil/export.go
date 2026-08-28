@@ -360,13 +360,42 @@ func readObject(source ObjectSource, ref model.BlobRef) ([]byte, error) {
 	return data, nil
 }
 
+// writeFileAtomic replaces a file in one step, so a reader never sees half of
+// one.
+//
+// The temporary name is unique rather than the target's with ".tmp" on the end.
+// A fixed name is only safe while one writer exists at a time, and there is no
+// such guarantee here: the desktop application's export lock is in-process, so a
+// command line export and the window running together -- or two exports into the
+// same world -- opened the same temporary with O_TRUNC, interleaved their bytes,
+// and both renamed the mixture over a region file in somebody's save.
+//
+// The contents are forced to disk before the rename. This writes into a world
+// the player will open in Minecraft, and a region file that is a rename away
+// from complete but whose bytes never landed is a corrupt chunk rather than a
+// missing one.
 func writeFileAtomic(path string, data []byte) error {
-	temporary := path + ".tmp"
-	if err := os.WriteFile(temporary, data, 0o644); err != nil {
+	handle, err := os.CreateTemp(filepath.Dir(path), ".worldledger-tmp-*")
+	if err != nil {
+		return err
+	}
+	temporary := handle.Name()
+	if _, err := handle.Write(data); err != nil {
+		handle.Close()
+		os.Remove(temporary)
+		return err
+	}
+	if err := handle.Sync(); err != nil {
+		handle.Close()
+		os.Remove(temporary)
+		return err
+	}
+	if err := handle.Close(); err != nil {
+		os.Remove(temporary)
 		return err
 	}
 	if err := os.Rename(temporary, path); err != nil {
-		_ = os.Remove(temporary)
+		os.Remove(temporary)
 		return err
 	}
 	return nil

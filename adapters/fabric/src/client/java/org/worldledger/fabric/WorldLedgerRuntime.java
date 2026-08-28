@@ -44,7 +44,7 @@ public final class WorldLedgerRuntime {
 	public static void onFullChunkPacket(ClientboundLevelChunkWithLightPacket packet) {
 		CaptureCoordinator coordinator = COORDINATOR.get();
 		if (coordinator != null) {
-			coordinator.onFullChunkPacket(packet);
+			guard("a chunk packet", () -> coordinator.onFullChunkPacket(packet));
 		}
 	}
 
@@ -70,30 +70,59 @@ public final class WorldLedgerRuntime {
 	public static void onBlockUpdate(ClientboundBlockUpdatePacket packet) {
 		CaptureCoordinator coordinator = COORDINATOR.get();
 		if (coordinator != null) {
-			coordinator.onBlockApplied(packet.getPos());
+			guard("a block update", () -> coordinator.onBlockApplied(packet.getPos()));
 		}
 	}
 
 	public static void onSectionBlocksUpdate(ClientboundSectionBlocksUpdatePacket packet) {
 		CaptureCoordinator coordinator = COORDINATOR.get();
 		if (coordinator != null) {
-			packet.runUpdates((position, state) -> coordinator.onBlockApplied(position));
+			guard("a section block update", () -> packet.runUpdates((position, state) -> coordinator.onBlockApplied(position)));
 		}
 	}
 
 	public static void onBlockEntityData(ClientboundBlockEntityDataPacket packet) {
 		CaptureCoordinator coordinator = COORDINATOR.get();
 		if (coordinator != null) {
-			coordinator.onBlockEntityPacket(packet);
+			guard("a block entity packet", () -> coordinator.onBlockEntityPacket(packet));
 		}
 	}
 
 	public static void onBiomeUpdate(ClientboundChunksBiomesPacket packet) {
 		CaptureCoordinator coordinator = COORDINATOR.get();
 		if (coordinator != null) {
-			for (ClientboundChunksBiomesPacket.ChunkBiomeData data : packet.chunkBiomeData()) {
-				coordinator.onBiomeApplied(data.pos().x(), data.pos().z());
-			}
+			guard("a biome update", () -> {
+				for (ClientboundChunksBiomesPacket.ChunkBiomeData data : packet.chunkBiomeData()) {
+					coordinator.onBiomeApplied(data.pos().x(), data.pos().z());
+				}
+			});
+		}
+	}
+
+	/**
+	 * Runs one piece of capture work, and never lets it reach Minecraft.
+	 *
+	 * <p>This class is the seam between the game and this mod: the mixins inject
+	 * at the tail of vanilla's own packet handlers, and the event registrations
+	 * below run inside the client's tick and connection handling. Anything that
+	 * escapes from here unwinds into code that has no idea what this mod is, and
+	 * takes the client down with it.
+	 *
+	 * <p>Nothing this mod does is worth that. Capture is a passenger: it records
+	 * what the client was shown, and a session that records nothing is a session
+	 * that recorded nothing. A player losing their connection -- or their
+	 * afternoon -- because a chunk could not be read is the one outcome that is
+	 * worse than not capturing at all.
+	 *
+	 * <p>Errors are not caught. An OutOfMemoryError or a linkage failure is not
+	 * this mod's to absorb, and pretending to carry on after one would hide the
+	 * only evidence of what happened.
+	 */
+	private static void guard(String what, Runnable body) {
+		try {
+			body.run();
+		} catch (RuntimeException exception) {
+			LOGGER.error("Capture failed during {}; the client is unaffected", what, exception);
 		}
 	}
 
@@ -103,7 +132,7 @@ public final class WorldLedgerRuntime {
 			PENDING_JOIN.set(pending);
 			CaptureCoordinator coordinator = COORDINATOR.get();
 			if (coordinator != null && PENDING_JOIN.compareAndSet(pending, null)) {
-				coordinator.onJoin(client);
+				guard("joining a server", () -> coordinator.onJoin(client));
 			}
 		});
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -111,37 +140,37 @@ public final class WorldLedgerRuntime {
 			PENDING_JOIN.set(null);
 			CaptureCoordinator coordinator = COORDINATOR.get();
 			if (coordinator != null) {
-				coordinator.onDisconnect();
+				guard("leaving a server", coordinator::onDisconnect);
 			}
 		});
 		ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register((client, level) -> {
 			CaptureCoordinator coordinator = COORDINATOR.get();
 			if (coordinator != null) {
-				coordinator.onLevelChange(level);
+				guard("a dimension change", () -> coordinator.onLevelChange(level));
 			}
 		});
 		ClientChunkEvents.CHUNK_LOAD.register((level, chunk) -> {
 			CaptureCoordinator coordinator = COORDINATOR.get();
 			if (coordinator != null) {
-				coordinator.onChunkLoad(level, chunk);
+				guard("a chunk loading", () -> coordinator.onChunkLoad(level, chunk));
 			}
 		});
 		ClientChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> {
 			CaptureCoordinator coordinator = COORDINATOR.get();
 			if (coordinator != null) {
-				coordinator.onChunkUnload(level, chunk);
+				guard("a chunk unloading", () -> coordinator.onChunkUnload(level, chunk));
 			}
 		});
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			CaptureCoordinator coordinator = COORDINATOR.get();
 			if (coordinator != null) {
-				coordinator.onEndTick();
+				guard("the end of a tick", coordinator::onEndTick);
 			}
 		});
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
 			CaptureCoordinator coordinator = COORDINATOR.get();
 			if (coordinator != null) {
-				coordinator.onClientStopping();
+				guard("the client stopping", coordinator::onClientStopping);
 			}
 		});
 	}
@@ -158,7 +187,9 @@ public final class WorldLedgerRuntime {
 			if (pendingJoin != null) {
 				pendingJoin.client().execute(() -> {
 					if (CONNECTION_EPOCH.get() == pendingJoin.epoch() && COORDINATOR.get() == coordinator) {
-						coordinator.onJoin(pendingJoin.client());
+						// This runs on the client thread, so it needs the same
+						// guard as the join it stands in for.
+						guard("joining a server", () -> coordinator.onJoin(pendingJoin.client()));
 					}
 				});
 			}

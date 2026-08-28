@@ -257,7 +257,15 @@ func (a Archive) recoverTransactions() error {
 			continue
 		}
 		if filepath.Ext(entry.Name()) != ".json" {
-			return fmt.Errorf("unexpected transaction file %q", entry.Name())
+			// Refusing here refuses to open the archive at all, from every
+			// command, with no way to reach fsck to find out why. A desktop.ini,
+			// a .DS_Store, or a cloud sync service's conflict copy is enough --
+			// none of which says anything about whether the transactions are
+			// sound, and none of which anybody could act on from the message.
+			//
+			// A file this package did not write is not a transaction, so it is
+			// not replayed and not treated as damage.
+			continue
 		}
 		if err := a.recoverTransaction(filepath.Join(dir, entry.Name())); err != nil {
 			return err

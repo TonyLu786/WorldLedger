@@ -84,6 +84,9 @@ type SpoolState struct {
 	// folder anyway, so the page can say the recordings still exist rather than
 	// leaving somebody to assume they were consumed.
 	Imported int `json:"imported"`
+	// Unreadable carries why the folder could not be read, when it could not be.
+	// Empty on the ordinary path.
+	Unreadable string `json:"unreadable,omitempty"`
 	// ImportedBytes is what those are costing inside the Minecraft directory.
 	//
 	// Keeping them is the safe default and stays the default. Not saying what
@@ -179,7 +182,12 @@ func readSpoolState() *SpoolState {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return &SpoolState{Dir: dir}
+		// A folder that cannot be read is not an empty folder. Returning zero
+		// counts made the play screen say "Nothing new since last time" about a
+		// folder it had failed to open -- while the import screen, given the
+		// same folder, said so honestly. Two screens disagreeing about one
+		// directory, and the reassuring one was wrong.
+		return &SpoolState{Dir: dir, Unreadable: err.Error()}
 	}
 	return &SpoolState{
 		Dir:           dir,

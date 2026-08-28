@@ -293,8 +293,40 @@ type Received struct {
 // own identity rules reject a record whose id does not match its contents. A
 // bundle from an untrusted peer therefore cannot introduce anything the archive
 // would not have accepted from its own adapter.
+// Sizes a peer does not get to choose.
+//
+// internal/bundle caps four dimensions on the adapter path, which is the less
+// untrusted of the two: the bundles it reads were written by a mod on the same
+// machine. This path reads a directory somebody else assembled and had no caps
+// at all, so a peer's bundle.json was read whole into memory whatever its size.
+// The numbers are generous against any real bundle and finite against a hostile
+// one.
+const (
+	maxTransferManifestBytes = 8 << 20
+	maxRecordBytes           = 1 << 20
+)
+
+func readAtMost(path string, max int64) ([]byte, error) {
+	handle, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer handle.Close()
+	// One byte past the limit, so a file exactly at it is accepted and anything
+	// larger is refused rather than silently truncated into something that
+	// might still parse.
+	data, err := io.ReadAll(io.LimitReader(handle, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > max {
+		return nil, fmt.Errorf("%s is larger than %d bytes", filepath.Base(path), max)
+	}
+	return data, nil
+}
+
 func Receive(a archive.Archive, dir string) (Received, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "bundle.json"))
+	data, err := readAtMost(filepath.Join(dir, "bundle.json"), maxTransferManifestBytes)
 	if err != nil {
 		return Received{}, err
 	}
@@ -338,7 +370,7 @@ func Receive(a archive.Archive, dir string) (Received, error) {
 		if err := validateDigest(id); err != nil {
 			return Received{}, err
 		}
-		raw, err := os.ReadFile(filepath.Join(dir, "observations", id+".json"))
+		raw, err := readAtMost(filepath.Join(dir, "observations", id+".json"), maxRecordBytes)
 		if err != nil {
 			return Received{}, fmt.Errorf("observation %s declared but missing: %w", id[:12], err)
 		}
@@ -396,7 +428,7 @@ func Receive(a archive.Archive, dir string) (Received, error) {
 		if strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
 			return Received{}, fmt.Errorf("attestation %q: a name may not contain a path", name)
 		}
-		body, err := os.ReadFile(filepath.Join(dir, "attestations", name))
+		body, err := readAtMost(filepath.Join(dir, "attestations", name), maxRecordBytes)
 		if err != nil {
 			return Received{}, fmt.Errorf("attestation %s: %w", name, err)
 		}
