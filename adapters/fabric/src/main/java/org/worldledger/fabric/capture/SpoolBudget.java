@@ -21,6 +21,20 @@ import java.util.stream.Stream;
  * make room for one that has not been taken yet. Refusing to capture more loses
  * only what was never recorded, and it is visible: the session reports that it
  * stopped and why.
+ *
+ * <p>The ceiling counts what the bundles come to, which is not what the folder
+ * occupies. A component repeated across bundles is written once and hard-linked
+ * from each of them, so the disk holds one copy where this counts several, and
+ * on a session that revisits the same terrain it can be counting many. That is
+ * deliberate rather than an oversight to be corrected: the declared total is
+ * the same number on every filesystem, it is what an import will have to read,
+ * and it can be arrived at without asking a filesystem questions that Windows
+ * does not answer. Keeping the disk itself safe is what minFreeBytes is for,
+ * and that one is a reading.
+ *
+ * <p>What does not follow is telling somebody their spool holds four gigabytes
+ * when the folder they are about to open holds a fraction of it, so the notice
+ * says what was counted.
  */
 public final class SpoolBudget {
 	/**
@@ -42,7 +56,13 @@ public final class SpoolBudget {
 		DISK_LOW
 	}
 
-	public record Status(State state, long spoolBytes, long usableBytes, String detail) {
+	/**
+	 * @param bundleBytes what the spool's bundles come to, counting a shared
+	 *     component once per bundle that names it
+	 * @param usableBytes what the filesystem says is free, or -1 if it would
+	 *     not say
+	 */
+	public record Status(State state, long bundleBytes, long usableBytes, String detail) {
 		public Status {
 			Objects.requireNonNull(state, "state");
 			Objects.requireNonNull(detail, "detail");
@@ -80,7 +100,9 @@ public final class SpoolBudget {
 
 		if (used >= maxBytes) {
 			return new Status(State.SPOOL_FULL, used, usable, String.format(
-					"spool holds %s and the budget is %s; import and clear it to resume capture",
+					"the spooled bundles come to %s against a budget of %s; import and clear the"
+							+ " spool to resume capture. Bundles share their repeated components,"
+							+ " so the folder itself holds less than that",
 					readable(used), readable(maxBytes)));
 		}
 		if (minFreeBytes > 0 && usable >= 0 && usable < minFreeBytes) {
@@ -91,7 +113,13 @@ public final class SpoolBudget {
 		return new Status(State.OK, used, usable, "within budget");
 	}
 
-	/** Total bytes currently held by the spool, including partial entries. */
+	/**
+	 * What the spool's files add up to, including partial entries.
+	 *
+	 * <p>A sum of declared sizes, so a component hard-linked into several
+	 * bundles is counted once for each of them. See the note on this class for
+	 * why that is the number the ceiling is set against.
+	 */
 	public long measure() {
 		if (!Files.isDirectory(spoolDirectory)) {
 			return 0L;

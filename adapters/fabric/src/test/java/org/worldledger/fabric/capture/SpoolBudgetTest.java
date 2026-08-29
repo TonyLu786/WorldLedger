@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -23,7 +24,7 @@ final class SpoolBudgetTest {
 		SpoolBudget budget = new SpoolBudget(root.resolve("spool"), 1024, 0);
 		SpoolBudget.Status status = budget.check();
 		assertTrue(status.allowsCapture());
-		assertEquals(0L, status.spoolBytes());
+		assertEquals(0L, status.bundleBytes());
 	}
 
 	@Test
@@ -34,6 +35,50 @@ final class SpoolBudgetTest {
 		writeBytes(spool.resolve("ready-b").resolve("components"), "blocks.bin", 500);
 
 		assertEquals(1000L, new SpoolBudget(spool, 1 << 20, 0).measure());
+	}
+
+	/**
+	 * The writer stores a component repeated across bundles once and hard-links
+	 * it from each, so this is a case where the sum is bigger than the folder.
+	 *
+	 * <p>Counting it per bundle is the choice, not an accident. A walk cannot
+	 * tell a link from a copy on Windows, which is where most of this runs, so
+	 * the alternative is a ceiling that means one thing on one filesystem and
+	 * something else on another. What the change was for is the notice: it no
+	 * longer tells somebody the folder holds a figure the folder does not hold.
+	 */
+	@Test
+	void aComponentSharedBetweenBundlesCountsForEachBundleThatNamesIt(@TempDir Path root)
+			throws IOException {
+		Path spool = root.resolve("spool");
+		Path first = spool.resolve("ready-a").resolve("components").resolve("blocks.bin");
+		Files.createDirectories(first.getParent());
+		Files.write(first, new byte[400]);
+
+		Path second = spool.resolve("ready-b").resolve("components").resolve("blocks.bin");
+		Files.createDirectories(second.getParent());
+		try {
+			Files.createLink(second, first);
+		} catch (IOException | UnsupportedOperationException | SecurityException unsupported) {
+			Assumptions.abort("this filesystem has no hard links, which is the whole subject");
+		}
+
+		assertEquals(800L, new SpoolBudget(spool, 1 << 20, 0).measure());
+	}
+
+	/**
+	 * The notice a person acts on. It used to open with "spool holds 4.0 GiB",
+	 * and somebody who then opened the folder would find a fraction of that and
+	 * conclude the program was wrong about the one thing it was measuring.
+	 */
+	@Test
+	void theNoticeDoesNotClaimTheFolderIsAsBigAsTheSum(@TempDir Path root) throws IOException {
+		Path spool = root.resolve("spool");
+		writeBytes(spool.resolve("ready-a"), "bundle.json", 2000);
+
+		String detail = new SpoolBudget(spool, 1000, 0).check().detail();
+		assertTrue(detail.contains("bundles"), "what was counted is not named: " + detail);
+		assertTrue(detail.contains("holds less"), "the folder is not smaller than the sum: " + detail);
 	}
 
 	@Test
