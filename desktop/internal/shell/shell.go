@@ -24,6 +24,9 @@ const (
 	// InWindow means Present ran a window and has now returned because it was
 	// closed.
 	InWindow
+	// Unopened means nothing could be shown at all. The address is in the note
+	// and only a person can act on it, so that note has to reach one.
+	Unopened
 )
 
 // Present shows the page.
@@ -42,28 +45,42 @@ func Present(url string, preferBrowser bool) (Mode, string) {
 		}
 		if note != "" {
 			if err := openBrowser(url); err != nil {
-				return InBrowser, note + "; and the browser could not be opened either: " + err.Error() +
-					"\nopen this address yourself: " + url
+				return Unopened, note + "; and the browser could not be opened either: " + err.Error() +
+					"\n\nOpen this address yourself:\n" + url
 			}
 			return InBrowser, note + "; opened in the browser instead"
 		}
 	}
 	if err := openBrowser(url); err != nil {
-		return InBrowser, "could not open a browser: " + err.Error() + "\nopen this address yourself: " + url
+		return Unopened, "could not open a browser: " + err.Error() + "\n\nOpen this address yourself:\n" + url
 	}
 	return InBrowser, ""
 }
 
 // openBrowser hands the address to whatever the system uses for one.
+//
+// Success here means the request was accepted, not that a page loaded. The
+// launcher exits as soon as it has passed the address on, and whether a browser
+// then starts, and reaches the server, and stays open, is not in the answer.
+// That gap is what the watchdog's arrival deadline covers.
 func openBrowser(url string) error {
+	var launcher *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
 		// rundll32 rather than `cmd /c start`, which treats the first quoted
 		// argument as a window title and would need an empty one placed just so.
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		launcher = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	case "darwin":
-		return exec.Command("open", url).Start()
+		launcher = exec.Command("open", url)
 	default:
-		return exec.Command("xdg-open", url).Start()
+		launcher = exec.Command("xdg-open", url)
 	}
+	if err := launcher.Start(); err != nil {
+		return err
+	}
+	// Collected in the background. The launcher exits almost immediately, and a
+	// child nobody waits for stays in the process table for as long as this
+	// program runs.
+	go launcher.Wait()
+	return nil
 }

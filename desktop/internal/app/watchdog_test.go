@@ -97,3 +97,57 @@ func TestReportingInGoesThroughTheServerLikeEverythingElse(t *testing.T) {
 		t.Fatalf("status %d with the token, want %d", response.StatusCode, http.StatusOK)
 	}
 }
+
+// The hole the ordinary timer left. Asking the system to open a browser
+// succeeds the moment the request is handed over, so nothing downstream knows
+// whether a page ever loaded. If none does, waiting for a first report waits
+// forever, and on a Windows build with no console that is a process with
+// nothing to close it by.
+func TestAPageThatNeverArrivesEndsIt(t *testing.T) {
+	wd := NewWatchdog(time.Hour)
+	wd.ExpectPage(20 * time.Millisecond)
+	if wd.expired() {
+		t.Fatal("the program was ended before the page had been given time to load")
+	}
+
+	time.Sleep(60 * time.Millisecond)
+	if !wd.expired() {
+		t.Fatal("a page that never loaded left the program running")
+	}
+	if !wd.NeverAppeared() {
+		t.Error("the program cannot tell this apart from a page somebody closed")
+	}
+}
+
+// The deadline is for a page that never comes, not for a slow one. A browser
+// that takes its time starting up must not be given up on the moment it
+// reports.
+func TestAPageThatArrivesInsideTheDeadlineIsKept(t *testing.T) {
+	wd := NewWatchdog(time.Hour)
+	wd.ExpectPage(50 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	wd.beat()
+
+	// Past the deadline it was given, and irrelevant now that it is here.
+	time.Sleep(60 * time.Millisecond)
+	if wd.expired() {
+		t.Fatal("a page that loaded inside its deadline was given up on anyway")
+	}
+	if wd.NeverAppeared() {
+		t.Error("a page that reported in is recorded as never having appeared")
+	}
+}
+
+// Present returns as soon as the browser has been asked, which can be after the
+// page has already loaded and reported. A deadline set then would be a second
+// way to kill a working page.
+func TestADeadlineSetAfterThePageIsAlreadyThereIsIgnored(t *testing.T) {
+	wd := NewWatchdog(time.Hour)
+	wd.beat()
+	wd.ExpectPage(20 * time.Millisecond)
+
+	time.Sleep(60 * time.Millisecond)
+	if wd.expired() {
+		t.Fatal("a page that was already reporting was ended by an arrival deadline")
+	}
+}

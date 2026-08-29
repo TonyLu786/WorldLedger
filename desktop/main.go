@@ -95,21 +95,43 @@ func run() error {
 	// is worth saying once, and then the browser gets the same application.
 	mode, note := shell.Present(server.URL(), *useBrowser)
 	if note != "" {
-		fmt.Fprintln(os.Stderr, note)
+		if mode == shell.Unopened {
+			// Nothing is on screen and the address is in here, so this has to
+			// reach somebody even on a build that cannot print.
+			shell.Tell(note)
+		} else {
+			fmt.Fprintln(os.Stderr, note)
+		}
 	}
 
-	// The two ways of showing the page end differently, and getting this wrong
+	// The three ways this can have gone end differently, and getting it wrong
 	// leaves somebody with a program they cannot see and cannot close. A window
 	// closing is the program being closed, and Present has already returned by
 	// the time we are here. A browser tab closing tells nobody anything, so the
 	// page reports in while it is open and the quiet is what ends this.
-	if mode == shell.InWindow {
+	switch mode {
+	case shell.InWindow:
 		return nil
+	case shell.InBrowser:
+		// A browser was asked for. Two minutes is long enough for a cold start
+		// on a slow machine and short enough that a browser which never arrives
+		// does not leave this running unseen.
+		watchdog.ExpectPage(2 * time.Minute)
+	default:
+		// Nobody was asked for anything: the address is on somebody's screen
+		// and they have to go and open it. That takes as long as reading and
+		// typing takes, so the wait is much longer. It is still a wait, though,
+		// because the alternative is a process that outlives the person's
+		// interest in it.
+		watchdog.ExpectPage(15 * time.Minute)
 	}
 	select {
 	case err := <-errs:
 		return err
 	case <-abandoned:
+		if watchdog.NeverAppeared() {
+			fmt.Fprintln(os.Stderr, "no page ever opened, so there was nothing to keep running for")
+		}
 		return nil
 	}
 }
