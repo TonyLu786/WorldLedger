@@ -48,6 +48,11 @@ func cmdFingerprint(args []string) error {
 			return err
 		}
 		fingerprint = loaded
+		// Said once, wherever this fingerprint is going: to a file, to a pipe,
+		// to a comparison, or to a negotiation that decides what a peer sends.
+		if err := noteWhatAHandOffDiscloses(a, "fingerprint"); err != nil {
+			return err
+		}
 	}
 
 	if *compareWith != "" && *negotiateWith != "" {

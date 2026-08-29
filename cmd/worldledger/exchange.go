@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/worldledger/worldledger-mc/internal/archive"
+	"github.com/worldledger/worldledger-mc/internal/redact"
 )
 
 // Merging two archives is the thing this project claims a world downloader
@@ -125,4 +127,45 @@ func printHandOff(kind, path string) {
 		fmt.Println("  they run: worldledger send --archive THEIRS --to my-fingerprint.txt \\")
 		fmt.Printf("      --their-manifest %s --out ./outbound\n", path)
 	}
+}
+
+// noteWhatAHandOffDiscloses says that the file about to be handed over is not
+// filtered by this archive's redactions.
+//
+// send withholds them and reports the count. A fingerprint and a manifest
+// describe everything, and that is deliberate: a peer works out what to send
+// from a complete picture, and one filtered down to what its author was willing
+// to share would have them send bytes this archive already holds, or skip
+// chunks it does not. But it is still a disclosure. Somebody who withdrew
+// consent is not in the file, and the chunks and digests their observations
+// account for are.
+//
+// Until now the only place that was written down was a design document. The
+// person writing the file is the one making the disclosure, so this is where it
+// belongs.
+func noteWhatAHandOffDiscloses(a archive.Archive, kind string) error {
+	declared, err := redact.NewStore(a.Root).List()
+	if err != nil {
+		// About to hand somebody a file, and unable to say what was supposed to
+		// be kept out of it. Everything else that touches redactions stops here
+		// and so does this.
+		return fmt.Errorf("read declared redactions: %w", err)
+	}
+	if note := handOffDisclosure(kind, len(declared)); note != "" {
+		fmt.Fprint(os.Stderr, note)
+	}
+	return nil
+}
+
+// handOffDisclosure is the wording, kept apart from the printing so that what
+// it says can be tested.
+func handOffDisclosure(kind string, redactions int) string {
+	if redactions == 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"note: %d declared redaction(s) do not apply to a %s. It describes every\n"+
+			"      observation, so a copy handed to somebody discloses the chunks and\n"+
+			"      digests that `send` would withhold.\n",
+		redactions, kind)
 }

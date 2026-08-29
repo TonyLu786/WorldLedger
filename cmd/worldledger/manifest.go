@@ -32,6 +32,9 @@ func cmdManifest(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := noteWhatAHandOffDiscloses(a, "manifest"); err != nil {
+		return err
+	}
 
 	if *compareWith != "" {
 		return reportComparison(manifest, *compareWith, *archivePath)
