@@ -15,6 +15,14 @@ type Policy string
 // PolicyCorroboratedFirst prefers a state reported by two or more independent
 // contributors and falls back to the most recent state when no state is
 // corroborated or when corroboration is tied.
+//
+// The count comes first and takes no account of when those contributors looked,
+// so a state agreed by more people wins even when every one of their
+// observations predates a more recent observation of something else. Four
+// contributors who last saw a chunk between twenty and sixty minutes ago
+// outvote two who saw it change a minute ago, and the answer is reported as
+// corroborated. Whether that is what the word should mean here is
+// docs/decisions/0003-corroboration-and-time.md, which is open.
 const PolicyCorroboratedFirst Policy = "corroborated-first"
 
 type Status string

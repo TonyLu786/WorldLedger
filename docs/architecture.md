@@ -86,6 +86,8 @@ Observations for the same chunk are grouped into a configurable time window. Wit
 
 A conflict is never resolved by majority vote in the core. Time uncertainty, world changes, packet ordering, incomplete components, malicious submissions, and capture bugs all require more context than a vote count provides.
 
+That describes `internal/verify`. The selection that decides what an exported world contains lives in `internal/epoch`, and it does count contributors, before consulting the window rather than after: a state agreed by more contributors wins even when every one of those observations predates a more recent observation of something else. Whether that is what corroboration should mean is [ADR 0003](decisions/0003-corroboration-and-time.md), which is open.
+
 Future verification can add signed contributors, capture confidence, clock uncertainty, component-level comparison, and transition inference without invalidating the original observations.
 
 ## Server identity
