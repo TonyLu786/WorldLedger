@@ -187,7 +187,7 @@ func (o *Observation) Finalize() error {
 	o.Chunk.Dimension = NormalizeToken(o.Chunk.Dimension)
 	o.Source.Contributor = trimIdentitySpace(o.Source.Contributor)
 	o.Source.Agent = strings.TrimSpace(o.Source.Agent)
-	o.Protocol = strings.TrimSpace(o.Protocol)
+	o.Protocol = trimIdentitySpace(o.Protocol)
 	o.ObservedAt = o.ObservedAt.UTC()
 	if o.ReceivedAt.IsZero() {
 		o.ReceivedAt = time.Now().UTC()
@@ -243,6 +243,9 @@ func validateFields(o Observation) error {
 	if err := requireIdentityUTF8("source.contributor", o.Source.Contributor); err != nil {
 		return err
 	}
+	if err := requireIdentityUTF8("protocol", o.Protocol); err != nil {
+		return err
+	}
 	if len(o.Components) == 0 {
 		return errors.New("at least one component is required")
 	}
@@ -292,7 +295,7 @@ func ObservationID(o Observation) string {
 	writeI32(&b, o.Chunk.X)
 	writeI32(&b, o.Chunk.Z)
 	writeInstant(&b, o.ObservedAt)
-	writeString(&b, strings.TrimSpace(o.Protocol))
+	writeString(&b, trimIdentitySpace(o.Protocol))
 	writeString(&b, trimIdentitySpace(o.Source.Contributor))
 	writeString(&b, StateDigest(o.Components))
 	sum := sha256.Sum256(b.Bytes())
