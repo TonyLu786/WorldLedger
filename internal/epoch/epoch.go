@@ -189,9 +189,10 @@ func latestPerContributor(observations []model.Observation, at time.Time) []mode
 		if o.ObservedAt.After(at) {
 			continue
 		}
-		current, exists := byContributor[o.Source.Contributor]
+		key := model.ContributorKey(o.Source.Contributor)
+		current, exists := byContributor[key]
 		if !exists || observationBefore(current, o) {
-			byContributor[o.Source.Contributor] = o
+			byContributor[key] = o
 		}
 	}
 	out := make([]model.Observation, 0, len(byContributor))
@@ -280,7 +281,7 @@ func observationBefore(left, right model.Observation) bool {
 func uniqueContributors(observations []model.Observation) []string {
 	seen := map[string]struct{}{}
 	for _, o := range observations {
-		seen[o.Source.Contributor] = struct{}{}
+		seen[model.ContributorKey(o.Source.Contributor)] = struct{}{}
 	}
 	out := make([]string, 0, len(seen))
 	for contributor := range seen {

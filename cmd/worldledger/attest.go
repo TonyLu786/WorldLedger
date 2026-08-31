@@ -271,7 +271,7 @@ func cmdAttestSign(args []string) error {
 		// key to a claim it cannot support. Corroborating another contributor
 		// is a different act than attesting to your own work, and conflating
 		// them would make the signature mean less than nothing.
-		if !strings.EqualFold(strings.TrimSpace(observation.Source.Contributor), label) {
+		if model.ContributorKey(observation.Source.Contributor) != model.ContributorKey(label) {
 			skipped++
 			continue
 		}

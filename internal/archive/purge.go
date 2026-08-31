@@ -224,7 +224,7 @@ func (a Archive) referencesByDigestLocked(interesting map[string]model.BlobRef) 
 			if _, wanted := interesting[ref.Digest]; !wanted {
 				continue
 			}
-			contributor := observation.Source.Contributor
+			contributor := model.ContributorKey(observation.Source.Contributor)
 			if contributor == "" {
 				contributor = "(unnamed)"
 			}

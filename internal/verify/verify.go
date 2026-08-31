@@ -84,7 +84,7 @@ func summarize(start, end time.Time, obs []model.Observation) Window {
 func uniqueContributors(obs []model.Observation) []string {
 	seen := map[string]struct{}{}
 	for _, o := range obs {
-		seen[o.Source.Contributor] = struct{}{}
+		seen[model.ContributorKey(o.Source.Contributor)] = struct{}{}
 	}
 	out := make([]string, 0, len(seen))
 	for contributor := range seen {

@@ -92,11 +92,16 @@ func (r Redaction) Validate() error {
 // capitalisation would leave behind exactly what someone asked to have removed.
 // Matching too much withholds data that could have been shared, which is the
 // error worth preferring here.
+//
+// It goes through model.ContributorKey rather than folding the two labels here.
+// This file reached that conclusion first and kept it to itself, while the
+// corroboration count went on treating the same two labels as two people. One
+// function is what stops them drifting apart again.
 func (r Redaction) Matches(observation model.Observation) bool {
 	if model.NormalizeToken(r.Server) != model.NormalizeToken(observation.Chunk.ServerID) {
 		return false
 	}
-	if r.Contributor != "" && !strings.EqualFold(strings.TrimSpace(r.Contributor), strings.TrimSpace(observation.Source.Contributor)) {
+	if r.Contributor != "" && model.ContributorKey(r.Contributor) != model.ContributorKey(observation.Source.Contributor) {
 		return false
 	}
 	if r.Dimension != "" && model.NormalizeToken(r.Dimension) != model.NormalizeToken(observation.Chunk.Dimension) {
@@ -130,7 +135,7 @@ func (r Redaction) deriveID() string {
 	var buffer bytes.Buffer
 	buffer.WriteString(model.NormalizeToken(r.Server))
 	buffer.WriteByte(0)
-	buffer.WriteString(strings.ToLower(strings.TrimSpace(r.Contributor)))
+	buffer.WriteString(model.ContributorKey(r.Contributor))
 	buffer.WriteByte(0)
 	buffer.WriteString(model.NormalizeToken(r.Dimension))
 	buffer.WriteByte(0)

@@ -89,11 +89,12 @@ func (c ChunkChange) Contributors() []string {
 	seen := make(map[string]struct{}, len(c.Revisits))
 	out := make([]string, 0, len(c.Revisits))
 	for _, r := range c.Revisits {
-		if _, dup := seen[r.Contributor]; dup {
+		key := model.ContributorKey(r.Contributor)
+		if _, dup := seen[key]; dup {
 			continue
 		}
-		seen[r.Contributor] = struct{}{}
-		out = append(out, r.Contributor)
+		seen[key] = struct{}{}
+		out = append(out, key)
 	}
 	return out
 }
@@ -171,7 +172,7 @@ func BuildDiff(server, dimension string, from, to time.Time, inputs []ChunkInput
 			diff.Summary.NeverSeen++
 		}
 		for _, r := range change.Revisits {
-			contributors[r.Contributor] = struct{}{}
+			contributors[model.ContributorKey(r.Contributor)] = struct{}{}
 		}
 	}
 
