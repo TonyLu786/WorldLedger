@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -54,8 +55,25 @@ type FingerprintComponent struct {
 
 // Fingerprint walks the whole archive under one lock. Passing a server limits
 // the result to that server; an empty string covers every server.
+//
+// The lock is taken here and the walk uses the helpers that expect to be called
+// under it. It used to call the exported Servers, Dimensions and
+// DimensionObservations, each of which takes the lock itself and gives it back:
+// for S servers and D dimensions that was 1+S+D acquisitions with the archive
+// unlocked in between, so an import running alongside could be half applied
+// when one part of the walk read it and fully applied by the time another did.
+// The result was a fingerprint of a state that had never existed as a whole,
+// which is the thing Manifest's comment says it prevents and this one claimed
+// to. It is also the file two machines compare to decide they hold the same
+// bytes, and the input to what a mirror is told to send.
 func (a Archive) Fingerprint(serverFilter string) (Fingerprint, error) {
-	servers, err := a.Servers()
+	lock, err := acquireArchiveLock(a.Root)
+	if err != nil {
+		return Fingerprint{}, fmt.Errorf("lock archive: %w", err)
+	}
+	defer lock.Close()
+
+	servers, err := readEncodedNames(filepath.Join(a.Root, "index", "chunks"))
 	if err != nil {
 		return Fingerprint{}, err
 	}
@@ -68,12 +86,12 @@ func (a Archive) Fingerprint(serverFilter string) (Fingerprint, error) {
 		if serverFilter != "" && server != serverFilter {
 			continue
 		}
-		dimensions, err := a.Dimensions(server)
+		dimensions, err := readEncodedNames(filepath.Join(a.Root, "index", "chunks", safe(server)))
 		if err != nil {
 			return Fingerprint{}, err
 		}
 		for _, dimension := range dimensions {
-			chunks, err := a.DimensionObservations(server, dimension)
+			chunks, err := a.dimensionObservationsLocked(server, dimension)
 			if err != nil {
 				return Fingerprint{}, err
 			}

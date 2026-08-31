@@ -53,7 +53,14 @@ func (a Archive) DimensionObservations(serverID, dimension string) ([]ChunkObser
 		return nil, fmt.Errorf("lock archive: %w", err)
 	}
 	defer lock.Close()
+	return a.dimensionObservationsLocked(serverID, dimension)
+}
 
+// dimensionObservationsLocked is the same walk for a caller that already holds
+// the lock. The archive lock is one exclusive lock and it is not reentrant on
+// either platform, so a caller that took it and then called the exported
+// method would not read a stale view: it would stop dead.
+func (a Archive) dimensionObservationsLocked(serverID, dimension string) ([]ChunkObservations, error) {
 	chunks, err := a.chunksLocked(serverID, dimension)
 	if err != nil {
 		return nil, err
