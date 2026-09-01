@@ -30,6 +30,25 @@ type Limits struct {
 	MaxNBTBytes        int
 	MaxNBTDepth        int
 	MaxCollectionItems int
+	// MaxNBTValues bounds how many NBT values one component may materialise,
+	// counting list elements and compound entries across every nested decode.
+	//
+	// The byte limits alone did not bound memory, because the smallest thing
+	// that produces an NBT value is one byte and the value itself is a hundred
+	// and fifty-two. A list of that many TAG_Byte elements turns a mebibyte of
+	// input into a hundred and fifty of heap, and block entities are decoded
+	// one after another out of a single component, so the real ceiling was the
+	// component limit times the same factor: sixty-four mebibytes of input
+	// against roughly nine and a half gibibytes of memory. The bytes arrive
+	// undecoded in a bundle from anybody, sit in the object store, and are
+	// decoded much later when somebody exports a world.
+	//
+	// The count is what has to be bounded, because the count is what is
+	// allocated. Half a million holds one component to about eighty mebibytes
+	// of materialised NBT. The adapter will not put more than four thousand
+	// block entities in a chunk, so that is over a hundred values each before
+	// anything real comes close.
+	MaxNBTValues int
 }
 
 func DefaultLimits() Limits {
@@ -39,6 +58,7 @@ func DefaultLimits() Limits {
 		MaxNBTBytes:        1 << 20,
 		MaxNBTDepth:        64,
 		MaxCollectionItems: 1 << 20,
+		MaxNBTValues:       1 << 19,
 	}
 }
 
@@ -362,7 +382,10 @@ func (limits Limits) normalized() (Limits, error) {
 	if limits.MaxCollectionItems == 0 {
 		limits.MaxCollectionItems = defaults.MaxCollectionItems
 	}
-	if limits.MaxComponentBytes < 0 || limits.MaxStringBytes < 0 || limits.MaxNBTBytes < 0 || limits.MaxNBTDepth < 0 || limits.MaxCollectionItems < 0 {
+	if limits.MaxNBTValues == 0 {
+		limits.MaxNBTValues = defaults.MaxNBTValues
+	}
+	if limits.MaxComponentBytes < 0 || limits.MaxStringBytes < 0 || limits.MaxNBTBytes < 0 || limits.MaxNBTDepth < 0 || limits.MaxCollectionItems < 0 || limits.MaxNBTValues < 0 {
 		return Limits{}, errors.New("canonicalization limits must be positive")
 	}
 	if limits.MaxNBTBytes > limits.MaxComponentBytes {

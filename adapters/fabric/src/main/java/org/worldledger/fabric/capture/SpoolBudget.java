@@ -2,8 +2,12 @@ package org.worldledger.fabric.capture;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -124,11 +128,74 @@ public final class SpoolBudget {
 		if (!Files.isDirectory(spoolDirectory)) {
 			return 0L;
 		}
-		try (Stream<Path> entries = Files.walk(spoolDirectory)) {
-			return entries.filter(Files::isRegularFile).mapToLong(SpoolBudget::sizeOf).sum();
+		long total = 0L;
+		try (Stream<Path> top = Files.list(spoolDirectory)) {
+			for (Path entry : (Iterable<Path>) top::iterator) {
+				if (!countsTowardBudget(entry.getFileName().toString())) {
+					continue;
+				}
+				total += sizeOfTree(entry);
+			}
+		} catch (NoSuchFileException vanished) {
+			// The spool itself went while this was reading it, which is what an
+			// import doing its job looks like. Nothing left to count.
+			return total;
 		} catch (IOException exception) {
 			throw new UncheckedIOException(exception);
 		}
+		return total;
+	}
+
+	/**
+	 * Whether an entry in the spool is work this budget is meant to bound.
+	 *
+	 * <p>The budget exists to stop an unattended client filling a disk with
+	 * captures nobody has taken in yet. It used to add up every file under the
+	 * spool, and the other half of this project renames a bundle to
+	 * {@code imported-} rather than deleting it, on the reasoning that a window
+	 * must not destroy somebody's only copy on the strength of one button. That
+	 * reasoning is right and its note says the new name "is invisible to" the
+	 * adapter, which was the part that was not true.
+	 *
+	 * <p>So a contributor who imports every evening accumulated toward the
+	 * ceiling anyway, and when it tripped, capture stopped for good and the
+	 * notice told them to import and clear the spool: exactly what they had been
+	 * doing. Quarantined bundles counted too, and nothing on either side of the
+	 * boundary ever removes those.
+	 */
+	private static boolean countsTowardBudget(String name) {
+		return name.startsWith("ready-") || name.startsWith(".tmp-");
+	}
+
+	/**
+	 * Adds up one bundle, tolerating its disappearance.
+	 *
+	 * <p>An import deletes bundles while the client is still running, which is
+	 * the documented next step and not a race anybody should have to avoid.
+	 * {@link Files#walk} aborts the whole traversal when a subtree vanishes
+	 * mid-walk, and the resulting UncheckedIOException escaped the budget check,
+	 * left the writer's failure handler with something that was not a full
+	 * spool, and lost the chunk that was being written.
+	 */
+	private static long sizeOfTree(Path root) throws IOException {
+		long[] total = {0L};
+		Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+				if (attributes.isRegularFile()) {
+					total[0] += attributes.size();
+				}
+				return FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public FileVisitResult visitFileFailed(Path file, IOException failure) {
+				// Gone between being listed and being read. It is not in the
+				// spool, so it is not in the total.
+				return FileVisitResult.CONTINUE;
+			}
+		});
+		return total[0];
 	}
 
 	private long usableSpace() {

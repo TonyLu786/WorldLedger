@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/worldledger/worldledger-mc/internal/model"
 )
 
 const FingerprintSchema = "worldledger.capture-fingerprint/v1"
@@ -72,6 +74,14 @@ func (a Archive) Fingerprint(serverFilter string) (Fingerprint, error) {
 		return Fingerprint{}, fmt.Errorf("lock archive: %w", err)
 	}
 	defer lock.Close()
+
+	// The names on disk are normalized, because that is what safe() encodes, so
+	// the filter has to be too. It was compared raw, and every other command
+	// that takes a server normalizes: --server EXAMPLE.ORG found the chunks
+	// through coverage and produced an empty fingerprint here, with the root of
+	// an empty tree and exit 0. That is indistinguishable from an archive that
+	// holds nothing, and handing it to a peer asks them to send everything.
+	serverFilter = model.NormalizeToken(serverFilter)
 
 	servers, err := readEncodedNames(filepath.Join(a.Root, "index", "chunks"))
 	if err != nil {
@@ -222,6 +232,12 @@ func ParseFingerprint(r io.Reader) (Fingerprint, error) {
 			continue
 		}
 		fields := strings.Fields(text)
+		if len(fields) == 0 {
+			// Not empty and holding nothing: a line of spaces, which any editor
+			// or transport can introduce. This indexed fields[0] and took the
+			// program down with a stack trace on a file a peer supplied.
+			continue
+		}
 		switch {
 		case fields[0] == "state" && len(fields) == 6:
 			x, err := strconv.ParseInt(fields[3], 10, 32)

@@ -150,15 +150,46 @@ func (s Store) putAlreadyStored(r io.Reader, expected model.BlobRef) (model.Blob
 	return ref, nil
 }
 
+// LooksLikeDigest reports whether a string is the only thing this store will
+// turn into a path: sixty-four lowercase hexadecimal characters.
+//
+// Everything here joins a digest onto the store's root, and the check used to
+// be that the string had four characters. A digest is not always something this
+// program computed. It arrives from a purge journal recovered off disk, from an
+// observation record, and from a bundle a stranger assembled, and
+// filepath.Join cleans what it is given: a "digest" of "../../../../victim.txt"
+// resolves to a path four levels above the archive, which Remove then deletes.
+// Opening an archive replays a purge journal, so that was reachable from every
+// command in the program.
+//
+// Validating in the one place every path is built is what makes the whole
+// family fail closed, rather than each caller remembering.
+func LooksLikeDigest(digest string) bool {
+	if len(digest) != sha256.Size*2 {
+		return false
+	}
+	for i := 0; i < len(digest); i++ {
+		c := digest[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 func (s Store) Path(ref model.BlobRef) string {
-	if len(ref.Digest) < 4 {
+	if !LooksLikeDigest(ref.Digest) {
 		return ""
 	}
 	return filepath.Join(s.root, "sha256", ref.Digest[:2], ref.Digest[2:4], ref.Digest)
 }
 
 func (s Store) Open(ref model.BlobRef) (*os.File, error) {
-	return os.Open(s.Path(ref))
+	path := s.Path(ref)
+	if path == "" {
+		return nil, fmt.Errorf("refusing to open an object with digest %q", ref.Digest)
+	}
+	return os.Open(path)
 }
 
 // Remove deletes an object. It reports whether anything was there, because a

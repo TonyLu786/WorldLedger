@@ -286,7 +286,7 @@ func (r *canonicalReader) readBlockEntity() (BlockEntity, error) {
 	if err != nil {
 		return BlockEntity{}, fmt.Errorf("nbt: %w", err)
 	}
-	value, err := DecodeNBTWithLimits(payload, r.limits)
+	value, err := decodeNBTSharing(payload, r.limits, r.values)
 	if err != nil {
 		return BlockEntity{}, fmt.Errorf("nbt: %w", err)
 	}
@@ -367,6 +367,21 @@ type canonicalReader struct {
 	data   []byte
 	offset int
 	limits Limits
+	// values is shared with every nested decode this reader starts, so a
+	// component made of many small NBT payloads is bounded as a whole rather
+	// than one payload at a time.
+	values *nbtBudget
+}
+
+// nbtBudget is how many more NBT values one component decode may materialise.
+type nbtBudget struct{ remaining int }
+
+func (b *nbtBudget) spend(count int, what string) error {
+	if count > b.remaining {
+		return fmt.Errorf("%s would materialise more NBT values than this component may hold", what)
+	}
+	b.remaining -= count
+	return nil
 }
 
 func newCanonicalReader(data []byte, limits Limits) (*canonicalReader, error) {
@@ -377,7 +392,11 @@ func newCanonicalReader(data []byte, limits Limits) (*canonicalReader, error) {
 	if len(data) > normalized.MaxComponentBytes {
 		return nil, fmt.Errorf("canonical component exceeds %d bytes", normalized.MaxComponentBytes)
 	}
-	return &canonicalReader{data: data, limits: normalized}, nil
+	return &canonicalReader{
+		data:   data,
+		limits: normalized,
+		values: &nbtBudget{remaining: normalized.MaxNBTValues},
+	}, nil
 }
 
 func (r *canonicalReader) remaining() int {

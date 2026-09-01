@@ -167,4 +167,50 @@ final class SpoolBudgetTest {
 				"ready".length(),
 				"guard against a platform default charset changing the fixture");
 	}
+
+	/**
+	 * The budget bounds captures nobody has taken in yet. The other half of this
+	 * project keeps a bundle after importing it, renaming it rather than deleting
+	 * it so a window never destroys somebody's only copy, and its note says the
+	 * new name is invisible to the adapter. It was not: everything counted, so a
+	 * contributor who imported every evening still reached the ceiling, and when
+	 * they did, capture stopped for good and the notice told them to import.
+	 */
+	@Test
+	void bundlesAlreadyTakenInDoNotCountAgainstTheCeiling(@TempDir Path root) throws IOException {
+		Path spool = root.resolve("spool");
+		writeBytes(spool.resolve("ready-a"), "bundle.json", 400);
+		writeBytes(spool.resolve("imported-b"), "bundle.json", 4000);
+		writeBytes(spool.resolve("quarantine-c"), "bundle.json", 4000);
+		writeBytes(spool.resolve(".tmp-d"), "bundle.json", 100);
+
+		assertEquals(500L, new SpoolBudget(spool, 1 << 20, 0).measure(),
+				"only work still waiting to be imported may count");
+	}
+
+	/**
+	 * Importing is the documented next step and it deletes bundles while the
+	 * client is still running. A walk that aborts when a subtree vanishes threw
+	 * out of the budget check, past the writer's full-spool handling, and lost
+	 * the chunk being written.
+	 */
+	@Test
+	void aBundleDeletedWhileTheSpoolIsBeingMeasuredIsNotAnError(@TempDir Path root) throws IOException {
+		Path spool = root.resolve("spool");
+		writeBytes(spool.resolve("ready-a"), "bundle.json", 400);
+		Path vanishing = spool.resolve("ready-b");
+		writeBytes(vanishing, "bundle.json", 400);
+
+		// The state a walk sees when an import removes the payload between
+		// listing the bundle and reading inside it.
+		Files.delete(vanishing.resolve("bundle.json"));
+
+		assertEquals(400L, new SpoolBudget(spool, 1 << 20, 0).measure(),
+				"a bundle that went away mid-measure should contribute nothing, not throw");
+	}
+
+	@Test
+	void aSpoolThatDisappearsEntirelyMeasuresZero(@TempDir Path root) {
+		assertEquals(0L, new SpoolBudget(root.resolve("never-existed"), 1 << 20, 0).measure());
+	}
 }

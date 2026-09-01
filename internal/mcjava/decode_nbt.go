@@ -17,7 +17,20 @@ func DecodeNBTWithLimits(data []byte, limits Limits) (NBTValue, error) {
 	if len(data) > normalized.MaxNBTBytes {
 		return NBTValue{}, fmt.Errorf("canonical NBT exceeds %d bytes", normalized.MaxNBTBytes)
 	}
-	r := &canonicalReader{data: data, limits: normalized}
+	return decodeNBTSharing(data, normalized, &nbtBudget{remaining: normalized.MaxNBTValues})
+}
+
+// decodeNBTSharing decodes one payload against a budget that may already have
+// been drawn down by earlier payloads in the same component.
+func decodeNBTSharing(data []byte, limits Limits, budget *nbtBudget) (NBTValue, error) {
+	normalized, err := limits.normalized()
+	if err != nil {
+		return NBTValue{}, err
+	}
+	if len(data) > normalized.MaxNBTBytes {
+		return NBTValue{}, fmt.Errorf("canonical NBT exceeds %d bytes", normalized.MaxNBTBytes)
+	}
+	r := &canonicalReader{data: data, limits: normalized, values: budget}
 	value, err := decodeNBTValue(r, 0)
 	if err != nil {
 		return NBTValue{}, err
@@ -154,6 +167,13 @@ func decodeNBTList(r *canonicalReader, depth int) (*NBTList, error) {
 		return nil, fmt.Errorf("invalid list element type %d", elementType)
 	}
 	count, err := r.readCollectionCount(1, "list")
+	if err == nil {
+		// Charged here and not in readCollectionCount, because a byte, int or
+		// long array produces elements the same size as the bytes it read. A
+		// list and a compound produce a struct per element, which is where the
+		// input and the memory stop being the same measurement.
+		err = r.values.spend(count, "list")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +193,9 @@ func decodeNBTList(r *canonicalReader, depth int) (*NBTList, error) {
 
 func decodeNBTCompound(r *canonicalReader, depth int) ([]NamedNBT, error) {
 	count, err := r.readCollectionCount(1, "compound")
+	if err == nil {
+		err = r.values.spend(count, "compound")
+	}
 	if err != nil {
 		return nil, err
 	}

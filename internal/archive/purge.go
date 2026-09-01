@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/worldledger/worldledger-mc/internal/cas"
 	"github.com/worldledger/worldledger-mc/internal/model"
 )
 
@@ -330,6 +331,18 @@ func (a Archive) recoverPurges() error {
 	for _, id := range journal.IDs {
 		if !looksLikeObservationID(id) {
 			return fmt.Errorf("%s: purge journal names %q, which is not an observation id", path, id)
+		}
+	}
+	// The references get the same treatment, and did not. They reach a path
+	// join too, and the one on the other end of it is os.Remove: a journal
+	// naming a digest of "../../something" removed a file outside the archive,
+	// on any command at all, because every command opens the archive and
+	// opening it replays the journal. The object store now refuses to build a
+	// path from anything that is not a digest, which is the real fix; this is
+	// the same check where the reason for it is legible.
+	for digest, ref := range journal.Refs {
+		if !cas.LooksLikeDigest(digest) || !cas.LooksLikeDigest(ref.Digest) {
+			return fmt.Errorf("%s: purge journal names %q, which is not an object digest", path, digest)
 		}
 	}
 	if _, err := a.applyPurgeLocked(journal.IDs, journal.Refs); err != nil {
