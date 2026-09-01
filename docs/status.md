@@ -249,7 +249,7 @@ Importing 158 of those measured 2 minutes 25 seconds, or roughly 918 ms each. Al
 
 Every component's path was resolved from the volume root, opening a handle per element, and every component in a bundle shares nearly all of that walk: fifty components spent 98 ms repeating it against 8 ms of actually opening the files. Resolving each directory once per bundle brought the same 158 bundles to 36 to 45 seconds.
 
-What was left did look like durability, and the object store did fsync once per component. But it fsynced before checking whether the object was already there, so it was making an object durable and then deleting it. That session held 7,900 components and 52 distinct objects: 99% of those fsyncs were for bytes already on disk. Checking first brought the same import to 23 to 25 seconds, and a second import of the same session to the same figure rather than to the 38 seconds it cost before.
+What was left did look like durability, and the object store did fsync once per component. But it fsynced before checking whether the object was already there, so it was making an object durable and then deleting it. That session held 7,900 components and 55 distinct objects: 99% of those fsyncs were for bytes already on disk. Checking first brought the same import to 23 to 25 seconds, and a second import of the same session to the same figure rather than to the 38 seconds it cost before.
 
 The remaining floor is genuine. An object the archive has never seen must be written and forced to disk before the import is acknowledged, and no amount of ordering avoids that. What the archive no longer pays is the same cost for bytes it already has.
 

@@ -129,7 +129,8 @@ footer { border-top: 1px solid var(--line); margin-top: 3.5rem; padding-top: 1.2
   <p>Everything the window does is also a command, which is the way in for scripting, and for the operations the window deliberately leaves out:</p>
   <pre><code>worldledger init ./archive
 worldledger ingest-spool --archive ./archive
-worldledger export --archive ./archive --server example.org --into /path/to/world</code></pre>
+worldledger policy set --archive ./archive --server example.org     --disposition private --declared-by your-name
+worldledger export --archive ./archive --server example.org --overwrite --into /path/to/world</code></pre>
   <p>The mod writes its recordings while you play; the tool assembles them afterwards. The export is written into a world the game itself created, because the world file that records the version and generator is not something this project should invent.</p>
 
   <h2>Where it stands</h2>

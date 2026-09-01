@@ -60,9 +60,11 @@ worldledger policy set --archive ./archive --server example.org \
 **6. Make a world.** In Minecraft, create a new empty single-player world and quit to the title screen. Then write your observations into it:
 
 ```sh
-worldledger export --archive ./archive --server example.org \
+worldledger export --archive ./archive --server example.org --overwrite \
     --into .minecraft/saves/<the world you just made>
 ```
+
+`--overwrite` is needed because Minecraft has already written the region file your spawn sits in, and an export refuses to touch a region file it did not create unless you say so. It replaces only the chunks this export holds; every other chunk in that file is carried through untouched.
 
 Open that world. The chunks you saw are there; the ones nobody saw are left as the empty world generated them, because an archive that guesses is not an archive.
 
@@ -299,7 +301,7 @@ Objects are addressed by content, so two contributors who observed the same chun
 ### Export a world
 
 ```sh
-worldledger export --archive ./archive --server example.org --into /path/to/world
+worldledger export --archive ./archive --server example.org --overwrite --into /path/to/world
 ```
 
 Writes the observed state unchanged into a world you created in the target release. It does not create the world: `level.dat` carries the data version, generator, and build height, and fabricating those is how an export ends up silently upgraded or misaligned. Chunks that were never observed are left unwritten rather than filled in.

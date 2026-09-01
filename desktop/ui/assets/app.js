@@ -936,7 +936,7 @@ function finished(result, world, moment) {
     addFact(facts, 'Already there, left alone', String(result.kept) + ' chunk(s)');
   }
   if (result.unknown) {
-    addFact(facts, 'Recorded but unreadable', String(result.unknown) + ' chunk(s), not written');
+    addFact(facts, 'Not yet seen at that moment', String(result.unknown) + ' chunk(s), not written');
   }
   if (result.withheld) {
     addFact(facts, 'Held back by a redaction', String(result.withheld) + ' recording(s)');
