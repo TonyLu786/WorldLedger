@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/worldledger/worldledger-mc/desktop/internal/api"
+	"github.com/worldledger/worldledger-mc/desktop/internal/health"
 )
 
 // The page and the API are one program written in two languages, and nothing
@@ -131,6 +132,36 @@ func TestEveryEndpointIsReachableFromThePage(t *testing.T) {
 // receiver names are the ones the page uses for a status, which is the response
 // every screen depends on and the one that grew a field the page was reading
 // before it existed.
+// handlesRoute reports whether one file registers one path.
+func handlesRoute(t *testing.T, file, path string) bool {
+	t.Helper()
+	fileSet := token.NewFileSet()
+	parsed, err := parser.ParseFile(fileSet, file, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel.Name != "HandleFunc" {
+			return true
+		}
+		literal, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || literal.Kind != token.STRING {
+			return true
+		}
+		if value, err := strconv.Unquote(literal.Value); err == nil && value == path {
+			found = true
+		}
+		return true
+	})
+	return found
+}
+
 func fieldsRead(source string, receivers ...string) map[string]bool {
 	found := map[string]bool{}
 	for _, receiver := range receivers {
@@ -229,5 +260,71 @@ func TestTheNoticeSaysTheThingsItExistsToSay(t *testing.T) {
 	}
 	if len(api.NoticeText()) < 3 {
 		t.Errorf("the notice is down to %d part(s)", len(api.NoticeText()))
+	}
+}
+
+// The page now says three things on its own, rather than rendering whatever the
+// other side supplied. That is a departure from the rule this file exists to
+// hold, so what it depends on is held here instead.
+//
+// It was arrived at by killing the process with the page open: the whole screen
+// became the words "Failed to fetch", because every sentence in this
+// application is minted in Go and the one failure that is not had nothing to
+// render. These check the parts of that fix which can silently stop working.
+
+func TestThePageCanSayTheApplicationHasStopped(t *testing.T) {
+	page := pageSource(t)
+	markup, err := assets.ReadFile("assets/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The banner the heartbeat raises, and the element it raises it into. A
+	// rename on either side puts the page back to failing silently.
+	if !strings.Contains(string(markup), `id="halted"`) {
+		t.Error("the page has no element for the application having stopped")
+	}
+	for _, needed := range []string{"getElementById('halted')", "function running(", "function stopped("} {
+		if !strings.Contains(page, needed) {
+			t.Errorf("app.js no longer has %s, so nothing raises or clears that banner", needed)
+		}
+	}
+
+	// A failed fetch has to become a sentence rather than reach the screen as
+	// whatever the browser called it.
+	if !strings.Contains(page, "function unreachable(") {
+		t.Error("app.js no longer classifies a failed fetch")
+	}
+	if !strings.Contains(page, "throw unreachable(err)") {
+		t.Error("call() no longer routes a failed fetch through unreachable()")
+	}
+}
+
+// The heartbeat is what makes the page notice on its own, and it is also what
+// keeps the application alive. Pointing it at an endpoint that does not exist
+// would end the program every time somebody left the page open.
+func TestTheHeartbeatPointsAtAnEndpointThatExists(t *testing.T) {
+	page := pageSource(t)
+	if !strings.Contains(page, "call('/api/alive')") {
+		t.Fatal("the page no longer reports in on /api/alive")
+	}
+	// Checked against the file that actually registers it rather than against
+	// the allow-list above, which exists precisely because this one route is
+	// mounted somewhere else and therefore was not being checked at all.
+	if !handlesRoute(t, "../internal/app/watchdog.go", "/api/alive") {
+		t.Error("the watchdog no longer registers /api/alive, so every page would be given up on")
+	}
+}
+
+// Which WorldLedger this is, and which Minecraft it was made for, are the two
+// facts somebody needs in order to tell a setup problem from an out-of-date
+// program. A window has no --version, so if these stop reaching the page there
+// is nowhere else to read them.
+func TestTheReportCarriesWhichBuildThisIs(t *testing.T) {
+	carried := jsonNames(health.Report{})
+	for _, field := range []string{"build", "supports"} {
+		if !carried[field] {
+			t.Errorf("health.Report no longer carries %q", field)
+		}
 	}
 }

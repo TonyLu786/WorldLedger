@@ -20,6 +20,7 @@ import (
 
 	"github.com/worldledger/worldledger-mc/desktop/internal/api"
 	"github.com/worldledger/worldledger-mc/desktop/internal/app"
+	"github.com/worldledger/worldledger-mc/desktop/internal/health"
 	"github.com/worldledger/worldledger-mc/desktop/internal/shell"
 	"github.com/worldledger/worldledger-mc/desktop/ui"
 )
@@ -64,6 +65,8 @@ func run() error {
 	if *modSource != "" {
 		api.ModSource = *modSource
 	}
+	// The same string --version prints, where the window can reach it.
+	health.Build = version
 
 	server, err := app.New()
 	if err != nil {

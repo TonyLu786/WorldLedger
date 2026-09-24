@@ -59,6 +59,12 @@ type Report struct {
 	Checks []Check `json:"checks"`
 	// Ready is true when capture would work if the player started the game now.
 	Ready bool `json:"ready"`
+	// Build is which WorldLedger this is, and Supports is the one Minecraft
+	// release it was made for. A window has no --version, so without these the
+	// two facts somebody needs in order to tell a setup problem from an
+	// out-of-date program were not anywhere they could read them.
+	Build    string `json:"build"`
+	Supports string `json:"supports"`
 }
 
 // NotFound is the report for a machine where no Minecraft directory exists at
@@ -73,6 +79,8 @@ func NotFound(looked []string) Report {
 		detail += " Looked in: " + strings.Join(looked, ", ")
 	}
 	return Report{
+		Build:    Build,
+		Supports: MinecraftVersion,
 		Checks: []Check{{
 			ID:     "minecraft",
 			Title:  "Minecraft",
@@ -84,7 +92,7 @@ func NotFound(looked []string) Report {
 
 // Inspect reads the machine and reports. It never writes anything.
 func Inspect(install mcpath.Install) Report {
-	report := Report{Root: install.Root}
+	report := Report{Root: install.Root, Build: Build, Supports: MinecraftVersion}
 
 	root := check{ID: "minecraft", Title: "Minecraft"}
 	if !isDir(install.Root) {
@@ -177,18 +185,57 @@ func checkRelease(versions []version) Check {
 			installed = append(installed, v.ID)
 		}
 	}
+	// Whose problem this is depends on which of two situations somebody is in,
+	// and the message used to describe only one of them.
+	//
+	// Somebody who has simply not played 26.2 yet needs their launcher. Somebody
+	// whose launcher has moved them on to a later release needs a later
+	// WorldLedger, and telling them 26.2 "is not installed" says their setup is
+	// incomplete when what is actually pinned is this program. Every player is
+	// eventually in the second situation, all of them on the same day, because
+	// Minecraft ships whether or not an adapter has caught up.
+	//
+	// Ordering two Minecraft version strings is not attempted. The old scheme
+	// and the new one do not compare, and guessing wrong would put the worse
+	// advice first for the people it is worst for. Saying both, with the pin
+	// named, is correct whichever situation somebody is in.
 	detail := "Minecraft " + MinecraftVersion + " is not installed"
 	if len(installed) > 0 {
-		detail += ". Installed: " + strings.Join(installed, ", ")
+		detail += ". You have: " + strings.Join(installed, ", ")
 	}
+	detail += ". Each build of WorldLedger is made for one Minecraft release, and " +
+		buildName() + " is made for " + MinecraftVersion +
+		". If your Minecraft is newer, a later WorldLedger is what supports it."
 	// The launcher installs a release the first time it is played, and doing it
 	// for somebody would mean driving their launcher.
+	detail += " To use this one instead, select " + MinecraftVersion +
+		" in the Minecraft launcher and play it once."
 	return Check{
 		ID:     "release",
 		Title:  "Minecraft " + MinecraftVersion,
 		State:  Missing,
-		Detail: detail + ". Select it in the Minecraft launcher and play it once.",
+		Detail: detail,
 	}
+}
+
+// Build is the version of this application, as the release stamped it.
+//
+// It is here because it is part of the answer to "why does this not work with
+// my Minecraft". A window has no --version, so somebody using one had no way to
+// find out which WorldLedger they were holding, which is the one fact they need
+// in order to work out whether a later one exists.
+//
+// Deliberately not a network check. Asking a server on every launch whether a
+// newer version exists is a decision about what this program tells somebody
+// else, and it is not one to take as a side effect of improving an error
+// message.
+var Build = "dev"
+
+func buildName() string {
+	if Build == "" || Build == "dev" {
+		return "this one"
+	}
+	return "this one (" + Build + ")"
 }
 
 func checkLoader(versions []version) Check {

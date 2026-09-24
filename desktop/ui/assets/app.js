@@ -26,12 +26,57 @@ if (location.search) {
   history.replaceState(null, '', location.pathname);
 }
 
+// Every sentence this page shows used to be minted on the other side of this
+// function: the application answers with a problem and what to do next, and the
+// page renders the pair. That covers everything the application can be wrong
+// about, and nothing about the application not being there.
+//
+// So a failed fetch reached the screen as "Failed to fetch": two words of
+// browser vocabulary, with no next, replacing whatever the person was looking
+// at. This was checked by killing the process with the page open. The three
+// cases below are the ones the page has to be able to say on its own.
+function unreachable(err) {
+  const failure = new Error('WorldLedger is not running any more');
+  failure.next = 'Start it again. This page belongs to the run that has ended, ' +
+    'so open the application and it will bring up a new one.';
+  failure.halted = true;
+  failure.cause = err;
+  return failure;
+}
+
+function unexpected(err) {
+  const failure = new Error('Something went wrong inside this page');
+  failure.next = 'Try again. If it keeps happening, the details are: ' + (err && err.message ? err.message : String(err));
+  return failure;
+}
+
 async function call(path, options) {
   const settings = Object.assign({ headers: {} }, options);
   settings.headers['X-WorldLedger-Token'] = token;
   if (settings.body) settings.headers['Content-Type'] = 'application/json';
-  const response = await fetch(path, settings);
-  const body = await response.json().catch(() => null);
+
+  let response;
+  try {
+    response = await fetch(path, settings);
+  } catch (err) {
+    // A loopback fetch does not fail for network reasons. Either the program
+    // has ended or something in the browser refused the request, and in both
+    // cases carrying on is not one of the options.
+    throw unreachable(err);
+  }
+  running();
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch (err) {
+    // A body that is not JSON is this page and the application disagreeing
+    // about what they are, which is not something a person can act on except
+    // by starting again.
+    if (!response.ok) {
+      throw unexpected(new Error('the application answered ' + response.status));
+    }
+  }
   if (!response.ok || (body && body.problem)) {
     const failure = new Error((body && body.problem) || ('the application answered ' + response.status));
     failure.next = body && body.next;
@@ -165,7 +210,22 @@ function markProgress(next) {
 
 const marks = { ok: '✓', missing: '!', wrong: '×', unknown: '?' };
 
+// Which WorldLedger this is, and the one Minecraft it was made for.
+//
+// A window has no --version, so somebody looking at a set-up screen that will
+// not go green had no way to find out whether they were holding an old build or
+// had an unsupported game. Both facts belong where the name already is.
+function renderMark(report) {
+  if (report.build && report.build !== 'dev') {
+    document.getElementById('mark-name').textContent = 'WorldLedger ' + report.build;
+  }
+  if (report.supports) {
+    document.getElementById('mark-note').textContent = 'for Minecraft ' + report.supports;
+  }
+}
+
 function renderChecks(report) {
+  renderMark(report);
   const host = document.getElementById('checks');
   host.replaceChildren();
 
@@ -1138,8 +1198,39 @@ function drawMap(chunks) {
 // the page says it is still here while it is open, and the application stops
 // when it stops saying so. Without this it would sit in the process list until
 // somebody learned what Task Manager is.
-setInterval(() => { call('/api/alive').catch(() => {}); }, 10000);
-call('/api/alive').catch(() => {});
+// And the other direction, which was missing entirely. The application gives up
+// on a page that stops reporting in; the page had no way to notice the
+// application had gone, so it went on showing what it last knew and only failed
+// when somebody pressed something. Two misses rather than one, because a banner
+// that appears and disappears teaches people to ignore it.
+const halted = document.getElementById('halted');
+let missedBeats = 0;
+
+function running() {
+  missedBeats = 0;
+  if (!halted.hidden) halted.hidden = true;
+}
+
+function stopped() {
+  if (!halted.hidden) return;
+  halted.replaceChildren(
+    el('strong', null, 'WorldLedger is not running any more'),
+    el('span', null, 'What is on this page is what it last knew. Start the application again ' +
+      'and it will open a page of its own; this one belongs to the run that has ended.'));
+  halted.hidden = false;
+}
+
+async function beat() {
+  try {
+    await call('/api/alive');
+  } catch (err) {
+    if (!err.halted) return;
+    missedBeats += 1;
+    if (missedBeats >= 2) stopped();
+  }
+}
+setInterval(beat, 10000);
+beat();
 
 // Before you start --------------------------------------------------------
 

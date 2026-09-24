@@ -309,3 +309,20 @@ button:disabled { opacity: 0.55; cursor: default; filter: none; }
 .ask-row-detail { display: block; font-size: 12px; color: var(--ink-soft); word-break: break-all; }
 
 button.primary.is-danger { background: var(--stop); }
+
+/* The application has stopped. It sits above the screen rather than over it:
+   what was last read is still true of the moment it was read, and hiding it
+   behind a sheet would take that away as well. */
+.halted {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 1.5rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--warn-edge, #c8a23a);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--warn-fill, #fdf6e3);
+  color: var(--ink);
+}
+.halted strong { font-size: 1rem; }
+.halted span { font-size: 0.9rem; opacity: 0.85; }

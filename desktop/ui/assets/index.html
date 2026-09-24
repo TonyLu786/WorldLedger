@@ -42,8 +42,8 @@
 <div class="frame">
   <nav class="rail">
     <div class="mark">
-      <span class="mark-name">WorldLedger</span>
-      <span class="mark-note">for Minecraft</span>
+      <span class="mark-name" id="mark-name">WorldLedger</span>
+      <span class="mark-note" id="mark-note">for Minecraft</span>
     </div>
     <button class="step" data-screen="setup"><span class="step-index">1</span><span class="step-text">Set up<small>Get Minecraft ready</small></span></button>
     <button class="step" data-screen="capture"><span class="step-index">2</span><span class="step-text">Play<small>What has been recorded</small></span></button>
@@ -55,6 +55,9 @@
   </nav>
 
   <main class="stage">
+    <!-- Shown when the application stops answering. Not a dialog: what is on
+         the screen is still worth reading, it is just no longer live. -->
+    <div class="halted" id="halted" role="status" hidden></div>
     <section class="screen" id="screen-setup" hidden>
       <header class="screen-head">
         <h1>Set up</h1>
