@@ -69,12 +69,17 @@ before it can be opened, and an archive that is only ever read is never touched.
 ## What this does not decide
 
 Whether the capture bundle between the mod and the core gets the same treatment.
-It has the same shape of problem and a worse exposure: the mod and the core are
-downloaded separately and a player can hold an old one of either, and
-`spec/capture-bundle-v1.md` has the importer rejecting unknown manifest fields
-outright. A layout change on that side does not fail at `Open` with a sentence
-about which way to go; it fails as capture that silently stops importing. That
-is a second ADR and probably a more urgent one.
+It has the same shape of problem and a worse exposure, because the mod and the
+core are downloaded separately and a player can hold an old one of either.
+
+**Correction.** This paragraph first said that a version mismatch there "fails
+as capture that silently stops importing". That is not true and was not checked
+before it was written. Both front ends report a bundle that would not import:
+the terminal lists the failures and exits non-zero, and the window renders them
+on the import screen. What is true is smaller and still worth fixing — the
+report is loud and unreadable. It names JSON rather than the situation, so
+somebody meeting it learns that a field was unexpected and not that their mod
+and their WorldLedger are different ages. See ADR 0005.
 
 ## Consequences
 

@@ -322,15 +322,20 @@ func parseManifest(data []byte, limits Limits) (Manifest, error) {
 		return Manifest{}, invalidf("bundle.json: %v", err)
 	}
 
+	// The schema is read before anything is validated against it, so that a
+	// bundle from a different version is explained as one. It used to be read
+	// after the strict decode, which meant a later adapter's extra field was
+	// refused as JSON: a true sentence about the wrong subject, handed to
+	// somebody whose mod and application are simply different ages.
+	if declared := declaredSchema(data); declared != Schema {
+		return Manifest{}, schemaRefusal(declared)
+	}
+
 	var raw rawManifest
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&raw); err != nil {
-		return Manifest{}, invalidf("bundle.json: %v", err)
-	}
-
-	if raw.Schema != Schema {
-		return Manifest{}, invalidf("unsupported schema %q", raw.Schema)
+		return Manifest{}, unknownFieldRefusal(err)
 	}
 	if strings.TrimSpace(raw.ServerID) == "" {
 		return Manifest{}, invalidf("server_id is required")

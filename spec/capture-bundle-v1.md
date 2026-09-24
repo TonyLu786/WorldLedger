@@ -68,6 +68,24 @@ The following are required:
 
 `server_address`, `source.agent`, and `capture` are local provenance fields. The archive core may preserve more of this provenance in later archive schema revisions, but their presence must not affect component hashes.
 
+### Unknown fields are rejected
+
+A manifest carrying a field not listed here is refused, and the whole bundle with it. This is not a warning and it is not ignored, which is what `spec/transfer-bundle-v1.md` has always said about its own manifest and what this document did not say about this one.
+
+It reads as an invitation to do otherwise — "the archive core may preserve more of this provenance" is about a later revision of this format, not about adding a field to this one — so it is worth being plain. **An adapter that adds a field must declare a new schema version.** A field added under `worldledger.capture-bundle/v1` fails every bundle it appears in, and the importer says so in those terms rather than as a problem with JSON.
+
+Two further rules the importer enforces and this document did not state: a manifest with a duplicate object key is refused, and JSON nesting is capped at 64 levels. Both are properties of the file rather than of its fields, and both refuse rather than repair.
+
+### What happens when the versions do not match
+
+The mod and the archive core are obtained separately, so a player holding two halves of different ages is ordinary rather than exceptional. The importer reads the schema before it validates anything against it, so that a mismatch is explained as one:
+
+- a later version than the importer knows means the mod is ahead, and the application is what needs updating;
+- an earlier one means the mod is behind;
+- a different family means this is not a capture bundle at all.
+
+In every case the bundle is left exactly where it is. A capture that cannot be imported today is still the only copy of what somebody saw, and it imports unchanged once the halves match.
+
 ## Component descriptors
 
 Each component descriptor contains:
