@@ -76,6 +76,56 @@ func Init(root string) (Archive, error) {
 // and holds something other than an archive.
 var ErrNotAnArchive = errors.New("not a WorldLedger archive")
 
+// ErrUnreadableFormat is returned for a directory that is an archive, written
+// in a layout this build does not read.
+//
+// It is kept apart from ErrNotAnArchive because the two need opposite actions.
+// One of them means somebody pointed at the wrong folder. The other means their
+// archive is fine and their program is the wrong one, and telling them their
+// archive is unsupported invites them to go and do something about the archive.
+var ErrUnreadableFormat = errors.New("this build cannot read that archive layout")
+
+// unreadableFormat says which layout was found, which this build reads, and
+// which way the mismatch runs.
+//
+// An archive is the thing somebody is keeping, so it outlives every build that
+// touches it, and a refusal that names only the number it found leaves them
+// with nothing to act on. Whether the fix is a newer WorldLedger or an older
+// one is knowable here and nowhere else.
+func unreadableFormat(root, found string) error {
+	if found == "" {
+		return fmt.Errorf("%w: %s has an empty VERSION, so what wrote it cannot be established",
+			ErrUnreadableFormat, root)
+	}
+	direction := "this build reads layout " + FormatVersion + " and that archive is layout " + found + "."
+	if newerFormat(found) {
+		direction += " It was written by a later WorldLedger, and a later WorldLedger is what reads it."
+	} else {
+		direction += " It was written by an earlier WorldLedger than this one."
+	}
+	return fmt.Errorf("%w: %s. %s", ErrUnreadableFormat, root, direction)
+}
+
+// newerFormat reports whether a layout is later than this build's.
+//
+// Layout numbers are decimal integers and nothing else, which is a property of
+// the format rather than an assumption about it: Init writes FormatVersion and
+// FormatVersion is a decimal integer. Anything that does not parse is treated
+// as later, because a build that cannot recognise a layout is more likely to be
+// behind it than ahead of it, and being wrong that way sends somebody looking
+// forwards rather than backwards.
+func newerFormat(found string) bool {
+	theirs, err := strconv.Atoi(found)
+	if err != nil {
+		return true
+	}
+	ours, err := strconv.Atoi(FormatVersion)
+	if err != nil {
+		return true
+	}
+	return theirs > ours
+}
+
 func Open(root string) (Archive, error) {
 	b, err := os.ReadFile(filepath.Join(root, "VERSION"))
 	if err != nil {
@@ -89,8 +139,8 @@ func Open(root string) (Archive, error) {
 		}
 		return Archive{}, fmt.Errorf("open archive %s: %w", root, err)
 	}
-	if strings.TrimSpace(string(b)) != FormatVersion {
-		return Archive{}, fmt.Errorf("unsupported archive format %q", strings.TrimSpace(string(b)))
+	if found := strings.TrimSpace(string(b)); found != FormatVersion {
+		return Archive{}, unreadableFormat(root, found)
 	}
 	a := Archive{Root: root, CAS: cas.New(filepath.Join(root, "objects"))}
 	lock, err := acquireArchiveLock(root)

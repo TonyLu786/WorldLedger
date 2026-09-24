@@ -96,6 +96,8 @@ func run(args []string) error {
 		return cmdCorpus(args[1:])
 	case "fsck":
 		return cmdFsck(args[1:])
+	case "diagnose":
+		return cmdDiagnose(args[1:])
 	default:
 		// The suggestion comes first and alone. Printing twenty-five lines of
 		// usage above it buried the one line that says what went wrong.
@@ -271,7 +273,16 @@ func cmdVerify(args []string) error {
 	dimension := fs.String("dimension", defaultDimension, "dimension id")
 	x := fs.Int("x", 0, "chunk x")
 	z := fs.Int("z", 0, "chunk z")
-	window := fs.Duration("window", 10*time.Second, "observation comparison window")
+	// Ten seconds here, thirty in epoch, and the two answer the same question
+	// for somebody reading the output: is this a disagreement or a change? They
+	// are different mechanisms. This buckets a chunk's timeline; epoch decides
+	// whether two states are close enough to contradict each other. But a
+	// chunk this clears can be the chunk the exporter flags, and neither number
+	// was written down anywhere. Saying it is not the same as reconciling it;
+	// which one verify ought to use is open.
+	window := fs.Duration("window", 10*time.Second,
+		"how close two observations must be to be compared together "+
+			"(the exporter uses a separate 30s window to decide conflict from change)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -296,6 +307,12 @@ func cmdFsck(args []string) error {
 	fs := flag.NewFlagSet("fsck", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	archivePath := fs.String("archive", "", "archive directory")
+	// The two failures this check reports most often, an index entry naming an
+	// observation that is not there and an observation missing from its index,
+	// had no fix at all. Both are damage to the arrangement rather than to the
+	// records, and the arrangement can be derived again from the records.
+	rebuild := fs.Bool("rebuild-index", false,
+		"derive the chunk index again from the observations, then check")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -305,6 +322,19 @@ func cmdFsck(args []string) error {
 	a, err := archive.Open(*archivePath)
 	if err != nil {
 		return err
+	}
+	if *rebuild {
+		rebuilt, err := a.RebuildIndex()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("indexed %d observation(s) across %d chunk(s)\n", rebuilt.Observations, rebuilt.Chunks)
+		for _, path := range rebuilt.Unreadable {
+			fmt.Printf("  left alone, could not be read: %s\n", path)
+		}
+		if len(rebuilt.Unreadable) != 0 {
+			fmt.Println("  an index can be built again and a record cannot, so nothing was removed")
+		}
 	}
 	report := a.Check()
 	enc := json.NewEncoder(os.Stdout)
@@ -381,6 +411,8 @@ func usage(w io.Writer) {
 		"  worldledger ingest-bundle --archive <archive-dir> [flags] <bundle-dir>",
 		"  worldledger ingest [flags] <payload-file>",
 		"  worldledger seed --observations <file> --operator <name> --accept-terms [flags]",
+		"  worldledger corpus --archive <archive-dir> --server <id>",
+		"  worldledger diagnose [--archive <archive-dir>] [--spool <spool-dir>] [--out <file>]",
 		"  worldledger version",
 		"",
 		"Add --help to any command to see what it takes.",

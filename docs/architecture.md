@@ -78,7 +78,7 @@ This gives immediate deduplication when contributors upload identical canonical 
 
 The first verification primitive is intentionally conservative.
 
-Observations for the same chunk are grouped into a configurable time window. Within that window, observations are grouped by state digest:
+Observations for the same chunk are grouped into a configurable time window, ten seconds by default (`verify --window`). Within that window, observations are grouped by state digest:
 
 - one state, one independent contributor: `single-source`;
 - one state, two or more independent contributors: `corroborated`;
@@ -86,7 +86,9 @@ Observations for the same chunk are grouped into a configurable time window. Wit
 
 A conflict is never resolved by majority vote in the core. Time uncertainty, world changes, packet ordering, incomplete components, malicious submissions, and capture bugs all require more context than a vote count provides.
 
-That describes `internal/verify`. The selection that decides what an exported world contains lives in `internal/epoch`, and it does count contributors, before consulting the window rather than after: a state agreed by more contributors wins even when every one of those observations predates a more recent observation of something else. Whether that is what corroboration should mean is [ADR 0003](decisions/0003-corroboration-and-time.md), which is open.
+That describes `internal/verify`, and its window is not the one an export uses. `internal/epoch` has its own, `DefaultSimultaneityWindow`, fixed at thirty seconds with no flag, and the two answer the same question for anybody reading the output: is this a disagreement or is it a change? A chunk `verify` clears at ten seconds can be a chunk the exporter reports as a conflict at thirty. Which window `verify` ought to use is open.
+
+The selection that decides what an exported world contains lives in `internal/epoch`, and it does count contributors, before consulting the window rather than after: a state agreed by more contributors wins even when every one of those observations predates a more recent observation of something else. Whether that is what corroboration should mean is [ADR 0003](decisions/0003-corroboration-and-time.md), which is open.
 
 Future verification can add signed contributors, capture confidence, clock uncertainty, component-level comparison, and transition inference without invalidating the original observations.
 
