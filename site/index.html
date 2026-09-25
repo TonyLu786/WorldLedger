@@ -125,7 +125,7 @@ footer { border-top: 1px solid var(--line); margin-top: 3.5rem; padding-top: 1.2
   </ul>
 
   <h2>Using it</h2>
-  <p><code>worldledger-desktop</code> is one file. It opens a window, reads what your Minecraft is missing, and offers to add Fabric and the mod in a single step that names every file it would write before writing any of them. After that it is: play, bring in what was recorded, decide what may be shared, make a world. Nothing is code-signed, so Windows will warn that the publisher is unknown.</p>
+  <p><code>worldledger-desktop</code> is one file. On Windows it opens a window; on macOS and Linux it opens in your browser, which is the same application with nothing left out. Either way it reads what your Minecraft is missing, and offers to add Fabric and the mod in a single step that names every file it would write before writing any of them. After that it is: play, bring in what was recorded, decide what may be shared, make a world. Nothing is code-signed, so Windows will warn that the publisher is unknown.</p>
   <p>Everything the window does is also a command, which is the way in for scripting, and for the operations the window deliberately leaves out:</p>
   <pre><code>worldledger init ./archive
 worldledger ingest-spool --archive ./archive

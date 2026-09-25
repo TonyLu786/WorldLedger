@@ -19,7 +19,7 @@ The Fabric process never opens or mutates an archive. The Go importer is the onl
 
 ## Quickstart
 
-Take `worldledger-desktop` for your platform from the [releases page](https://github.com/TonyLu786/WorldLedger/releases) and run it. It opens a window, checks what your Minecraft is missing, and offers to add Fabric and the mod in one step, naming every file it would write before it writes any of them. After that it is: play, bring it in, decide what may be shared, make a world.
+Take `worldledger-desktop` for your platform from the [releases page](https://github.com/TonyLu786/WorldLedger/releases) and run it. On Windows it opens a window; on macOS and Linux it opens in your browser instead, which is the same application with nothing left out. Either way it checks what your Minecraft is missing, and offers to add Fabric and the mod in one step, naming every file it would write before it writes any of them. After that it is: play, bring it in, decide what may be shared, make a world.
 
 Two things to expect the first time. Windows will warn that the file is from an unknown publisher, because it is not code-signed — More info, then Run anyway, or check its SHA-256 against `SHA256SUMS.txt` on the releases page first. And Minecraft has to have been played once at 26.2 before there is anything to add the mod to; the application says so rather than guessing.
 
@@ -87,7 +87,7 @@ Prebuilt archives for Windows, Linux, and macOS are on the [releases page](https
 Install the mod with the exact Fabric Loader and Fabric API versions in [Supported Fabric baseline](#supported-fabric-baseline). On first client start the adapter creates `<minecraft-config>/worldledger/capture.properties`:
 
 ```properties
-contributor=alice
+contributor=
 server_id=
 coalesce_ticks=10
 queue_capacity=32
@@ -277,7 +277,7 @@ Two real archives, of 158 and 40 observations, converged this way: after both di
 
 ### Withhold observations
 
-A contributor may withdraw consent, or an operator may ask for one area to be excluded whoever observed it. Both are declared, attributed, and reversible:
+A contributor may withdraw consent, or an operator may ask for one area to be excluded whoever observed it. Both are declared, attributed, and reversible: `worldledger redact withdraw --archive ./archive --id <id>` takes one back:
 
 ```sh
 worldledger redact set --archive ./archive --server example.org \

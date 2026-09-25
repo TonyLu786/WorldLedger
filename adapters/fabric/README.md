@@ -68,7 +68,7 @@ max_snapshots_per_tick=1
 - `queue_capacity` bounds semantic snapshots waiting for canonicalization and disk I/O.
 - `max_snapshots_per_tick` bounds normal client-thread snapshot work.
 
-Configuration is loaded once during client startup. Restart after changing it.
+Configuration is re-read by `/worldledger reload`. Only `coalesce_ticks` and `queue_capacity` are consumed when capture starts, so everything else takes effect without restarting the client.
 
 ## Spool contract
 

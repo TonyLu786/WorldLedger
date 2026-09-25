@@ -73,6 +73,10 @@ func cmdRedactSet(args []string) error {
 	fmt.Printf("matches  %d observation(s) currently in the archive\n", matched)
 	fmt.Println("\nThese are now withheld from coverage, export, convert, and send. They are still")
 	fmt.Println("stored. Run 'worldledger redact purge' to remove what can be removed.")
+	// A declaration is reversible and only the destructive step was signposted,
+	// which is the wrong one to find first if this named the wrong scope.
+	fmt.Printf("To take this declaration back instead:\n  worldledger redact withdraw --archive %s --id %s\n",
+		*archivePath, declared.ID[:12])
 	return nil
 }
 

@@ -20,7 +20,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/worldledger/worldledger-mc/internal/archive"
-	"github.com/worldledger/worldledger-mc/internal/cas"
 	"github.com/worldledger/worldledger-mc/internal/model"
 )
 
@@ -152,35 +151,9 @@ func Import(a archive.Archive, bundleDir string, options Options) (Result, error
 		}
 	}
 
-	refs := make(map[string]model.BlobRef, len(prepared.components))
-	resolver := pathResolver{}
-	for _, component := range prepared.components {
-		f, info, err := openRegularWithin(prepared.root, prepared.realRoot, component.descriptor.Path, resolver)
-		if err != nil {
-			return Result{}, invalidf("component %q: %v", component.name, err)
-		}
-		if os.SameFile(prepared.manifestInfo, info) {
-			_ = f.Close()
-			return Result{}, invalidf("component %q resolves to bundle.json", component.name)
-		}
-
-		expected := model.BlobRef{
-			Algorithm: component.descriptor.Algorithm,
-			Digest:    component.descriptor.Digest,
-			Size:      component.descriptor.Size,
-		}
-		ref, putErr := a.CAS.PutVerified(f, expected)
-		closeErr := f.Close()
-		if putErr != nil {
-			if errors.Is(putErr, cas.ErrObjectMismatch) {
-				return Result{}, invalidf("component %q changed while importing: %v", component.name, putErr)
-			}
-			return Result{}, fmt.Errorf("store component %q: %w", component.name, putErr)
-		}
-		if closeErr != nil {
-			return Result{}, fmt.Errorf("close component %q: %w", component.name, closeErr)
-		}
-		refs[component.name] = ref
+	refs, err := storeComponents(a, prepared)
+	if err != nil {
+		return Result{}, err
 	}
 
 	o := model.Observation{
