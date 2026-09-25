@@ -272,6 +272,43 @@ func isHexDigit(c byte) bool {
 // the one path this process happens to know. The segment after Users is an
 // account name whoever it belongs to, which also covers a second person's
 // directory appearing in somebody's error message.
+// accountVariants is the account name as it is, and as a directory names it.
+//
+// The first real run of this command leaked one. The account was "Juntong Lu"
+// and the path held C--Users-Juntong-Lu-Desktop-..., which is the same name
+// with the space written as a hyphen, so the substring never matched and a
+// real person's real name went into the file the command opens by saying
+// "this is everything it would hand over". The segment after Users was masked
+// correctly; that was never the only place a name appears.
+//
+// Only whole-name spellings are covered. Masking the parts on their own would
+// catch a directory called after somebody's first name, and would also take
+// out every ordinary word that happens to be somebody's surname, in a report
+// whose value is that it can still be read. Where the line falls is worth
+// saying rather than leaving to be discovered: this catches the name, not the
+// pieces of it.
+func accountVariants(account string) []string {
+	separators := func(r rune) bool {
+		return r == ' ' || r == '-' || r == '_' || r == '.'
+	}
+	parts := strings.FieldsFunc(account, separators)
+	if len(parts) < 2 {
+		return []string{account}
+	}
+	// Longest first, so a spelling that contains another is taken out whole
+	// rather than in pieces.
+	variants := []string{account}
+	for _, separator := range []string{" ", "-", "_", ".", ""} {
+		if joined := strings.Join(parts, separator); joined != account {
+			variants = append(variants, joined)
+		}
+	}
+	sort.SliceStable(variants, func(i, j int) bool {
+		return len(variants[i]) > len(variants[j])
+	})
+	return variants
+}
+
 func maskPath(text string) string {
 	masked := text
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
@@ -281,9 +318,12 @@ func maskPath(text string) string {
 			masked = replaceFold(masked, other, "<home>")
 		}
 		// And the account name wherever it stands, which is how it survives a
-		// directory somebody named after themselves.
-		if account := filepath.Base(home); len(account) > 2 {
-			masked = replaceFold(masked, account, "<user>")
+		// directory somebody named after themselves, in any of the spellings a
+		// directory gives it.
+		for _, variant := range accountVariants(filepath.Base(home)) {
+			if len(variant) > 2 {
+				masked = replaceFold(masked, variant, "<user>")
+			}
 		}
 	}
 	return maskAccountSegments(masked)
