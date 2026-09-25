@@ -94,16 +94,16 @@ func Assess(server string, chunks []model.ChunkRef) Assessment {
 	switch {
 	case assessment.LargestCluster >= clusterModerateCeiling:
 		assessment.Exposure = ExposureSubstantial
-		assessment.Reason = fmt.Sprintf("a contiguous area of %d chunks is large enough to contain whole structures", assessment.LargestCluster)
+		assessment.Reason = fmt.Sprintf("a contiguous area of %d chunk(s) is large enough to contain whole structures", assessment.LargestCluster)
 	case assessment.Regions >= regionsOfConcern && assessment.DensestRegion >= 0.25:
 		assessment.Exposure = ExposureSubstantial
 		assessment.Reason = fmt.Sprintf("%d regions with up to %.0f%% coverage span several structure placements", assessment.Regions, assessment.DensestRegion*100)
 	case assessment.LargestCluster >= clusterMinimalCeiling:
 		assessment.Exposure = ExposureModerate
-		assessment.Reason = fmt.Sprintf("a contiguous area of %d chunks may contain a structure", assessment.LargestCluster)
+		assessment.Reason = fmt.Sprintf("a contiguous area of %d chunk(s) may contain a structure", assessment.LargestCluster)
 	default:
 		assessment.Exposure = ExposureMinimal
-		assessment.Reason = fmt.Sprintf("coverage is scattered; the largest contiguous area is %d chunks", assessment.LargestCluster)
+		assessment.Reason = fmt.Sprintf("coverage is scattered; the largest contiguous area is %d chunk(s)", assessment.LargestCluster)
 	}
 	return assessment
 }

@@ -159,12 +159,35 @@ function ask({ title, lead, rows, confirm: confirmText, danger }) {
   });
 }
 
+// One place, not one places.
+//
+// An archive after a first evening holds one recording of one place, so the
+// singular is the case somebody meets first rather than an edge of it. Six
+// strings in here were written straight as plurals and one, the count of what
+// is waiting, was not; this is that one, given a name.
+//
+// The window says it this way throughout, and the command line writes
+// "chunk(s)". That is not drift: the two speak different vocabularies on
+// purpose, places here and chunks there, so there is no shared string to keep
+// in step. What matters is that neither of them ever writes "1 places".
+function count(n, singular, plural) {
+  return n + ' ' + (n === 1 ? singular : (plural || singular + 's'));
+}
+
+// Base 1024, named accordingly. It divided by 1024 and called the result KB,
+// so the same archive read 8.4 KB here and 8.4 KiB on the command line: the
+// same number under two names, and this was the wrong one. humanBytes in
+// cmd/worldledger is the other half of this, and drift_test.go holds them to
+// each other.
 function bytes(n) {
+  if (!Number.isFinite(n)) return 'unknown';
   if (n < 1024) return n + ' B';
-  const units = ['KB', 'MB', 'GB'];
+  const units = ['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
   let value = n / 1024;
-  for (const unit of units) {
-    if (value < 1024 || unit === 'GB') return value.toFixed(value < 10 ? 1 : 0) + ' ' + unit;
+  for (let i = 0; i < units.length; i++) {
+    if (value < 1024 || i === units.length - 1) {
+      return value.toFixed(1) + ' ' + units[i];
+    }
     value /= 1024;
   }
 }
@@ -292,7 +315,10 @@ function removeEverything() {
       await refreshSetup();
       const left = (result.skipped || []).length;
       document.getElementById('checks').prepend(banner('good', 'Removed',
-        left ? left + ' file(s) were left alone because they had been changed since they were installed.'
+        left
+          ? (left === 1
+            ? '1 file was left alone because it had been changed since it was installed.'
+            : left + ' files were left alone because they had been changed since they were installed.')
           : 'Your Minecraft is back to what it was.'));
     } catch (err) {
       go.disabled = false;
@@ -412,7 +438,7 @@ function renderCapture(status) {
       'Your past recordings are safe and listed below. Go to Set up to put the mod back.'));
   } else if (waiting > 0) {
     host.append(banner('good',
-      waiting + (waiting === 1 ? ' recording waiting' : ' recordings waiting'),
+      count(waiting, 'recording') + ' waiting',
       'Go to Bring it in to add them to your archive.'));
   } else {
     host.append(banner('todo', 'Nothing new since last time',
@@ -446,9 +472,10 @@ function clearKept(status) {
   const card = el('section', 'card');
   card.append(el('h2', null, 'Clear the ones already brought in'));
   card.append(el('p', 'card-lead',
-    status.spool.imported + ' recording(s), ' + bytes(status.spool.imported_bytes) +
-    ', are being kept inside your Minecraft folder after being brought in. Clearing them ' +
-    'frees that space. Anything not yet brought in, and anything set aside as unreadable, ' +
+    count(status.spool.imported, 'recording') + ', ' + bytes(status.spool.imported_bytes) +
+    (status.spool.imported === 1 ? ', is' : ', are') +
+    ' being kept inside your Minecraft folder after being brought in. Clearing that ' +
+    'frees the space. Anything not yet brought in, and anything set aside as unreadable, ' +
     'stays exactly where it is.'));
 
   const go = el('button', 'fix', 'Clear ' + bytes(status.spool.imported_bytes));
@@ -457,10 +484,10 @@ function clearKept(status) {
 
   go.addEventListener('click', async () => {
     if (!await ask({
-      title: 'Delete ' + status.spool.imported + ' recordings that have already been brought in?',
+      title: 'Delete ' + count(status.spool.imported, 'recording') + ' that have already been brought in?',
       lead: 'This frees ' + bytes(status.spool.imported_bytes) + ' and cannot be undone.',
       rows: [
-        { title: 'Deleted', detail: status.spool.imported + ' recording(s) already added to your archive' },
+        { title: 'Deleted', detail: count(status.spool.imported, 'recording') + ' already added to your archive' },
         { title: 'Left alone', detail: 'your archive, anything still waiting, and anything set aside as unreadable' },
       ],
       confirm: 'Delete them',
@@ -474,7 +501,7 @@ function clearKept(status) {
       const result = await call('/api/tidy', { method: 'POST' });
       renderCapture(await loadStatus());
       document.getElementById('capture-body').prepend(banner('good',
-        'Cleared ' + result.removed + ' recording(s), freeing ' + bytes(result.freed),
+        'Cleared ' + count(result.removed, 'recording') + ', freeing ' + bytes(result.freed),
         'Your archive still holds everything they contained.'));
     } catch (err) {
       go.disabled = false;
@@ -540,7 +567,7 @@ function renderImport(status) {
   }
 
   const facts = el('div', 'facts');
-  addFact(facts, 'In your archive', String(status.observations) + ' recordings');
+  addFact(facts, 'In your archive', count(status.observations, 'recording'));
   addFact(facts, 'Space used', bytes(status.object_bytes));
   addFact(facts, 'Archive folder', status.archive_dir);
   host.append(facts);
@@ -601,7 +628,7 @@ async function refreshDeclare() {
       const card = el('section', 'card');
       const head = el('div', 'card-head');
       head.append(el('h2', null, server.id));
-      head.append(el('span', 'card-note', server.chunks + ' places recorded'));
+      head.append(el('span', 'card-note', count(server.chunks, 'place') + ' recorded'));
       card.append(head);
 
       if (server.declared) {
@@ -725,7 +752,7 @@ function serverChooser(servers, onChange) {
   chosenServer = defaultServer(servers);
   const select = el('select');
   for (const server of servers) {
-    const option = el('option', null, server.id + ' — ' + server.chunks + ' places');
+    const option = el('option', null, server.id + ' — ' + count(server.chunks, 'place'));
     option.value = server.id;
     select.append(option);
   }
@@ -782,7 +809,7 @@ function dimensionChooser(servers, onChange) {
   }
   const select = el('select');
   for (const dimension of available) {
-    const option = el('option', null, worldName(dimension.id) + ' — ' + dimension.chunks + ' places');
+    const option = el('option', null, worldName(dimension.id) + ' — ' + count(dimension.chunks, 'place'));
     option.value = dimension.id;
     select.append(option);
   }
@@ -988,18 +1015,18 @@ function finished(result, world, moment) {
     'It is called ' + world.name + '. Open Minecraft, choose Singleplayer, and play it.'));
 
   const facts = el('div', 'facts');
-  addFact(facts, 'Places written', String(result.chunks) + ' chunk(s) from ' + chosenServer);
+  addFact(facts, 'Places written', count(result.chunks, 'place') + ' from ' + chosenServer);
   if (moment) addFact(facts, 'As it was on', moment);
   // The number that answers "did this eat my world", which is the question the
   // export used to leave hanging because it did not know the answer itself.
   if (result.kept) {
-    addFact(facts, 'Already there, left alone', String(result.kept) + ' chunk(s)');
+    addFact(facts, 'Already there, left alone', count(result.kept, 'place'));
   }
   if (result.unknown) {
-    addFact(facts, 'Not yet seen at that moment', String(result.unknown) + ' chunk(s), not written');
+    addFact(facts, 'Not yet seen at that moment', count(result.unknown, 'place') + ', not written');
   }
   if (result.withheld) {
-    addFact(facts, 'Held back by a redaction', String(result.withheld) + ' recording(s)');
+    addFact(facts, 'Held back by a redaction', count(result.withheld, 'recording'));
   }
   addFact(facts, 'Files written', (result.region_files || []).join(', ') || 'none');
   addFact(facts, 'World folder', result.world_dir || world.path);
@@ -1058,7 +1085,7 @@ async function refreshTravel() {
         'Time travel compares two moments. Play again another day, bring those recordings in, ' +
         'and this will show what changed in between.'));
       const facts = el('div', 'facts');
-      addFact(facts, moments[0].label, moments[0].chunks + ' places recorded');
+      addFact(facts, moments[0].label, count(moments[0].chunks, 'place') + ' recorded');
       host.append(facts);
       return;
     }
@@ -1068,7 +1095,7 @@ async function refreshTravel() {
     const to = el('select');
     for (const moment of moments) {
       for (const select of [from, to]) {
-        const option = el('option', null, moment.label + ' (' + moment.chunks + ' places)');
+        const option = el('option', null, moment.label + ' (' + count(moment.chunks, 'place') + ')');
         option.value = moment.at;
         select.append(option);
       }

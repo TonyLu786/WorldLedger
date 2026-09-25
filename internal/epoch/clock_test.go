@@ -25,24 +25,30 @@ func TestAFastClockCanTurnAConflictIntoAChange(t *testing.T) {
 	// Two contributors look at the same chunk at the same real moment and see
 	// different things. That is a conflict and it is the case worth a person's
 	// attention.
+	//
+	// Both gaps are taken from the window rather than written as fixed
+	// durations, so that widening or narrowing it moves this test with it. A
+	// version of this with a five-minute skew against a thirty-second window
+	// had to skip itself if the window ever grew past the skew, which is a test
+	// that stops testing without saying so.
+	inside := DefaultSimultaneityWindow / 2
 	honest := []model.Observation{
 		newObservation(t, "alice", at(10), 'a'),
-		newObservation(t, "bob", at(10).Add(2*time.Second), 'b'),
+		newObservation(t, "bob", at(10).Add(inside), 'b'),
 	}
 	if got := SelectChunk(testChunk, honest, at(30)).Status; got != StatusConflict {
-		t.Fatalf("two contributors disagreeing two seconds apart = %q; want %q", got, StatusConflict)
+		t.Fatalf("two contributors disagreeing %v apart = %q; want %q", inside, got, StatusConflict)
 	}
 
-	// The same two observations, with bob's clock five minutes fast. Nothing
-	// about what either of them saw has changed.
+	// The same two observations, with bob's clock wrong by more than the
+	// window, which is what it takes. Nothing about what either of them saw has
+	// changed.
+	skew := DefaultSimultaneityWindow + time.Second
 	skewed := []model.Observation{
 		newObservation(t, "alice", at(10), 'a'),
-		newObservation(t, "bob", at(15).Add(2*time.Second), 'b'),
+		newObservation(t, "bob", at(10).Add(skew), 'b'),
 	}
 	selection := SelectChunk(testChunk, skewed, at(30))
-	if selection.Status == StatusConflict {
-		t.Skip("a five-minute skew no longer moves the window; the rest of this test is about the case where it does")
-	}
 	if selection.Status != StatusSuperseded {
 		t.Fatalf("status = %q; a skew this size makes the disagreement look like a change", selection.Status)
 	}
@@ -84,11 +90,12 @@ func TestAClockAheadOfTheEpochCannotMoveTheWindowAtAll(t *testing.T) {
 // exposure is real: it takes a clock wrong by more than the simultaneity window
 // to move anybody out of it.
 func TestASkewInsideTheWindowChangesNothing(t *testing.T) {
+	inside := DefaultSimultaneityWindow / 3
 	skewed := []model.Observation{
 		newObservation(t, "alice", at(10), 'a'),
-		newObservation(t, "bob", at(10).Add(10*time.Second), 'b'),
+		newObservation(t, "bob", at(10).Add(inside), 'b'),
 	}
 	if got := SelectChunk(testChunk, skewed, at(30)).Status; got != StatusConflict {
-		t.Errorf("status = %q; ten seconds is inside the thirty-second window", got)
+		t.Errorf("status = %q; %v is inside the %v window", got, inside, DefaultSimultaneityWindow)
 	}
 }

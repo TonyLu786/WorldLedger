@@ -67,8 +67,8 @@ func reportComparison(local archive.Manifest, path, archivePath string) error {
 		return err
 	}
 
-	fmt.Printf("local  root %s  (%d observations)\n", local.Root, local.Observations)
-	fmt.Printf("remote root %s  (%d observations)\n\n", remote.Root, remote.Observations)
+	fmt.Printf("local  root %s  (%d observation(s))\n", local.Root, local.Observations)
+	fmt.Printf("remote root %s  (%d observation(s))\n\n", remote.Root, remote.Observations)
 
 	differences := archive.Compare(local, remote)
 	if len(differences) == 0 {

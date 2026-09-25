@@ -293,7 +293,7 @@ func (r worldRequest) writeStreaming(a archive.Archive, snapshot epoch.Snapshot,
 }
 
 func (r worldRequest) report(snapshot epoch.Snapshot, report anvil.ExportReport) error {
-	fmt.Printf("wrote %d chunks into %d region file(s)\n", report.Chunks, len(report.RegionFiles))
+	fmt.Printf("wrote %d chunk(s) into %d region file(s)\n", report.Chunks, len(report.RegionFiles))
 	for _, path := range report.RegionFiles {
 		fmt.Printf("  %s\n", path)
 	}
