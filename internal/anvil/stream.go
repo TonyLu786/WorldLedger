@@ -36,11 +36,20 @@ import (
 //     being replaced by a smaller one.
 //
 // The second is why there is a validation pass that reads the region files and
-// throws the result away, and then a writing pass that reads them again. It
-// costs reading the destination twice. The alternative is holding every
-// adopted frame across the whole export, which is the memory this exists to
-// avoid, or discovering the unreadable file after four of its neighbours have
-// already been replaced.
+// throws the result away, and then a writing pass that reads them again. The
+// alternative is holding every adopted frame across the whole export, which is
+// the memory this exists to avoid, or discovering the unreadable file after
+// four of its neighbours have already been replaced.
+//
+// Reading the destination twice was worth measuring rather than worrying about,
+// and it is cheaper than it sounds: eight hundred chunks over region files that
+// all already existed took 9.6 seconds written all at once and 10.0 region by
+// region, a difference of under five per cent, and most of that is scanning a
+// thousand header slots a second time rather than the bytes. The destination is
+// small next to the archive it is built from. A full region file is sixteen
+// mebibytes against the hundreds of mebibytes of objects decoded to fill it, so
+// the second pass is a rounding error on an export and the property it buys is
+// not.
 
 // ExportByRegion writes an existing world one region file at a time.
 //

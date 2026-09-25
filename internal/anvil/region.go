@@ -160,14 +160,27 @@ func (r *Region) Bytes() []byte {
 	}
 	sort.Ints(slots)
 
-	locations := make([]byte, sectorBytes)
-	timestamps := make([]byte, sectorBytes)
-	body := make([]byte, 0, len(r.payload)*sectorBytes)
+	// The whole file is sized before any of it is written.
+	//
+	// It used to guess: one sector per chunk for the body, when a chunk is
+	// three or four, so appending regrew the slice several times over. Each
+	// chunk also got a padded copy of its own before being appended into that.
+	// A sixteen mebibyte region cost a hundred and eleven mebibytes of
+	// allocation, seven times what it produced, and an export is many regions.
+	//
+	// Every length here is known in advance, so none of it needs guessing.
+	total := headerSectors * sectorBytes
+	for _, slot := range slots {
+		total += sectorsFor(len(r.payload[slot])) * sectorBytes
+	}
+	out := make([]byte, total)
+	locations := out[:sectorBytes]
+	timestamps := out[sectorBytes : 2*sectorBytes]
 
 	nextSector := headerSectors
 	for _, slot := range slots {
 		frame := r.payload[slot]
-		sectors := (len(frame) + sectorBytes - 1) / sectorBytes
+		sectors := sectorsFor(len(frame))
 		entry := slot * 4
 		locations[entry] = byte(nextSector >> 16)
 		locations[entry+1] = byte(nextSector >> 8)
@@ -180,16 +193,17 @@ func (r *Region) Bytes() []byte {
 			copy(timestamps[entry:entry+4], stamp)
 		}
 
-		padded := make([]byte, sectors*sectorBytes)
-		copy(padded, frame)
-		body = append(body, padded...)
+		// Straight into the sector it belongs in. The rest of that sector is
+		// already zero, which is the padding.
+		copy(out[nextSector*sectorBytes:], frame)
 		nextSector += sectors
 	}
+	return out
+}
 
-	out := make([]byte, 0, len(locations)+len(timestamps)+len(body))
-	out = append(out, locations...)
-	out = append(out, timestamps...)
-	return append(out, body...)
+// sectorsFor is how many whole sectors a frame occupies.
+func sectorsFor(length int) int {
+	return (length + sectorBytes - 1) / sectorBytes
 }
 
 func regionSlot(chunkX, chunkZ int32) int {

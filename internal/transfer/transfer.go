@@ -80,6 +80,9 @@ type Sent struct {
 // would be smaller still and wrong, because it leaves two mirrors agreeing on
 // every byte and disagreeing about who observed what.
 func Send(a archive.Archive, peer archive.Fingerprint, peerManifest *archive.Manifest, out string) (Sent, error) {
+	if err := requireSeparateFromArchive(out, a.Root); err != nil {
+		return Sent{}, err
+	}
 	local, err := a.Fingerprint("")
 	if err != nil {
 		return Sent{}, err
@@ -251,6 +254,75 @@ func chunksTheyDisagreeAbout(a archive.Archive, peer *archive.Manifest) (map[mod
 		out[*difference.Chunk] = struct{}{}
 	}
 	return out, true
+}
+
+// requireSeparateFromArchive refuses to assemble a bundle inside the archive it
+// is being assembled from.
+//
+// A bundle directory is laid out like an archive: observations/<id>.json and
+// objects addressed by digest. Pointed at the archive itself, Send writes its
+// own records back over the ones it is reading, and the result is an archive
+// whose integrity check reports each observation stored more than once, from a
+// command that printed a success and a suggestion for what to do next.
+//
+// internal/bundle has exactly this guard for the mirror-image case, on the
+// reasoning that a path somebody typed is allowed to be wrong and a program is
+// not allowed to act on it destructively. This path had none.
+func requireSeparateFromArchive(out, archiveRoot string) error {
+	outPath, err := filepath.Abs(out)
+	if err != nil {
+		return fmt.Errorf("resolve the output directory: %w", err)
+	}
+	archivePath, err := filepath.Abs(archiveRoot)
+	if err != nil {
+		return fmt.Errorf("resolve the archive: %w", err)
+	}
+	// Both resolved the same way, which matters more than it looks. The output
+	// directory usually does not exist yet, so EvalSymlinks fails on it and
+	// leaves it as typed, while the archive does exist and resolves. On Windows
+	// that is enough on its own to make one comparison fail: a temporary path
+	// arrives with the short form of a name that has a space in it, and the
+	// resolved archive has the long one. Same directory, two strings, no
+	// overlap detected.
+	outPath = resolveExisting(outPath)
+	archivePath = resolveExisting(archivePath)
+	if within(archivePath, outPath) || within(outPath, archivePath) {
+		return fmt.Errorf(
+			"refusing to build a bundle at %s, which is inside the archive it would be built from"+
+				" (or the other way round): a bundle is laid out like an archive, so writing one"+
+				" here would write over the records it is reading. Choose a directory outside %s",
+			out, archiveRoot)
+	}
+	return nil
+}
+
+// resolveExisting resolves as much of a path as exists and keeps the rest.
+//
+// A directory that has not been created cannot be resolved, and refusing to
+// compare it would be refusing to check the one case that matters: send is
+// usually pointed at somewhere new.
+func resolveExisting(path string) string {
+	remainder := ""
+	current := filepath.Clean(path)
+	for {
+		if resolved, err := filepath.EvalSymlinks(current); err == nil {
+			return filepath.Join(resolved, remainder)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return filepath.Clean(path)
+		}
+		remainder = filepath.Join(filepath.Base(current), remainder)
+		current = parent
+	}
+}
+
+func within(root, target string) bool {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(target))
+	if err != nil || filepath.IsAbs(relative) {
+		return false
+	}
+	return relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator))
 }
 
 func copyObject(a archive.Archive, ref model.BlobRef, out string) error {

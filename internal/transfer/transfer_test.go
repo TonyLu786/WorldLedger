@@ -257,3 +257,40 @@ func TestSendingToAMirrorThatHoldsEverythingProducesNothing(t *testing.T) {
 		t.Fatalf("given the peer's manifest, an identical mirror needs nothing, got %+v", withManifest)
 	}
 }
+
+// A bundle directory is laid out like an archive, so pointing send at the
+// archive it is reading writes its own records back over them. The archive is
+// left with every observation stored twice, from a command that reported
+// success and printed what to do next.
+//
+// internal/bundle has this guard for the mirror-image case. This path had none.
+func TestSendRefusesToBuildInsideTheArchiveItReadsFrom(t *testing.T) {
+	dir := t.TempDir()
+	a, err := archive.Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Something to send, so the refusal under test is the one being tested and
+	// not "this archive holds no observation".
+	add(t, a, 0, 0, "alice", 1, "something to send")
+
+	for _, out := range []string{
+		dir,
+		filepath.Join(dir, "outbound"),
+		filepath.Join(dir, "objects", "outbound"),
+	} {
+		_, err := Send(a, archive.Fingerprint{}, nil, out)
+		if err == nil {
+			t.Errorf("send into %s was allowed", out)
+			continue
+		}
+		if !strings.Contains(err.Error(), "inside the archive") {
+			t.Errorf("send into %s refused for the wrong reason: %v", out, err)
+		}
+	}
+
+	// And somewhere else entirely is still fine.
+	if _, err := Send(a, archive.Fingerprint{}, nil, filepath.Join(t.TempDir(), "outbound")); err != nil {
+		t.Errorf("send into a separate directory was refused: %v", err)
+	}
+}

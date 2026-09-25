@@ -179,6 +179,10 @@ func cmdIngest(args []string) error {
 	if *archivePath == "" || *server == "" || *contributor == "" || *observedAt == "" || fs.NArg() != 1 {
 		return usageError("ingest")
 	}
+	chunkX, chunkZ, err := requireChunk(*x, *z)
+	if err != nil {
+		return err
+	}
 	t, err := time.Parse(time.RFC3339Nano, *observedAt)
 	if err != nil {
 		return fmt.Errorf("parse observed-at: %w", err)
@@ -197,7 +201,7 @@ func cmdIngest(args []string) error {
 		return err
 	}
 	o := model.Observation{
-		Chunk:      model.ChunkRef{ServerID: *server, Dimension: *dimension, X: int32(*x), Z: int32(*z)},
+		Chunk:      model.ChunkRef{ServerID: *server, Dimension: *dimension, X: chunkX, Z: chunkZ},
 		ObservedAt: t,
 		Protocol:   *protocol,
 		Source:     model.Source{Contributor: *contributor, Agent: *agent},
@@ -293,7 +297,11 @@ func cmdVerify(args []string) error {
 	if err != nil {
 		return err
 	}
-	obs, err := a.Observations(model.ChunkRef{ServerID: *server, Dimension: *dimension, X: int32(*x), Z: int32(*z)})
+	chunkX, chunkZ, err := requireChunk(*x, *z)
+	if err != nil {
+		return err
+	}
+	obs, err := a.Observations(model.ChunkRef{ServerID: *server, Dimension: *dimension, X: chunkX, Z: chunkZ})
 	if err != nil {
 		return err
 	}
@@ -369,7 +377,11 @@ func parseChunkSelector(name string, args []string) (archive.Archive, model.Chun
 	if err != nil {
 		return archive.Archive{}, model.ChunkRef{}, err
 	}
-	return a, model.ChunkRef{ServerID: *server, Dimension: *dimension, X: int32(*x), Z: int32(*z)}, nil
+	chunkX, chunkZ, err := requireChunk(*x, *z)
+	if err != nil {
+		return archive.Archive{}, model.ChunkRef{}, err
+	}
+	return a, model.ChunkRef{ServerID: *server, Dimension: *dimension, X: chunkX, Z: chunkZ}, nil
 }
 
 func usage(w io.Writer) {

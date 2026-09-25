@@ -357,8 +357,12 @@ func cmdExport(args []string) error {
 	if err := requirePolicy(a, request.server); err != nil {
 		return err
 	}
-	printCompatibilityNotice(snapshot, int32(*dataVersion))
-	return request.writeStreaming(a, snapshot, sources, int32(*dataVersion))
+	stamped, err := requireDataVersion(*dataVersion)
+	if err != nil {
+		return err
+	}
+	printCompatibilityNotice(snapshot, stamped)
+	return request.writeStreaming(a, snapshot, sources, stamped)
 }
 
 // cmdConvert writes a downgraded copy into a separate world. It is deliberately
