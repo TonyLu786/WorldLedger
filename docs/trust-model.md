@@ -36,6 +36,16 @@ Observed timestamps are supplied by capture sources. They can be inaccurate or m
 
 Future observations should carry clock-quality metadata and an upload receipt timestamp. Verification can then reason about intervals rather than exact instants.
 
+[ADR 0003](decisions/0003-corroboration-and-time.md) gave a clock one more thing to decide, and it is worth naming rather than leaving to be found. Selection now consults the simultaneity window before it counts anybody, and the window is measured back from the most recent eligible observation. A contributor whose clock runs fast moves it. Observations that were genuinely simultaneous with theirs fall outside and stop deciding what the chunk holds: they still corroborate if they agree, and if they disagree they become what the chunk used to hold rather than a contradiction. **A clock wrong by more than the window can therefore turn a conflict into a change**, which is a disagreement being hidden rather than manufactured.
+
+Three things bound it, and none of them is a defence:
+
+- it takes a skew larger than the window, thirty seconds by default, before anybody moves out of it;
+- an observation claiming a time after the epoch is not eligible at all, so for an export of "now" a fast clock excludes only itself;
+- it can narrow who decides, never add a voter, so the contributor doing it cannot make anybody agree with them.
+
+What is done about it is that it is counted. Every `Selection` carries how many eligible observations were inside the window and how many fell outside, so a reader can see that a chunk was decided by one observation while four others were set aside. That is the same shape as everything else here: the archive cannot verify a clock, and it can refuse to be quiet about what a clock decided.
+
 ### Legitimate disagreement
 
 Minecraft worlds are mutable. Two conflicting observations seconds apart may both be correct.

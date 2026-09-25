@@ -75,13 +75,41 @@ type Selection struct {
 	Support Support `json:"support"`
 }
 
-// Support describes the observations a selection rests on.
+// Support describes the observations a selection rests on, and what the window
+// left out of deciding it.
+//
+// A snapshot manifest carries this and a manifest is handed to other people, so
+// nothing in here is formatted by a language. The span was a Go duration string
+// for about an hour: "30m0s" is readable and it is also Go's spelling of a
+// number, and the identity encoding elsewhere in this project goes to some
+// trouble not to leave that choice open to whoever writes the second
+// implementation. Integers do not have the choice.
 type Support struct {
 	Observations int       `json:"observations"`
 	Earliest     time.Time `json:"earliest"`
 	Latest       time.Time `json:"latest"`
-	// Span is Latest minus Earliest, as a duration somebody can read.
-	Span string `json:"span"`
+	// SpanSeconds and SpanNanoseconds are Latest minus Earliest, split the way
+	// an instant is split for identity: whole seconds and the remainder within
+	// one second.
+	SpanSeconds     int64 `json:"span_seconds"`
+	SpanNanoseconds int32 `json:"span_nanoseconds"`
+	// Counted is how many of the eligible observations were inside the window
+	// and so decided what this chunk holds. Earlier is how many fell outside it.
+	//
+	// The second number is here because of what the window does when a clock is
+	// wrong. The most recent eligible observation is what the window is measured
+	// back from, so a contributor whose clock runs fast moves it, and
+	// observations that were genuinely simultaneous with theirs fall outside and
+	// stop voting. They still corroborate if they agree; if they disagree they
+	// become what the chunk used to hold rather than a contradiction, so a
+	// skewed clock can turn a conflict into a superseded and nothing would have
+	// said so.
+	//
+	// It cannot be defended against here. An observed time is supplied by
+	// whoever captured it and the trust model says so. What it can be is
+	// visible, which is what this counts.
+	Counted int `json:"counted"`
+	Earlier int `json:"earlier"`
 }
 
 func (s Selection) Known() bool {
@@ -223,7 +251,7 @@ func SelectChunkWithin(
 		Selected:     &winner,
 		Contributors: selected.Contributors,
 		Rejected:     rejected,
-		Support:      supportOf(selected.Observations),
+		Support:      supportOf(selected.Observations, len(contemporary), len(earlier)),
 	}
 }
 
@@ -287,30 +315,33 @@ func rejectedGroups(eligible []model.Observation, selectedDigest string) []State
 	return groupByState(losing)
 }
 
-// supportOf describes how old the observations behind a selection are.
+// supportOf describes how old the observations behind a selection are, and how
+// many of the eligible ones the window left out of deciding it.
 //
 // A status is one word and cannot carry this. Two contributors who agree ten
 // seconds apart and two who agree a fortnight apart are both corroborated, and
 // anybody deciding how much to rely on that wants to know which they have.
-func supportOf(observations []model.Observation) Support {
+func supportOf(observations []model.Observation, counted, earlier int) Support {
+	support := Support{Counted: counted, Earlier: earlier}
 	if len(observations) == 0 {
-		return Support{}
+		return support
 	}
-	earliest, latest := observations[0].ObservedAt, observations[0].ObservedAt
+	earliestAt, latestAt := observations[0].ObservedAt, observations[0].ObservedAt
 	for _, o := range observations[1:] {
-		if o.ObservedAt.Before(earliest) {
-			earliest = o.ObservedAt
+		if o.ObservedAt.Before(earliestAt) {
+			earliestAt = o.ObservedAt
 		}
-		if o.ObservedAt.After(latest) {
-			latest = o.ObservedAt
+		if o.ObservedAt.After(latestAt) {
+			latestAt = o.ObservedAt
 		}
 	}
-	return Support{
-		Observations: len(observations),
-		Earliest:     earliest.UTC(),
-		Latest:       latest.UTC(),
-		Span:         latest.Sub(earliest).String(),
-	}
+	span := latestAt.Sub(earliestAt)
+	support.Observations = len(observations)
+	support.Earliest = earliestAt.UTC()
+	support.Latest = latestAt.UTC()
+	support.SpanSeconds = int64(span / time.Second)
+	support.SpanNanoseconds = int32(span % time.Second)
+	return support
 }
 
 func latestPerContributor(observations []model.Observation, at time.Time) []model.Observation {

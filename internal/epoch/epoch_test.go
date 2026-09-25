@@ -132,8 +132,15 @@ func TestOlderAgreementStillCorroborates(t *testing.T) {
 	if selection.Support.Observations != 2 {
 		t.Errorf("support counts %d observation(s), want 2", selection.Support.Observations)
 	}
-	if selection.Support.Span != "30m0s" {
-		t.Errorf("support span = %q, want 30m0s", selection.Support.Span)
+	if selection.Support.SpanSeconds != 1800 || selection.Support.SpanNanoseconds != 0 {
+		t.Errorf("support span = %ds %dns, want 1800s 0ns",
+			selection.Support.SpanSeconds, selection.Support.SpanNanoseconds)
+	}
+	// Both agreed, thirty minutes apart, so one was inside the window and one
+	// was not. Corroboration counts them both; the window counts them apart.
+	if selection.Support.Counted != 1 || selection.Support.Earlier != 1 {
+		t.Errorf("counted=%d earlier=%d; one observation was inside the window and one outside",
+			selection.Support.Counted, selection.Support.Earlier)
 	}
 }
 
