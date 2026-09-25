@@ -18,53 +18,107 @@ type translationOptions struct {
 	keepBlockEntities bool
 }
 
-// translateForTarget rewrites prepared chunks for another Minecraft release and
-// prints what the conversion cost. It returns the chunks the target can carry
-// and the data version to stamp them with.
+// A translation rewrites chunks for another Minecraft release.
+//
+// It is a value rather than a function because a conversion is now carried out
+// one region at a time, and the parts of it that are about the whole dimension
+// -- what was lost, and whether the result may be written at all -- have to
+// live across those regions. The translator inside it already accumulates its
+// report over every chunk it is given, so nothing here adds up anything the
+// translator is not already adding up.
 //
 // This runs only for the convert command. An export never reaches here, so a
 // faithful export cannot silently become an approximation.
-func translateForTarget(prepared []anvil.PreparedChunk, dimensionID string, options translationOptions) ([]anvil.PreparedChunk, int32, error) {
+type translation struct {
+	profile   mcprofile.Profile
+	dimension mcprofile.Dimension
+	policy    translate.Policy
+	rules     translate.Rules
+	options   translationOptions
+
+	translator *translate.Translator
+	// Block entity payloads are the network representation of the release that
+	// was captured. Nothing here migrates them, and a payload an older release
+	// cannot parse is a chunk it may refuse to load, so they are dropped unless
+	// the operator asks for them. They are counted out here rather than inside
+	// the translator, which only sees blocks, biomes and the build range.
+	droppedBlockEntities int
+}
+
+func newTranslation(dimensionID string, options translationOptions) (*translation, error) {
 	profile, err := mcprofile.Load(options.profilePath)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	dimension, exists := profile.Dimension(dimensionID)
 	if !exists {
-		return nil, 0, fmt.Errorf("release %s has no dimension %s", profile.Version, dimensionID)
+		return nil, fmt.Errorf("release %s has no dimension %s", profile.Version, dimensionID)
 	}
 	policy, err := translate.ParsePolicy(options.policyName)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	rules := translate.Rules{Schema: translate.RulesSchema}
 	if options.rulesPath != "" {
 		rules, err = translate.LoadRules(options.rulesPath)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 	}
-	translator, err := translate.New(profile, rules, policy, options.filler, options.fillerBiome)
-	if err != nil {
-		return nil, 0, err
+
+	t := &translation{
+		profile:   profile,
+		dimension: dimension,
+		policy:    policy,
+		rules:     rules,
+		options:   options,
 	}
+	if err := t.restart(); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
 
-	// Block entity payloads are the network representation of the release that
-	// was captured. Nothing here migrates them, and a payload an older release
-	// cannot parse is a chunk it may refuse to load, so they are dropped unless
-	// the operator asks for them.
-	droppedBlockEntities := 0
+// restart gives the translation a fresh translator and forgets what was
+// counted.
+//
+// The deciding pass and the writing pass translate the same chunks, so one
+// translator across both would report every loss twice and say the dimension
+// holds twice the chunks it holds. The report that is printed is the deciding
+// pass's, which is the complete one; the writing pass's is discarded.
+func (t *translation) restart() error {
+	translator, err := translate.New(t.profile, t.rules, t.policy, t.options.filler, t.options.fillerBiome)
+	if err != nil {
+		return err
+	}
+	t.translator = translator
+	t.droppedBlockEntities = 0
+	return nil
+}
 
+// canRefuse answers whether this policy may decide, after seeing everything,
+// that nothing should be written.
+//
+// Only the report policy does. skip-chunk and fill decide each chunk on its own
+// and never revisit one, so a conversion under either can be written as it goes.
+func (t *translation) canRefuse() bool {
+	return t.policy == translate.PolicyReport
+}
+
+// chunks translates one region's worth. It matches what ExportByRegion asks of
+// a transform, and is also what the deciding pass runs with the result thrown
+// away.
+func (t *translation) chunks(prepared []anvil.PreparedChunk) ([]anvil.PreparedChunk, error) {
 	translated := make([]anvil.PreparedChunk, 0, len(prepared))
 	for _, entry := range prepared {
-		out, keep, err := translator.Chunk(translate.Chunk{
+		out, keep, err := t.translator.Chunk(translate.Chunk{
 			Shape:  entry.Components.Shape,
 			Blocks: entry.Components.Blocks,
 			Biomes: entry.Components.Biomes,
-		}, dimension)
+		}, t.dimension)
 		if err != nil {
-			return nil, 0, fmt.Errorf("chunk (%d,%d): %w", entry.Chunk.X, entry.Chunk.Z, err)
+			return nil, fmt.Errorf("chunk (%d,%d): %w", entry.Chunk.X, entry.Chunk.Z, err)
 		}
 		if !keep {
 			continue
@@ -72,21 +126,21 @@ func translateForTarget(prepared []anvil.PreparedChunk, dimensionID string, opti
 		entry.Components.Shape = out.Shape
 		entry.Components.Blocks = out.Blocks
 		entry.Components.Biomes = out.Biomes
-		if !options.keepBlockEntities && entry.Components.HasBlockEntities {
-			if len(entry.Components.BlockEntities) > 0 {
-				droppedBlockEntities += len(entry.Components.BlockEntities)
-			}
+		if !t.options.keepBlockEntities && entry.Components.HasBlockEntities {
+			t.droppedBlockEntities += len(entry.Components.BlockEntities)
 			entry.Components.BlockEntities = nil
 			entry.Components.HasBlockEntities = false
 		}
 		translated = append(translated, entry)
 	}
+	return translated, nil
+}
 
-	report := translator.Report()
-	printTranslationReport(profile, report, droppedBlockEntities, options.keepBlockEntities)
-
-	if translator.Refused() {
-		return nil, 0, errors.New("the target release cannot represent some observed state; nothing was written (choose --on-unrepresentable skip-chunk or fill, or supply --rules)")
+// verdict is whether what was seen may be written, and is meaningful only after
+// every chunk has been through chunks.
+func (t *translation) verdict() error {
+	if t.translator.Refused() {
+		return errors.New("the target release cannot represent some observed state; nothing was written (choose --on-unrepresentable skip-chunk or fill, or supply --rules)")
 	}
 	// A dropped block entity is a loss, and `report` means do not write.
 	//
@@ -95,22 +149,40 @@ func translateForTarget(prepared []anvil.PreparedChunk, dimensionID string, opti
 	// whose only loss was every chest, sign and furnace in the world reported
 	// them and then wrote the world anyway, under the one policy whose entire
 	// purpose is to write nothing and tell you what would have gone.
-	if report.Policy == translate.PolicyReport && droppedBlockEntities > 0 {
-		return nil, 0, fmt.Errorf(
+	if t.policy == translate.PolicyReport && t.droppedBlockEntities > 0 {
+		return fmt.Errorf(
 			"%d block entit(ies) would be dropped and nothing was written; "+
 				"pass --keep-block-entities to carry them across unchanged, or choose "+
 				"--on-unrepresentable skip-chunk or fill",
-			droppedBlockEntities)
+			t.droppedBlockEntities)
 	}
-	fmt.Printf("converted world targets Minecraft %s (data version %d)\n\n", profile.Version, profile.DataVersion)
-	return translated, profile.DataVersion, nil
+	return nil
 }
 
-func printTranslationReport(profile mcprofile.Profile, report translate.Report, droppedBlockEntities int, keptBlockEntities bool) {
-	fmt.Printf("translating to %s (data version %d) under policy %s\n", profile.Version, profile.DataVersion, report.Policy)
+// printHeader says what is about to happen. It is printed before anything is
+// written, under every policy.
+//
+// It is separate from the outcome below because the two are known at different
+// times. What a conversion targets and how it is configured comes from the
+// arguments; what it cost is known only once every region has been through,
+// which under the streaming policies is after the world has been written.
+func (t *translation) printHeader() {
+	fmt.Printf("translating to %s (data version %d) under policy %s\n\n",
+		t.profile.Version, t.profile.DataVersion, t.policy)
+}
 
+// printOutcome is what the conversion cost and what it produced, in that order.
+// It reads the same whether it comes before the write, because the policy may
+// still refuse, or after it.
+func (t *translation) printOutcome() {
+	printTranslationLosses(t.translator.Report(), t.droppedBlockEntities, t.options.keepBlockEntities)
+	fmt.Printf("converted world targets Minecraft %s (data version %d)\n\n",
+		t.profile.Version, t.profile.DataVersion)
+}
+
+func printTranslationLosses(report translate.Report, droppedBlockEntities int, keptBlockEntities bool) {
 	if !report.Lossy() && droppedBlockEntities == 0 {
-		fmt.Printf("%d chunk(s) translated with no loss\n\n", report.Chunks)
+		fmt.Printf("%d chunk(s) translated with no loss\n", report.Chunks)
 		return
 	}
 

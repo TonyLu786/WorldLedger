@@ -67,22 +67,7 @@ func ExportByRegion(source ObjectSource, chunks []ChunkSource, request ExportReq
 		return ExportReport{}, err
 	}
 
-	grouped := map[[2]int32][]ChunkSource{}
-	for _, entry := range chunks {
-		regionX, regionZ := RegionOf(entry.Chunk.X, entry.Chunk.Z)
-		key := [2]int32{regionX, regionZ}
-		grouped[key] = append(grouped[key], entry)
-	}
-	keys := make([][2]int32, 0, len(grouped))
-	for key := range grouped {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i][0] == keys[j][0] {
-			return keys[i][1] < keys[j][1]
-		}
-		return keys[i][0] < keys[j][0]
-	})
+	keys, grouped := groupByRegion(chunks)
 
 	paths := make([]string, 0, len(keys))
 	for _, key := range keys {
@@ -118,7 +103,7 @@ func ExportByRegion(source ObjectSource, chunks []ChunkSource, request ExportReq
 		return ExportReport{}, err
 	}
 
-	report := ExportReport{RegionFiles: paths}
+	var report ExportReport
 	for index, key := range keys {
 		prepared, err := Prepare(source, grouped[key])
 		if err != nil {
@@ -129,6 +114,15 @@ func ExportByRegion(source ObjectSource, chunks []ChunkSource, request ExportReq
 			if err != nil {
 				return ExportReport{}, err
 			}
+		}
+		if len(prepared) == 0 {
+			// A transform is allowed to drop every chunk in a region; a
+			// conversion that skips what the target release cannot hold does
+			// exactly that. Writing the file anyway would create an empty
+			// region where there had been none, or rewrite an existing one
+			// byte for byte to say nothing, and either way name it afterwards
+			// as a file this wrote.
+			continue
 		}
 
 		region := NewRegion(key[0], key[1])
@@ -160,8 +154,63 @@ func ExportByRegion(source ObjectSource, chunks []ChunkSource, request ExportReq
 		if err := writeFileAtomic(paths[index], region.Bytes()); err != nil {
 			return ExportReport{}, err
 		}
+		report.RegionFiles = append(report.RegionFiles, paths[index])
 	}
 	return report, nil
+}
+
+// EachRegion loads a dimension one region at a time and hands each region's
+// chunks to visit, writing nothing.
+//
+// It exists for the half of a conversion that has to be decided before any of
+// it is written. Under the report policy a single piece of state the target
+// release cannot represent means the whole conversion writes nothing, and that
+// promise cannot be kept by a writer that has already put thirty region files
+// on disk by the time it reaches the one that refuses. So the translation is
+// run over the whole dimension first with its output thrown away, and then run
+// again by ExportByRegion for the world it produces. One region is held at a
+// time either way. What the first pass adds is measured against the second in
+// bench_each_region_test.go: about a fifth of it with nothing to translate, and
+// more as the translation itself grows.
+//
+// The policies that cannot refuse do not pay this. skip-chunk and fill decide
+// each chunk on its own and never change their mind about the ones already
+// written, so they stream straight through in a single pass.
+func EachRegion(source ObjectSource, chunks []ChunkSource, visit func(prepared []PreparedChunk) error) error {
+	keys, grouped := groupByRegion(chunks)
+	for _, key := range keys {
+		prepared, err := Prepare(source, grouped[key])
+		if err != nil {
+			return err
+		}
+		if err := visit(prepared); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// groupByRegion divides chunks along the line the output files divide on, and
+// orders the regions so that two runs over the same archive do the same work in
+// the same order.
+func groupByRegion(chunks []ChunkSource) ([][2]int32, map[[2]int32][]ChunkSource) {
+	grouped := map[[2]int32][]ChunkSource{}
+	for _, entry := range chunks {
+		regionX, regionZ := RegionOf(entry.Chunk.X, entry.Chunk.Z)
+		key := [2]int32{regionX, regionZ}
+		grouped[key] = append(grouped[key], entry)
+	}
+	keys := make([][2]int32, 0, len(grouped))
+	for key := range grouped {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i][0] == keys[j][0] {
+			return keys[i][1] < keys[j][1]
+		}
+		return keys[i][0] < keys[j][0]
+	})
+	return keys, grouped
 }
 
 // checkAdoptable reads an existing region file the way Adopt would, and reports

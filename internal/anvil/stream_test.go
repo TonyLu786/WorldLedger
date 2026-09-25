@@ -15,7 +15,7 @@ import (
 
 // blockStatesOf turns a decoded section back into the states it was built
 // from, so the same components can be written as objects and read as objects.
-func blockStatesOf(t *testing.T, section mcjava.BlockSection) []mcjava.BlockState {
+func blockStatesOf(t testing.TB, section mcjava.BlockSection) []mcjava.BlockState {
 	t.Helper()
 	states, err := section.ParsedStates()
 	if err != nil {
@@ -34,7 +34,7 @@ func blockStatesOf(t *testing.T, section mcjava.BlockSection) []mcjava.BlockStat
 // is all Prepare needs in order to load something.
 type sourceForTest struct{ dir string }
 
-func newSourceForTest(t *testing.T) (sourceForTest, []ChunkSource, []PreparedChunk) {
+func newSourceForTest(t testing.TB) (sourceForTest, []ChunkSource, []PreparedChunk) {
 	t.Helper()
 	dir := t.TempDir()
 	components := testComponents(t)

@@ -12,7 +12,7 @@ import (
 	"github.com/worldledger/worldledger-mc/internal/mcjava"
 )
 
-func blockSection(t *testing.T, sectionY int32, names ...string) mcjava.BlockSection {
+func blockSection(t testing.TB, sectionY int32, names ...string) mcjava.BlockSection {
 	t.Helper()
 	states := make([]mcjava.BlockState, mcjava.BlockCount)
 	for position := range states {
@@ -29,7 +29,7 @@ func blockSection(t *testing.T, sectionY int32, names ...string) mcjava.BlockSec
 	return section
 }
 
-func biomeSection(t *testing.T, sectionY int32, names ...string) mcjava.BiomeSection {
+func biomeSection(t testing.TB, sectionY int32, names ...string) mcjava.BiomeSection {
 	t.Helper()
 	biomes := make([]string, mcjava.BiomeCount)
 	for position := range biomes {
@@ -135,7 +135,7 @@ func TestEncodeNamedWritesVanillaFraming(t *testing.T) {
 	}
 }
 
-func testComponents(t *testing.T) ChunkComponents {
+func testComponents(t testing.TB) ChunkComponents {
 	t.Helper()
 	return ChunkComponents{
 		Shape:  mcjava.Shape{MinSectionY: -4, SectionCount: 24},

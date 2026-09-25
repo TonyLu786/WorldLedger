@@ -247,18 +247,6 @@ func (r worldRequest) plan() (archive.Archive, epoch.Snapshot, []anvil.ChunkSour
 	return a, snapshot, sources, nil
 }
 
-// prepareAll loads every chunk at once, for the one caller that needs them
-// together.
-//
-// convert translates a whole dimension against a target release and takes the
-// data version it will stamp from that translation, so it cannot write a region
-// before it has looked at all of them. That is a real difference from export
-// rather than an oversight, and it is the reason convert still carries the
-// memory export no longer does.
-func prepareAll(a archive.Archive, sources []anvil.ChunkSource) ([]anvil.PreparedChunk, error) {
-	return anvil.Prepare(a.CAS, sources)
-}
-
 // writeStreaming exports region by region, gathering as it goes what the
 // compatibility notice needs.
 //
@@ -266,8 +254,13 @@ func prepareAll(a archive.Archive, sources []anvil.ChunkSource) ([]anvil.Prepare
 // all in advance is the thing this stopped doing, so that half of the notice is
 // printed after the write instead of before. It is advice about opening the
 // world, which is the next thing somebody does either way.
+//
+// transform is how convert gets in. It is given each region's chunks before
+// they are written, which is what lets a conversion be bounded the same way an
+// export is.
 func (r worldRequest) writeStreaming(a archive.Archive, snapshot epoch.Snapshot,
-	sources []anvil.ChunkSource, dataVersion int32) error {
+	sources []anvil.ChunkSource, dataVersion int32,
+	transform func([]anvil.PreparedChunk) ([]anvil.PreparedChunk, error)) error {
 
 	namespaces := map[string]struct{}{}
 	report, err := anvil.ExportByRegion(a.CAS, sources, anvil.ExportRequest{
@@ -276,6 +269,16 @@ func (r worldRequest) writeStreaming(a archive.Archive, snapshot epoch.Snapshot,
 		DataVersion: dataVersion,
 		Overwrite:   r.overwrite,
 	}, func(prepared []anvil.PreparedChunk) ([]anvil.PreparedChunk, error) {
+		if transform != nil {
+			var err error
+			prepared, err = transform(prepared)
+			if err != nil {
+				return nil, err
+			}
+		}
+		// After the transform, so that what is named is what was written. A
+		// conversion rewrites the palettes, and this is advice about the client
+		// that opens the result.
 		recordModNamespaces(namespaces, prepared)
 		return prepared, nil
 	})
@@ -287,19 +290,6 @@ func (r worldRequest) writeStreaming(a archive.Archive, snapshot epoch.Snapshot,
 	}
 	printModNamespaces(sortedSet(namespaces))
 	return nil
-}
-
-func (r worldRequest) write(snapshot epoch.Snapshot, prepared []anvil.PreparedChunk, dataVersion int32) error {
-	report, err := anvil.Export(prepared, anvil.ExportRequest{
-		WorldDir:    r.into,
-		Dimension:   snapshot.Dimension,
-		DataVersion: dataVersion,
-		Overwrite:   r.overwrite,
-	})
-	if err != nil {
-		return err
-	}
-	return r.report(snapshot, report)
 }
 
 func (r worldRequest) report(snapshot epoch.Snapshot, report anvil.ExportReport) error {
@@ -362,7 +352,7 @@ func cmdExport(args []string) error {
 		return err
 	}
 	printCompatibilityNotice(snapshot, stamped)
-	return request.writeStreaming(a, snapshot, sources, stamped)
+	return request.writeStreaming(a, snapshot, sources, stamped, nil)
 }
 
 // cmdConvert writes a downgraded copy into a separate world. It is deliberately
@@ -393,18 +383,7 @@ func cmdConvert(args []string) error {
 	if err := requirePolicy(a, request.server); err != nil {
 		return err
 	}
-	// Every chunk at once, which export stopped doing and this cannot: the data
-	// version stamped into the world comes out of translating the whole
-	// dimension, so no region can be written before all of them have been read.
-	prepared, err := prepareAll(a, sources)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("converting into a separate world at %s\n", request.into)
-	fmt.Println("the faithful export is untouched; this copy is an approximation")
-	fmt.Println()
-
-	prepared, dataVersion, err := translateForTarget(prepared, snapshot.Dimension, translationOptions{
+	conversion, err := newTranslation(snapshot.Dimension, translationOptions{
 		profilePath:       *targetProfile,
 		rulesPath:         *rulesPath,
 		policyName:        *policyName,
@@ -415,10 +394,57 @@ func cmdConvert(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(prepared) == 0 {
-		return errors.New("conversion left no chunk that the target release can represent")
+
+	fmt.Printf("converting into a separate world at %s\n", request.into)
+	fmt.Println("the faithful export is untouched; this copy is an approximation")
+	fmt.Println()
+	conversion.printHeader()
+
+	// Under the report policy a single piece of state the target release cannot
+	// hold means the whole conversion writes nothing, and that cannot be
+	// decided by a writer that already has thirty region files on disk when it
+	// reaches the one that refuses. So the dimension is translated once with
+	// the result thrown away, and whether it may be written is settled before
+	// the first region file is. The translation runs twice and one region is
+	// held at a time rather than the whole dimension; the added pass measures
+	// at about a fifth of the writing one.
+	//
+	// The policies that cannot refuse do not pay it. skip-chunk and fill decide
+	// each chunk on its own and never revisit one, so they stream straight
+	// through.
+	if conversion.canRefuse() {
+		if err := anvil.EachRegion(a.CAS, sources, func(prepared []anvil.PreparedChunk) error {
+			_, err := conversion.chunks(prepared)
+			return err
+		}); err != nil {
+			return err
+		}
+		if err := conversion.verdict(); err != nil {
+			// The losses are printed by verdict's caller only when it clears;
+			// a refusal says what it refused over in the error itself.
+			printTranslationLosses(conversion.translator.Report(),
+				conversion.droppedBlockEntities, conversion.options.keepBlockEntities)
+			return err
+		}
+		conversion.printOutcome()
+		// The writing pass counts the same chunks over again, and the losses
+		// just printed are the complete ones.
+		if err := conversion.restart(); err != nil {
+			return err
+		}
 	}
-	return request.write(snapshot, prepared, dataVersion)
+
+	if err := request.writeStreaming(a, snapshot, sources,
+		conversion.profile.DataVersion, conversion.chunks); err != nil {
+		return err
+	}
+	if !conversion.canRefuse() {
+		// After the write, for the same reason the namespaces are: what a
+		// conversion cost is known only once every region has been through, and
+		// not holding them all at once is the point.
+		conversion.printOutcome()
+	}
+	return nil
 }
 
 // printCompatibilityNotice states up front what will read the result. Minecraft
