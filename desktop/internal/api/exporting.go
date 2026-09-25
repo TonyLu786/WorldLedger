@@ -124,14 +124,6 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prepared, err := anvil.Prepare(a.CAS, sources)
-	if err != nil {
-		app.WriteFailure(w, http.StatusInternalServerError,
-			"the recordings could not be read back: "+err.Error(),
-			"this usually means the archive is damaged")
-		return
-	}
-
 	// Asked before exporting, so that the one failure with a known cause can be
 	// told apart from every other one.
 	//
@@ -147,12 +139,16 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report, err := anvil.Export(prepared, anvil.ExportRequest{
+	// One region file at a time. This used to load every chunk first, at 205 KiB
+	// each held for the whole run, which is the shape that has no bound: a large
+	// dimension was decoded and compressed in memory in its entirety before a
+	// byte was written, inside the window, on the machine somebody plays on.
+	report, err := anvil.ExportByRegion(a.CAS, sources, anvil.ExportRequest{
 		WorldDir:    request.WorldDir,
 		Dimension:   request.Dimension,
 		DataVersion: anvil.DataVersion26_2,
 		Overwrite:   true,
-	})
+	}, nil)
 	if err != nil {
 		app.WriteFailure(w, http.StatusInternalServerError,
 			"the world could not be written: "+err.Error(),

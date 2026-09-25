@@ -216,7 +216,14 @@ type worldRequest struct {
 	overwrite   bool
 }
 
-func (r worldRequest) plan() (archive.Archive, epoch.Snapshot, []anvil.PreparedChunk, error) {
+// plan works out which observation each chunk should come from, and stops
+// there.
+//
+// It used to load every one of them as well. That is 205 KiB per chunk held for
+// the whole run, with nothing bounding it, so a large dimension was decoded and
+// compressed in memory in its entirety before a byte was written. Loading is now
+// the export's business, one region file at a time.
+func (r worldRequest) plan() (archive.Archive, epoch.Snapshot, []anvil.ChunkSource, error) {
 	a, err := archive.Open(r.archivePath)
 	if err != nil {
 		return archive.Archive{}, epoch.Snapshot{}, nil, err
@@ -237,11 +244,49 @@ func (r worldRequest) plan() (archive.Archive, epoch.Snapshot, []anvil.PreparedC
 		return archive.Archive{}, epoch.Snapshot{}, nil, emptySelectionError(a, r.server, r.dimension, snapshot.At)
 	}
 
-	prepared, err := anvil.Prepare(a.CAS, sources)
+	return a, snapshot, sources, nil
+}
+
+// prepareAll loads every chunk at once, for the one caller that needs them
+// together.
+//
+// convert translates a whole dimension against a target release and takes the
+// data version it will stamp from that translation, so it cannot write a region
+// before it has looked at all of them. That is a real difference from export
+// rather than an oversight, and it is the reason convert still carries the
+// memory export no longer does.
+func prepareAll(a archive.Archive, sources []anvil.ChunkSource) ([]anvil.PreparedChunk, error) {
+	return anvil.Prepare(a.CAS, sources)
+}
+
+// writeStreaming exports region by region, gathering as it goes what the
+// compatibility notice needs.
+//
+// The namespaces cannot be known before the chunks are loaded, and loading them
+// all in advance is the thing this stopped doing, so that half of the notice is
+// printed after the write instead of before. It is advice about opening the
+// world, which is the next thing somebody does either way.
+func (r worldRequest) writeStreaming(a archive.Archive, snapshot epoch.Snapshot,
+	sources []anvil.ChunkSource, dataVersion int32) error {
+
+	namespaces := map[string]struct{}{}
+	report, err := anvil.ExportByRegion(a.CAS, sources, anvil.ExportRequest{
+		WorldDir:    r.into,
+		Dimension:   snapshot.Dimension,
+		DataVersion: dataVersion,
+		Overwrite:   r.overwrite,
+	}, func(prepared []anvil.PreparedChunk) ([]anvil.PreparedChunk, error) {
+		recordModNamespaces(namespaces, prepared)
+		return prepared, nil
+	})
 	if err != nil {
-		return archive.Archive{}, epoch.Snapshot{}, nil, err
+		return err
 	}
-	return a, snapshot, prepared, nil
+	if err := r.report(snapshot, report); err != nil {
+		return err
+	}
+	printModNamespaces(sortedSet(namespaces))
+	return nil
 }
 
 func (r worldRequest) write(snapshot epoch.Snapshot, prepared []anvil.PreparedChunk, dataVersion int32) error {
@@ -254,6 +299,10 @@ func (r worldRequest) write(snapshot epoch.Snapshot, prepared []anvil.PreparedCh
 	if err != nil {
 		return err
 	}
+	return r.report(snapshot, report)
+}
+
+func (r worldRequest) report(snapshot epoch.Snapshot, report anvil.ExportReport) error {
 	fmt.Printf("wrote %d chunks into %d region file(s)\n", report.Chunks, len(report.RegionFiles))
 	for _, path := range report.RegionFiles {
 		fmt.Printf("  %s\n", path)
@@ -301,15 +350,15 @@ func cmdExport(args []string) error {
 		return usageError("export")
 	}
 
-	a, snapshot, prepared, err := request.plan()
+	a, snapshot, sources, err := request.plan()
 	if err != nil {
 		return err
 	}
 	if err := requirePolicy(a, request.server); err != nil {
 		return err
 	}
-	printCompatibilityNotice(snapshot, prepared, int32(*dataVersion))
-	return request.write(snapshot, prepared, int32(*dataVersion))
+	printCompatibilityNotice(snapshot, int32(*dataVersion))
+	return request.writeStreaming(a, snapshot, sources, int32(*dataVersion))
 }
 
 // cmdConvert writes a downgraded copy into a separate world. It is deliberately
@@ -333,11 +382,18 @@ func cmdConvert(args []string) error {
 		return usageError("convert")
 	}
 
-	a, snapshot, prepared, err := request.plan()
+	a, snapshot, sources, err := request.plan()
 	if err != nil {
 		return err
 	}
 	if err := requirePolicy(a, request.server); err != nil {
+		return err
+	}
+	// Every chunk at once, which export stopped doing and this cannot: the data
+	// version stamped into the world comes out of translating the whole
+	// dimension, so no region can be written before all of them have been read.
+	prepared, err := prepareAll(a, sources)
+	if err != nil {
 		return err
 	}
 	fmt.Printf("converting into a separate world at %s\n", request.into)
@@ -364,7 +420,7 @@ func cmdConvert(args []string) error {
 // printCompatibilityNotice states up front what will read the result. Minecraft
 // upgrades an older world forward on its own, so a newer client is safe; there
 // is no path backwards, which is what convert exists for.
-func printCompatibilityNotice(snapshot epoch.Snapshot, prepared []anvil.PreparedChunk, dataVersion int32) {
+func printCompatibilityNotice(snapshot epoch.Snapshot, dataVersion int32) {
 	releases := observedReleases(snapshot)
 	fmt.Printf("This export is written at data version %d", dataVersion)
 	if len(releases) > 0 {
@@ -376,15 +432,25 @@ func printCompatibilityNotice(snapshot epoch.Snapshot, prepared []anvil.Prepared
 	fmt.Println("  An older release cannot read it at all. Use `worldledger convert` to write a")
 	fmt.Println("  downgraded copy into a separate world.")
 
-	if namespaces := modNamespaces(prepared); len(namespaces) > 0 {
-		fmt.Println()
-		fmt.Printf("  This export contains state from %d non-vanilla namespace(s). The client that\n", len(namespaces))
-		fmt.Println("  opens it needs the matching mods installed, or those blocks will not load:")
-		for _, namespace := range namespaces {
-			fmt.Printf("    %s\n", namespace)
-		}
-	}
 	fmt.Println()
+}
+
+// printModNamespaces says what a client opening this world will need.
+//
+// It is separate from the notice above because it is the half that has to wait.
+// A namespace is a name inside a decoded block palette, and the export no
+// longer holds every chunk at once in order to look at them, so this is printed
+// after the write rather than before it. What it advises is about opening the
+// world, which is the next thing somebody does either way.
+func printModNamespaces(namespaces []string) {
+	if len(namespaces) == 0 {
+		return
+	}
+	fmt.Printf("\nThis export contains state from %d non-vanilla namespace(s). The client that\n", len(namespaces))
+	fmt.Println("opens it needs the matching mods installed, or those blocks will not load:")
+	for _, namespace := range namespaces {
+		fmt.Printf("  %s\n", namespace)
+	}
 }
 
 func observedReleases(snapshot epoch.Snapshot) []string {
@@ -412,6 +478,13 @@ func observedReleases(snapshot epoch.Snapshot) []string {
 // exported state.
 func modNamespaces(prepared []anvil.PreparedChunk) []string {
 	seen := map[string]struct{}{}
+	recordModNamespaces(seen, prepared)
+	return sortedSet(seen)
+}
+
+// recordModNamespaces adds one batch of chunks to a set being gathered across
+// several, which is what a region-at-a-time export has.
+func recordModNamespaces(seen map[string]struct{}, prepared []anvil.PreparedChunk) {
 	record := func(value string) {
 		namespace, _, found := strings.Cut(value, ":")
 		if found && namespace != "minecraft" {
@@ -437,7 +510,6 @@ func modNamespaces(prepared []anvil.PreparedChunk) []string {
 			record(blockEntity.Type)
 		}
 	}
-	return sortedSet(seen)
 }
 
 func sortedSet(values map[string]struct{}) []string {
