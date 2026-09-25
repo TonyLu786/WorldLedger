@@ -133,9 +133,9 @@ func handleInstall(w http.ResponseWriter, r *http.Request) {
 	saved := saveManifest(dir, manifest)
 
 	if err != nil {
-		undone, undoErr := installer.Uninstall(manifest)
+		notUndone, undoErr := installer.Uninstall(manifest)
 		next := reachabilityAdvice(err)
-		if undoErr != nil || len(undone) > 0 {
+		if undoErr != nil || len(notUndone) > 0 {
 			next = "some of it could not be undone automatically; the record is in " + saved
 		}
 		app.WriteFailure(w, http.StatusInternalServerError, err.Error(), next)
@@ -180,8 +180,20 @@ func handleUninstall(w http.ResponseWriter, r *http.Request) {
 			"some of it was removed; the record is still in "+manifestPath(dir))
 		return
 	}
-	os.Remove(manifestPath(dir))
-	app.WriteJSON(w, http.StatusOK, map[string]any{"skipped": skipped})
+
+	// The record used to be deleted here whatever happened, including when
+	// something could not be put back, which left nothing to try again with.
+	// What is kept now is exactly what is still to undo, written over the old
+	// record rather than merged into it: saveManifest adds to what is held,
+	// and adding the remainder back to the whole would keep everything.
+	remaining := installer.Remaining(manifest, skipped)
+	complete := len(remaining.Records) == 0
+	if complete {
+		os.Remove(manifestPath(dir))
+	} else if body, err := json.MarshalIndent(remaining, "", "  "); err == nil {
+		os.WriteFile(manifestPath(dir), body, 0o644)
+	}
+	app.WriteJSON(w, http.StatusOK, map[string]any{"skipped": skipped, "complete": complete})
 }
 
 func manifestPath(dir string) string { return filepath.Join(dir, "installed.json") }

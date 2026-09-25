@@ -313,13 +313,32 @@ function removeEverything() {
     try {
       const result = await call('/api/uninstall', { method: 'POST' });
       await refreshSetup();
-      const left = (result.skipped || []).length;
-      document.getElementById('checks').prepend(banner('good', 'Removed',
-        left
-          ? (left === 1
-            ? '1 file was left alone because it had been changed since it was installed.'
-            : left + ' files were left alone because they had been changed since they were installed.')
-          : 'Your Minecraft is back to what it was.'));
+      // Two kinds of file are left behind, and they are opposites. One was
+      // changed by somebody after it was installed, so it is theirs and leaving
+      // it is right. The other could not be put back and still holds what was
+      // installed. This used to call both the first, under "Removed".
+      const skipped = result.skipped || [];
+      const notPutBack = skipped.filter((entry) => !entry.changed);
+      const changed = skipped.length - notPutBack.length;
+      const checks = document.getElementById('checks');
+      if (notPutBack.length) {
+        const one = notPutBack.length === 1;
+        const warning = banner('todo', 'Not everything could be put back',
+          count(notPutBack.length, 'file') + (one ? ' still holds' : ' still hold') +
+          ' what was installed. The record of ' + (one ? 'it' : 'them') +
+          ' is kept, so pressing Remove again tries again.');
+        const list = el('ul');
+        for (const entry of notPutBack) list.append(el('li', null, entry.path + ': ' + entry.reason));
+        warning.append(list);
+        checks.prepend(warning);
+      } else {
+        checks.prepend(banner('good', 'Removed',
+          changed
+            ? (changed === 1
+              ? '1 file was left alone because it had been changed since it was installed.'
+              : changed + ' files were left alone because they had been changed since they were installed.')
+            : 'Your Minecraft is back to what it was.'));
+      }
     } catch (err) {
       go.disabled = false;
       go.textContent = 'Remove';

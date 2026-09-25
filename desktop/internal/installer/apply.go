@@ -213,13 +213,58 @@ func ensureDir(dir string) ([]string, error) {
 	return created, nil
 }
 
+// Skipped is something Uninstall did not undo, and why.
+//
+// The reasons are not alike, and the difference is all somebody needs to know.
+// A file changed since it was installed is theirs now, and leaving it alone is
+// the right outcome. A kept copy that could not be read, or a launcher entry
+// that could not be taken out, is the opposite: what was installed is still
+// there, and should not be. The window reported every one of them as the
+// first, under a banner saying everything had been removed.
+type Skipped struct {
+	Path string `json:"path"`
+	// Changed is set only for a file left alone because something else changed
+	// it after it was installed. Every other skip is a failure to put back.
+	Changed bool   `json:"changed"`
+	Reason  string `json:"reason"`
+	// index is the record's place in the manifest, so what is left to undo can
+	// be kept without what was already undone.
+	index int
+}
+
+func (s Skipped) String() string { return s.Path + " (" + s.Reason + ")" }
+
+// Remaining is what an uninstall left undone that is still somebody's to undo:
+// the records that could not be put back, in their original order. Records
+// undone, and files left alone because they are no longer ours, are not in it.
+//
+// Keeping the whole manifest after a partial uninstall would make the next
+// attempt report every file it had already restored as "changed since it was
+// installed", because a restored file no longer matches what was installed.
+func Remaining(manifest Manifest, skipped []Skipped) Manifest {
+	failed := map[int]bool{}
+	for _, s := range skipped {
+		if !s.Changed {
+			failed[s.index] = true
+		}
+	}
+	remaining := manifest
+	remaining.Records = nil
+	for index, record := range manifest.Records {
+		if failed[index] {
+			remaining.Records = append(remaining.Records, record)
+		}
+	}
+	return remaining
+}
+
 // Uninstall replays a manifest backwards.
 //
 // A file that has changed since we wrote it is left alone. Somebody may have
 // edited their capture.properties, and removing a mod is not a licence to throw
 // away what they wrote afterwards.
-func Uninstall(manifest Manifest) ([]string, error) {
-	var skipped []string
+func Uninstall(manifest Manifest) ([]Skipped, error) {
+	var skipped []Skipped
 	for i := len(manifest.Records) - 1; i >= 0; i-- {
 		record := manifest.Records[i]
 
@@ -232,7 +277,7 @@ func Uninstall(manifest Manifest) ([]string, error) {
 		// everything else is left exactly as the launcher last wrote it.
 		if record.Kind == AddLauncherEntry {
 			if err := removeLauncherEntry(record.Path, LoaderVersionID()); err != nil {
-				skipped = append(skipped, record.Path+" ("+err.Error()+")")
+				skipped = append(skipped, Skipped{Path: record.Path, Reason: err.Error(), index: i})
 			}
 			continue
 		}
@@ -240,7 +285,8 @@ func Uninstall(manifest Manifest) ([]string, error) {
 		if current, err := os.ReadFile(record.Path); err == nil && record.Digest != "" {
 			digest := sha256.Sum256(current)
 			if hex.EncodeToString(digest[:]) != record.Digest {
-				skipped = append(skipped, record.Path+" (changed since it was installed)")
+				skipped = append(skipped, Skipped{Path: record.Path, Changed: true,
+					Reason: "changed since it was installed", index: i})
 				continue
 			}
 		}
@@ -253,7 +299,8 @@ func Uninstall(manifest Manifest) ([]string, error) {
 		}
 		previous, err := os.ReadFile(record.Backup)
 		if err != nil {
-			skipped = append(skipped, record.Path+" (the kept copy could not be read)")
+			skipped = append(skipped, Skipped{Path: record.Path,
+				Reason: "the copy kept from before could not be read, so it was not put back", index: i})
 			continue
 		}
 		if err := os.WriteFile(record.Path, previous, 0o644); err != nil {

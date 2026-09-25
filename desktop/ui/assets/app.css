@@ -154,6 +154,7 @@ body {
 .banner.todo { background: var(--warn-soft); border-color: var(--warn); }
 .banner strong { display: block; margin-bottom: 2px; }
 .banner span { font-size: 13px; color: var(--ink-soft); }
+.banner ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink-soft); word-break: break-word; }
 
 /* Buttons --------------------------------------------------------------- */
 

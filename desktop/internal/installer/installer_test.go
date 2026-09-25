@@ -3,6 +3,8 @@ package installer
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -287,6 +289,14 @@ func TestAFileChangedSinceInstallingIsLeftAlone(t *testing.T) {
 	if len(skipped) == 0 {
 		t.Fatal("the edited file was removed without a word")
 	}
+	for _, s := range skipped {
+		if !s.Changed {
+			t.Errorf("an edited file was reported as something that failed to be put back: %v", s)
+		}
+	}
+	if left := Remaining(manifest, skipped); len(left.Records) != 0 {
+		t.Errorf("a file that is somebody else's now was kept as still to undo: %v", left.Records)
+	}
 	current, err := os.ReadFile(install.CaptureProperties())
 	if err != nil {
 		t.Fatalf("the edited file was deleted: %v", err)
@@ -500,7 +510,7 @@ func TestUninstallingAnEntryThatIsAlreadyGoneIsNotAProblem(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range skipped {
-		if strings.Contains(s, "launcher_profiles") {
+		if strings.Contains(s.Path, "launcher_profiles") {
 			t.Errorf("an entry somebody had already removed was reported as a problem: %s", s)
 		}
 	}
@@ -573,5 +583,54 @@ func TestAnAbsentFileIsWrittenFromScratch(t *testing.T) {
 	got := string(captureProperties("erin", nil))
 	if !strings.Contains(got, "contributor=erin") {
 		t.Errorf("a fresh file does not carry the name: %q", got)
+	}
+}
+
+// The opposite case, and the one the window used to report as the first. A file
+// that existed before was replaced, and the copy kept of it cannot be read, so
+// uninstalling cannot put it back: what was installed is still there. That is a
+// failure to undo, not somebody's edit, and it is what is left to try again.
+func TestAKeptCopyThatCannotBeReadIsAFailureAndStaysToUndo(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "thing.jar")
+	installed := []byte("what the installer wrote")
+	if err := os.WriteFile(path, installed, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gone := filepath.Join(t.TempDir(), "thing.jar.kept")
+	digest := sha256.Sum256(installed)
+	other := filepath.Join(dir, "other.jar")
+	if err := os.WriteFile(other, []byte("also installed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	otherDigest := sha256.Sum256([]byte("also installed"))
+	manifest := Manifest{Records: []Record{
+		{Path: other, Digest: hex.EncodeToString(otherDigest[:])},
+		{Path: path, Backup: gone, Digest: hex.EncodeToString(digest[:])},
+	}}
+
+	skipped, err := Uninstall(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skipped) != 1 || skipped[0].Path != path {
+		t.Fatalf("skipped %v, want only %s", skipped, path)
+	}
+	if skipped[0].Changed {
+		t.Error("a file that could not be put back was reported as one somebody had changed")
+	}
+	if !strings.Contains(skipped[0].Reason, "not put back") {
+		t.Errorf("the reason does not say it was not put back: %q", skipped[0].Reason)
+	}
+	if current, _ := os.ReadFile(path); string(current) != string(installed) {
+		t.Errorf("the file was touched although it could not be restored: %q", current)
+	}
+
+	left := Remaining(manifest, skipped)
+	if len(left.Records) != 1 || left.Records[0].Path != path {
+		t.Fatalf("what is left to undo is %v, want only %s", left.Records, path)
+	}
+	if _, err := os.Stat(other); !os.IsNotExist(err) {
+		t.Error("the file that could be undone was not")
 	}
 }
