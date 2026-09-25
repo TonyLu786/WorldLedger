@@ -195,7 +195,7 @@ func readSpoolState() *SpoolState {
 		InProgress:    contents.InProgress,
 		Quarantined:   contents.Quarantined,
 		Imported:      len(contents.Imported),
-		ImportedBytes: spool.Size(contents.Imported),
+		ImportedBytes: kept.total(contents.Imported),
 	}
 }
 
