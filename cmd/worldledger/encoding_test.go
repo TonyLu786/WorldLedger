@@ -110,6 +110,13 @@ func TestTextFilesAreNotDoubleEncoded(t *testing.T) {
 		if nonTextExtensions[strings.ToLower(filepath.Ext(path))] {
 			return
 		}
+		// A content-addressed object is canonical component bytes named by
+		// their own digest, with no extension to say so. It is not text and
+		// never was, and .gitattributes marks the same paths binary so that a
+		// checkout does not translate them into a different digest.
+		if strings.Contains(filepath.ToSlash(path), "/objects/sha256/") {
+			return
+		}
 		if !utf8.Valid(data) {
 			problems = append(problems, filepath.ToSlash(path)+": not valid UTF-8")
 			return

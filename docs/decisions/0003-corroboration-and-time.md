@@ -1,6 +1,6 @@
 # ADR 0003: Whether corroboration may be counted across time
 
-**Status:** proposed
+**Status:** accepted, 2026-09-25. **B**, with the span from **C** carried on every `Selection`.
 
 ## Context
 
@@ -83,9 +83,13 @@ Keep the vote as it is and add `corroborated-stale` for a leading group whose vo
 
 Cost: `Status` is currently a small closed set that maps cleanly onto colours in the desktop application and onto counts in the summary. A sixth value is not free. It also still selects the stale state, so the export is unchanged; only the label improves.
 
-## Recommendation
+## Decision
 
 **B**, with the span from **C** added to `Selection` so a reader can see how old the agreement is without a new status.
+
+In the code: the most recent eligible observation fixes a window; two states inside it are a conflict settled among those observations alone; otherwise the state inside it is the state, older agreement still corroborates it, and older disagreement becomes evidence rather than a vote. `PolicyCorroboratedFirst` is now `PolicyCorroboratedWithinWindow`, so a snapshot manifest says which rule produced it.
+
+One thing came out of implementing it that is worth recording, because the first test written for it asserted the wrong thing. In the four-against-two case above the answer is still *corroborated* — it is corroborated about the other state. Two contributors did independently see the new one a minute apart, which is exactly what the word is for. What changed is which state it is said about, not whether it is said.
 
 B is the smaller change than it looks: it reorders existing reasoning rather than introducing new judgement. The simultaneity window, the grouping and the total order are all already there, and the constant does not change. What changes is that the window is consulted before the vote instead of after it.
 

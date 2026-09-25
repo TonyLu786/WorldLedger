@@ -1,0 +1,40 @@
+{
+  "schema": "worldledger.observation/v1",
+  "id": "f6c2788d9899fe1db4bf05755bf37c9280f07ab3851363fb74043fb3c629b819",
+  "chunk": {
+    "server_id": "example.org:25565",
+    "dimension": "minecraft:overworld",
+    "x": 14,
+    "z": -8
+  },
+  "observed_at": "2026-08-09T12:00:03.123456Z",
+  "received_at": "2026-09-25T08:22:06.1127315Z",
+  "protocol": "minecraft-java/26.2;canonical=worldledger.minecraft.java.chunk/v1",
+  "source": {
+    "contributor": "fixture-contributor",
+    "agent": "worldledger-fabric/0.1.0-dev"
+  },
+  "components": {
+    "mcjava.biomes.-4": {
+      "algorithm": "sha256",
+      "digest": "5a8e16fe0cd235992d0189e9a894d47bd8455c6c963329821524b9d9b7e95b07",
+      "size": 201
+    },
+    "mcjava.block_entities": {
+      "algorithm": "sha256",
+      "digest": "8966ca92974146f8d58c2c3337de38c3b8f38fdda4c6d45595c37311b8727a77",
+      "size": 52
+    },
+    "mcjava.blocks.-4": {
+      "algorithm": "sha256",
+      "digest": "ed0cd3cbaa8a1165700c575cfaffe8cf3f58bee5602a3ba5ab3c0db78ea7f49f",
+      "size": 8262
+    },
+    "mcjava.shape": {
+      "algorithm": "sha256",
+      "digest": "c407dde4e324670d3f9f76af08b9a86dff9d09f0a08de92b1e1174ea043a5790",
+      "size": 53
+    }
+  },
+  "state_digest": "a56c43589292429b80bb3d6b00c1bbf64e9600c83e5be5f34091cc3cb61ebc91"
+}

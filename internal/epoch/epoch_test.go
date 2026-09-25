@@ -74,7 +74,19 @@ func TestSelectChunkCorroboratesAgreeingContributors(t *testing.T) {
 	}
 }
 
-func TestSelectChunkPrefersCorroboratedStateOverMoreRecentSingleSource(t *testing.T) {
+// This test asserted the opposite until ADR 0003 was decided, and the reversal
+// is the decision rather than a regression.
+//
+// Two contributors agreed at minute ten and eleven; a third saw something else
+// at minute nineteen, eight minutes after either of them last looked. The old
+// rule counted heads and reported the chunk as corroborated holding the older
+// state, which reads as "two people confirm this is what is there" when the
+// only person who has looked recently says it is not.
+//
+// Nothing here says mallory is right. It says a majority assembled before
+// somebody else looked is not a statement about now, and the labels say which
+// is which: the state is superseded, and both states are kept.
+func TestAStateNobodyHasSeenSinceDoesNotOutvoteTheOneSomebodyHas(t *testing.T) {
 	observations := []model.Observation{
 		newObservation(t, "alice", at(10), 'a'),
 		newObservation(t, "bob", at(11), 'a'),
@@ -82,14 +94,46 @@ func TestSelectChunkPrefersCorroboratedStateOverMoreRecentSingleSource(t *testin
 	}
 
 	selection := SelectChunk(testChunk, observations, at(20))
+	if selection.Status != StatusSuperseded {
+		t.Fatalf("status = %q; want %q", selection.Status, StatusSuperseded)
+	}
+	if selection.Selected.Source.Contributor != "mallory" {
+		t.Errorf("the chunk was written as the state nobody has seen since, from %q",
+			selection.Selected.Source.Contributor)
+	}
+	// And what it used to hold is still evidence, with both of the people who
+	// saw it named.
+	if len(selection.Rejected) != 1 {
+		t.Fatalf("the earlier state was not preserved: %#v", selection.Rejected)
+	}
+	if got := selection.Rejected[0].Contributors; len(got) != 2 {
+		t.Errorf("the earlier state names %v; both who saw it should be there", got)
+	}
+}
+
+// The other half of the same rule. Older agreement still corroborates, because
+// nothing has contradicted it: the point is not that old observations stop
+// counting, it is that they stop counting against a newer one.
+func TestOlderAgreementStillCorroborates(t *testing.T) {
+	observations := []model.Observation{
+		newObservation(t, "alice", at(10), 'a'),
+		newObservation(t, "bob", at(40), 'a'),
+	}
+
+	selection := SelectChunk(testChunk, observations, at(50))
 	if selection.Status != StatusCorroborated {
 		t.Fatalf("status = %q; want %q", selection.Status, StatusCorroborated)
 	}
-	if selection.Selected.Source.Contributor == "mallory" {
-		t.Fatal("a lone later contributor overrode a corroborated state")
+	if len(selection.Contributors) != 2 {
+		t.Errorf("contributors = %v; both agreed and both should count", selection.Contributors)
 	}
-	if len(selection.Rejected) != 1 || selection.Rejected[0].Contributors[0] != "mallory" {
-		t.Fatalf("the rejected state was not preserved as evidence: %#v", selection.Rejected)
+	// And the caller can see how far apart they were, which is the half of the
+	// answer a single word cannot carry.
+	if selection.Support.Observations != 2 {
+		t.Errorf("support counts %d observation(s), want 2", selection.Support.Observations)
+	}
+	if selection.Support.Span != "30m0s" {
+		t.Errorf("support span = %q, want 30m0s", selection.Support.Span)
 	}
 }
 
@@ -264,7 +308,7 @@ func TestBuildSnapshotSummarizesCoverage(t *testing.T) {
 	if snapshot.Server != "example.org" || snapshot.Dimension != "minecraft:overworld" {
 		t.Fatalf("snapshot did not normalize its identity: %q / %q", snapshot.Server, snapshot.Dimension)
 	}
-	if snapshot.Policy != PolicyCorroboratedFirst {
+	if snapshot.Policy != PolicyCorroboratedWithinWindow {
 		t.Fatalf("policy = %q", snapshot.Policy)
 	}
 }

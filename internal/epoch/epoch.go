@@ -12,18 +12,17 @@ import (
 
 type Policy string
 
-// PolicyCorroboratedFirst prefers a state reported by two or more independent
-// contributors and falls back to the most recent state when no state is
-// corroborated or when corroboration is tied.
+// PolicyCorroboratedWithinWindow decides what a chunk holds from the
+// observations closest in time to the most recent one, and counts older
+// agreement as corroboration rather than as a vote.
 //
-// The count comes first and takes no account of when those contributors looked,
-// so a state agreed by more people wins even when every one of their
-// observations predates a more recent observation of something else. Four
-// contributors who last saw a chunk between twenty and sixty minutes ago
-// outvote two who saw it change a minute ago, and the answer is reported as
-// corroborated. Whether that is what the word should mean here is
-// docs/decisions/0003-corroboration-and-time.md, which is open.
-const PolicyCorroboratedFirst Policy = "corroborated-first"
+// The name changed with the rule. It used to be corroborated-first, and it
+// counted contributors before it consulted time at all, so four who last looked
+// an hour ago outvoted two who had watched the chunk change a minute before.
+// A snapshot manifest records its policy, so an export from either side of that
+// change says which one produced it. See
+// docs/decisions/0003-corroboration-and-time.md.
+const PolicyCorroboratedWithinWindow Policy = "corroborated-within-window"
 
 type Status string
 
@@ -69,6 +68,20 @@ type Selection struct {
 	Selected     *model.Observation `json:"selected,omitempty"`
 	Contributors []string           `json:"contributors,omitempty"`
 	Rejected     []StateGroup       `json:"rejected,omitempty"`
+	// Support is how old the observations behind this are. A status is one word
+	// and cannot carry it: two contributors who agree ten seconds apart and two
+	// who agree a fortnight apart are both corroborated, and anybody deciding
+	// how far to rely on that wants to know which they have.
+	Support Support `json:"support"`
+}
+
+// Support describes the observations a selection rests on.
+type Support struct {
+	Observations int       `json:"observations"`
+	Earliest     time.Time `json:"earliest"`
+	Latest       time.Time `json:"latest"`
+	// Span is Latest minus Earliest, as a duration somebody can read.
+	Span string `json:"span"`
 }
 
 func (s Selection) Known() bool {
@@ -106,7 +119,7 @@ func BuildSnapshot(server, dimension string, at time.Time, inputs []ChunkInput) 
 		Server:     model.NormalizeToken(server),
 		Dimension:  model.NormalizeToken(dimension),
 		At:         at.UTC(),
-		Policy:     PolicyCorroboratedFirst,
+		Policy:     PolicyCorroboratedWithinWindow,
 		Selections: make([]Selection, 0, len(inputs)),
 	}
 	for _, input := range inputs {
@@ -129,20 +142,38 @@ func BuildSnapshot(server, dimension string, at time.Time, inputs []ChunkInput) 
 	return snapshot
 }
 
-// SelectChunk applies PolicyCorroboratedFirst to one chunk using the default
+// SelectChunk applies PolicyCorroboratedWithinWindow to one chunk using the
 // simultaneity window.
 func SelectChunk(chunk model.ChunkRef, observations []model.Observation, at time.Time) Selection {
 	return SelectChunkWithin(chunk, observations, at, DefaultSimultaneityWindow)
 }
 
-// SelectChunkWithin applies PolicyCorroboratedFirst to one chunk. Each
-// contributor is represented by its most recent observation at or before the
-// epoch, so a contributor cannot outweigh others by submitting the same state
-// repeatedly.
+// SelectChunkWithin decides one chunk. Each contributor is represented by its
+// most recent observation at or before the epoch, so a contributor cannot
+// outweigh others by submitting the same state repeatedly.
 //
-// The window decides how disagreement is labelled. States seen within it are a
-// conflict; states further apart are a change the archive recorded, and the
-// later one supersedes the earlier.
+// Agreement and currency are two questions and this used to answer the first
+// while being read as an answer to both. The count came first and took no
+// account of when anybody looked, so four contributors whose last visit was an
+// hour ago outvoted two who had watched the chunk change a minute ago, and the
+// older state came out under this project's strongest confidence word with no
+// conflict and no superseded anywhere. That was reproduced, written up as
+// ADR 0003, and is what this now does differently.
+//
+// The window is consulted before the vote rather than after it. The most recent
+// eligible observation fixes a window, and only what falls inside it decides
+// what the chunk holds now:
+//
+//   - two states inside the window is a contradiction, because the world is
+//     unlikely to have changed between them. That is a conflict and it is
+//     settled among those observations alone;
+//   - otherwise the state inside the window is the state. Older observations
+//     agreeing with it still corroborate it, because nothing has contradicted
+//     them; older observations disagreeing with it are what the chunk used to
+//     hold, and they are evidence rather than votes.
+//
+// A state cannot be reported as the state at a moment on the strength of votes
+// that predate a contradicting observation. That is the whole of the change.
 func SelectChunkWithin(
 	chunk model.ChunkRef, observations []model.Observation, at time.Time, window time.Duration) Selection {
 	eligible := latestPerContributor(observations, at)
@@ -150,37 +181,41 @@ func SelectChunkWithin(
 		return Selection{Chunk: chunk, Status: StatusUnknown}
 	}
 
-	groups := groupByState(eligible)
-	best := groups[0]
-	corroborated := len(best.Contributors) >= 2 &&
-		(len(groups) == 1 || len(best.Contributors) > len(groups[1].Contributors))
+	contemporary, earlier := splitByRecency(eligible, window)
+	current := groupByState(contemporary)
 
-	selected := best
+	var selected StateGroup
 	status := StatusSingleSource
-	switch {
-	case corroborated:
-		status = StatusCorroborated
-	case len(groups) > 1:
-		selected = mostRecentGroup(groups)
-		// Disagreement only counts as contradiction when the states were seen
-		// close together; otherwise the world simply changed.
-		if spread(groups) <= window {
-			status = StatusConflict
-		} else {
+	if len(current) > 1 {
+		// Seen differently at about the same moment. Which of them is right is
+		// not something a count settles, and saying so is the point of the
+		// label.
+		selected = mostRecentGroup(current)
+		status = StatusConflict
+	} else {
+		selected = current[0]
+		supporters := selected.Contributors
+		if len(earlier) > 0 {
+			agreeing := observationsWithState(earlier, selected.StateDigest)
+			selected.Observations = append(append([]model.Observation(nil), selected.Observations...), agreeing...)
+			sort.Slice(selected.Observations, func(i, j int) bool {
+				return observationBefore(selected.Observations[i], selected.Observations[j])
+			})
+			supporters = uniqueContributors(selected.Observations)
+			selected.Contributors = supporters
+		}
+		switch {
+		case len(supporters) >= 2:
+			status = StatusCorroborated
+		case disagrees(earlier, selected.StateDigest):
+			// Nobody else has seen what is there now, and somebody saw
+			// something else before it. The world changed and one person has
+			// been back since.
 			status = StatusSuperseded
 		}
 	}
 
-	rejected := make([]StateGroup, 0, len(groups)-1)
-	for _, group := range groups {
-		if group.StateDigest != selected.StateDigest {
-			rejected = append(rejected, group)
-		}
-	}
-	if len(rejected) == 0 {
-		rejected = nil
-	}
-
+	rejected := rejectedGroups(eligible, selected.StateDigest)
 	winner := mostRecent(selected.Observations)
 	return Selection{
 		Chunk:        chunk,
@@ -188,6 +223,93 @@ func SelectChunkWithin(
 		Selected:     &winner,
 		Contributors: selected.Contributors,
 		Rejected:     rejected,
+		Support:      supportOf(selected.Observations),
+	}
+}
+
+// splitByRecency divides the eligible observations at one window back from the
+// most recent of them.
+//
+// The most recent decides where the window sits, rather than the epoch,
+// because the question is what the last people to look agreed about. An epoch
+// far in the future would otherwise put every observation outside its own
+// window and leave nothing to decide with.
+func splitByRecency(eligible []model.Observation, window time.Duration) (contemporary, earlier []model.Observation) {
+	newest := eligible[0].ObservedAt
+	for _, o := range eligible[1:] {
+		if o.ObservedAt.After(newest) {
+			newest = o.ObservedAt
+		}
+	}
+	cutoff := newest.Add(-window)
+	for _, o := range eligible {
+		if o.ObservedAt.Before(cutoff) {
+			earlier = append(earlier, o)
+			continue
+		}
+		contemporary = append(contemporary, o)
+	}
+	return contemporary, earlier
+}
+
+func observationsWithState(observations []model.Observation, digest string) []model.Observation {
+	var out []model.Observation
+	for _, o := range observations {
+		if o.StateDigest == digest {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+func disagrees(observations []model.Observation, digest string) bool {
+	for _, o := range observations {
+		if o.StateDigest != digest {
+			return true
+		}
+	}
+	return false
+}
+
+// rejectedGroups is every state that was not selected, over the whole eligible
+// set rather than only the recent part of it. What the chunk used to hold is
+// evidence whether or not it was allowed to vote.
+func rejectedGroups(eligible []model.Observation, selectedDigest string) []StateGroup {
+	var losing []model.Observation
+	for _, o := range eligible {
+		if o.StateDigest != selectedDigest {
+			losing = append(losing, o)
+		}
+	}
+	if len(losing) == 0 {
+		return nil
+	}
+	return groupByState(losing)
+}
+
+// supportOf describes how old the observations behind a selection are.
+//
+// A status is one word and cannot carry this. Two contributors who agree ten
+// seconds apart and two who agree a fortnight apart are both corroborated, and
+// anybody deciding how much to rely on that wants to know which they have.
+func supportOf(observations []model.Observation) Support {
+	if len(observations) == 0 {
+		return Support{}
+	}
+	earliest, latest := observations[0].ObservedAt, observations[0].ObservedAt
+	for _, o := range observations[1:] {
+		if o.ObservedAt.Before(earliest) {
+			earliest = o.ObservedAt
+		}
+		if o.ObservedAt.After(latest) {
+			latest = o.ObservedAt
+		}
+	}
+	return Support{
+		Observations: len(observations),
+		Earliest:     earliest.UTC(),
+		Latest:       latest.UTC(),
+		Span:         latest.Sub(earliest).String(),
 	}
 }
 

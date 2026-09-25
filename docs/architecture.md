@@ -74,6 +74,16 @@ objects/
 
 This gives immediate deduplication when contributors upload identical canonical state. The current implementation stores objects uncompressed; storage codecs can be added below the digest boundary as long as hashes continue to refer to canonical uncompressed bytes.
 
+### Records and arrangement
+
+An archive holds two kinds of thing, and the distinction is a promise rather than an observation about the current code.
+
+**Records** are `observations/` and `objects/`. An observation is an immutable, content-addressed claim; an object is bytes addressed by their own digest. Neither is derivable from anything else, and losing one loses evidence.
+
+**Arrangement** is everything else, `index/` today. Every line of the chunk index is an observation id filed under the chunk that observation names, and both come out of the observation file. It decides nothing and records nothing, and `worldledger fsck --rebuild-index` derives the whole of it again.
+
+What follows is what a change to the on-disk layout costs. A change to the arrangement is migrated by deriving it again, with no journal and no half-migrated state. A change to the records is a much larger act and is visible as one when it is proposed. Anything that proposes to move something from the second category to the first has to change [ADR 0004](decisions/0004-archive-layout-changes.md) first.
+
 ## Verification
 
 The first verification primitive is intentionally conservative.
@@ -88,7 +98,7 @@ A conflict is never resolved by majority vote in the core. Time uncertainty, wor
 
 That describes `internal/verify`, and its window is not the one an export uses. `internal/epoch` has its own, `DefaultSimultaneityWindow`, fixed at thirty seconds with no flag, and the two answer the same question for anybody reading the output: is this a disagreement or is it a change? A chunk `verify` clears at ten seconds can be a chunk the exporter reports as a conflict at thirty. Which window `verify` ought to use is open.
 
-The selection that decides what an exported world contains lives in `internal/epoch`, and it does count contributors, before consulting the window rather than after: a state agreed by more contributors wins even when every one of those observations predates a more recent observation of something else. Whether that is what corroboration should mean is [ADR 0003](decisions/0003-corroboration-and-time.md), which is open.
+The selection that decides what an exported world contains lives in `internal/epoch`, which consults the window before it counts anybody. The most recent eligible observation fixes a window; two states inside it are a conflict, settled among those observations alone. Otherwise the state inside it is the state: older observations agreeing with it still corroborate it, and older ones disagreeing are what the chunk used to hold rather than votes against what it holds now. A state is never reported as the state at a moment on the strength of agreement assembled before somebody else looked. This replaced a rule that counted contributors first; see [ADR 0003](decisions/0003-corroboration-and-time.md).
 
 Future verification can add signed contributors, capture confidence, clock uncertainty, component-level comparison, and transition inference without invalidating the original observations.
 

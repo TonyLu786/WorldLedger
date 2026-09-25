@@ -1,6 +1,6 @@
 # ADR 0004: What a change to the archive layout is allowed to cost
 
-**Status:** proposed
+**Status:** accepted, 2026-09-25, with the fixture requirement below.
 
 ## Context
 
@@ -91,6 +91,12 @@ and their WorldLedger are different ages. See ADR 0005.
 - The rebuild is on the critical path of a layout change, so it needs to stay
   correct for reasons beyond repair. It has tests for a destroyed index, a stale
   entry, and a record it cannot place.
+- **A fixture archive at every layout this build claims to read is committed,
+  and a test opens it.** This was added as a condition of accepting. "Reads N
+  and N-1" is cheap to write and rots unseen, because nothing exercises the
+  older path until the day somebody needs it, which is the day it has to work.
+  `testdata/archive-layout-1/` is that fixture for layout 1, and it exists from
+  now rather than from whenever there is a layout 2 to compare against.
 - Nothing about today's archives changes. There is one layout and this describes
   what happens when there are two.
 

@@ -150,7 +150,7 @@ func BuildDiff(server, dimension string, from, to time.Time, inputs []ChunkInput
 		Dimension: model.NormalizeToken(dimension),
 		From:      from.UTC(),
 		To:        to.UTC(),
-		Policy:    PolicyCorroboratedFirst,
+		Policy:    PolicyCorroboratedWithinWindow,
 		Changes:   make([]ChunkChange, 0, len(inputs)),
 	}
 
