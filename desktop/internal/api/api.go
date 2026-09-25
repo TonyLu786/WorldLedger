@@ -23,18 +23,30 @@ import (
 )
 
 // Mount registers every endpoint the page uses.
+//
+// The two handlers that can run for a long time are handed this server's
+// watchdog rather than reaching for it. It used to be a package variable that
+// Mount assigned and they read. That is safe in the program, where Mount runs
+// once before anything is served. The tests start a server for every test,
+// and that made it one variable shared by all of them, kept in order only
+// because each handler happened to read it before answering. What each
+// server's handlers are given, nobody else can reach.
 func Mount(server *app.Server, watchdog *app.Watchdog) {
-	holdDuringLongWork = watchdog.Hold
+	longWork := hold(watchdog.Hold)
 
 	server.HandleFunc("/api/notice", handleNotice)
 	server.HandleFunc("/api/health", handleHealth)
 	server.HandleFunc("/api/status", handleStatus)
-	server.HandleFunc("/api/import", handleImport)
+	server.HandleFunc("/api/import", func(w http.ResponseWriter, r *http.Request) {
+		handleImport(w, r, longWork)
+	})
 	server.HandleFunc("/api/tidy", handleTidy)
 	server.HandleFunc("/api/choices", handleChoices)
 	server.HandleFunc("/api/declare", handleDeclare)
 	server.HandleFunc("/api/worlds", handleWorlds)
-	server.HandleFunc("/api/export", handleExport)
+	server.HandleFunc("/api/export", func(w http.ResponseWriter, r *http.Request) {
+		handleExport(w, r, longWork)
+	})
 	server.HandleFunc("/api/moments", handleMoments)
 	server.HandleFunc("/api/travel", handleTravel)
 	server.HandleFunc("/api/plan", handlePlan)
@@ -71,12 +83,7 @@ func openArchive() (archive.Archive, error) {
 	return archive.Open(dir)
 }
 
-// holdDuringLongWork marks work that must outlive a quiet page. An import of
-// two hundred bundles can take longer than the watchdog's patience, and a page
-// waiting for it is not a page nobody is looking at.
-//
-// It is a variable so that the handlers can use it without every one of them
-// carrying a reference to the watchdog. The default does nothing, which is what
-// the tests want and is safe: the worst case is a timer that was never held off
-// in a program with no watchdog running.
-var holdDuringLongWork = func() func() { return func() {} }
+// A hold marks work that must outlive a quiet page, and returns what releases
+// it. An import of two hundred bundles can take longer than the watchdog's
+// patience, and a page waiting for it is not a page nobody is looking at.
+type hold func() func()
