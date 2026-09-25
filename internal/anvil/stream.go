@@ -93,7 +93,18 @@ func ExportByRegion(source ObjectSource, chunks []ChunkSource, request ExportReq
 		if len(existing) == 0 {
 			continue
 		}
-		if _, err := checkAdoptable(key[0], key[1], existing, grouped[key]); err != nil {
+		// Which slots this export will replace, and so does not have to be able
+		// to adopt. With a transform there are none it can promise: a transform
+		// may drop any chunk it is given, and a slot this meant to replace and
+		// then did not is a slot the writing pass tries to adopt after nothing
+		// validated it. That failed there instead, reporting that the file had
+		// changed while the export was running, about a file that had not
+		// changed at all.
+		ours := grouped[key]
+		if transform != nil {
+			ours = nil
+		}
+		if _, err := checkAdoptable(key[0], key[1], existing, ours); err != nil {
 			return ExportReport{}, fmt.Errorf(
 				"%s could not be read, so writing it would have discarded what it holds: %w", paths[index], err)
 		}
@@ -219,6 +230,12 @@ func groupByRegion(chunks []ChunkSource) ([][2]int32, map[[2]int32][]ChunkSource
 // The slots this export will occupy are marked first, because Adopt skips them
 // and a validation that did not would refuse a file over a chunk about to be
 // replaced. What is validated is exactly what would be adopted.
+//
+// ours may be empty, which validates the whole file. That is what a write with
+// a transform passes, because a transform is allowed to drop chunks and so no
+// slot can be promised in advance. The cost is refusing a conversion over a
+// damaged chunk it might have replaced; the alternative is discovering the
+// damage with region files already written.
 func checkAdoptable(regionX, regionZ int32, existing []byte, ours []ChunkSource) (int, error) {
 	probe := NewRegion(regionX, regionZ)
 	for _, entry := range ours {

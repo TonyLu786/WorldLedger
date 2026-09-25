@@ -73,6 +73,17 @@ type ExportReport struct {
 // does not create the world: level.dat carries the data version, generator, and
 // build height, and fabricating those is how an export ends up silently
 // upgraded or misaligned against the client that reads it.
+//
+// Nothing that ships calls this any more. Both front ends write a dimension
+// through ExportByRegion, which holds one region file rather than the whole
+// decoded world, and this builds every region before it writes a byte.
+//
+// It is kept because it is what ExportByRegion is checked against: it arrives
+// at the same bytes by an obviously different route, all at once from a map
+// keyed by region, and TestRegionByRegionWritesTheSameWorld compares the two
+// file for file. A streaming writer with no independent implementation to
+// disagree with it is a writer whose tests can only say it is consistent with
+// itself. Do not call it from anything that has to run on somebody's machine.
 func Export(chunks []PreparedChunk, request ExportRequest) (ExportReport, error) {
 	regionDir, err := DimensionDirectory(request.WorldDir, request.Dimension)
 	if err != nil {
