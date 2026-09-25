@@ -283,3 +283,32 @@ func TestTheTwoComparisonWindowsAreBothWrittenDown(t *testing.T) {
 		}
 	}
 }
+
+// The README's first instruction is what somebody reads before anything else,
+// and it said the application opens a window. It does on Windows; on macOS and
+// Linux runWindow returns false without attempting anything, so it opens a
+// browser tab.
+//
+// That is now stated. This is here because nothing else would notice it drifting
+// back, and the sentence is load-bearing: it is the one somebody acts on before
+// they have anything else to go on. See ADR 0006.
+func TestTheQuickstartSaysWhichPlatformGetsAWindow(t *testing.T) {
+	for _, page := range []string{
+		filepath.Join("..", "..", "README.md"),
+		filepath.Join("..", "..", "site", "index.html"),
+	} {
+		text := readFile(t, page)
+		if !strings.Contains(text, "On Windows it opens a window") {
+			t.Errorf("%s no longer says which platform gets a window", page)
+		}
+		if !strings.Contains(text, "browser") {
+			t.Errorf("%s no longer says what the others get instead", page)
+		}
+	}
+
+	// And the claim has to stay true: a window is attempted on Windows only.
+	other := readFile(t, filepath.Join("..", "internal", "shell", "window_other.go"))
+	if !strings.Contains(other, "return \"\", false") {
+		t.Error("runWindow now attempts something outside Windows, so the quickstart is understating it")
+	}
+}
