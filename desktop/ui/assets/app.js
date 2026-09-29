@@ -384,10 +384,10 @@ function fixEverything(report) {
         return;
       }
       const agreed = await ask({
-        title: 'This will write ' + plan.steps.length + ' files into your Minecraft',
+        title: 'This will write ' + count(plan.steps.length, 'file') + ' into your Minecraft',
         lead: 'Nothing else is touched. Anything replaced is kept, and Remove puts it all back.',
         rows: plan.steps.map((s) => ({ title: s.title, detail: s.target })),
-        confirm: 'Write these files',
+        confirm: plan.steps.length === 1 ? 'Write this file' : 'Write these files',
       });
       if (!agreed) {
         go.disabled = false;
@@ -400,7 +400,7 @@ function fixEverything(report) {
       });
       await refreshSetup();
       document.getElementById('checks').prepend(banner('good',
-        'Done — ' + result.done + ' files written',
+        'Done — ' + count(result.done, 'file') + ' written',
         'Start Minecraft, choose the WorldLedger installation, and play.'));
     } catch (err) {
       go.disabled = false;
@@ -458,7 +458,7 @@ function renderCapture(status) {
   } else if (waiting > 0) {
     host.append(banner('good',
       count(waiting, 'recording') + ' waiting',
-      'Go to Bring it in to add them to your archive.'));
+      'Go to Bring it in to add ' + (waiting === 1 ? 'it' : 'them') + ' to your archive.'));
   } else {
     host.append(banner('todo', 'Nothing new since last time',
       'Join a server and play. Recordings appear here as you go, and the last of them when you quit.'));
@@ -488,11 +488,12 @@ function renderCapture(status) {
 // without ever being mentioned, which is how somebody ends up with gigabytes
 // inside .minecraft that nothing here ever named.
 function clearKept(status) {
+  const one = status.spool.imported === 1;
   const card = el('section', 'card');
-  card.append(el('h2', null, 'Clear the ones already brought in'));
+  card.append(el('h2', null, one ? 'Clear the one already brought in' : 'Clear the ones already brought in'));
   card.append(el('p', 'card-lead',
     count(status.spool.imported, 'recording') + ', ' + bytes(status.spool.imported_bytes) +
-    (status.spool.imported === 1 ? ', is' : ', are') +
+    (one ? ', is' : ', are') +
     ' being kept inside your Minecraft folder after being brought in. Clearing that ' +
     'frees the space. Anything not yet brought in, and anything set aside as unreadable, ' +
     'stays exactly where it is.'));
@@ -503,13 +504,14 @@ function clearKept(status) {
 
   go.addEventListener('click', async () => {
     if (!await ask({
-      title: 'Delete ' + count(status.spool.imported, 'recording') + ' that have already been brought in?',
+      title: 'Delete ' + count(status.spool.imported, 'recording') +
+        (one ? ' that has' : ' that have') + ' already been brought in?',
       lead: 'This frees ' + bytes(status.spool.imported_bytes) + ' and cannot be undone.',
       rows: [
         { title: 'Deleted', detail: count(status.spool.imported, 'recording') + ' already added to your archive' },
         { title: 'Left alone', detail: 'your archive, anything still waiting, and anything set aside as unreadable' },
       ],
-      confirm: 'Delete them',
+      confirm: one ? 'Delete it' : 'Delete them',
       danger: true,
     })) {
       return;
@@ -521,7 +523,7 @@ function clearKept(status) {
       renderCapture(await loadStatus());
       document.getElementById('capture-body').prepend(banner('good',
         'Cleared ' + count(result.removed, 'recording') + ', freeing ' + bytes(result.freed),
-        'Your archive still holds everything they contained.'));
+        'Your archive still holds everything ' + (result.removed === 1 ? 'it' : 'they') + ' contained.'));
     } catch (err) {
       go.disabled = false;
       go.textContent = 'Clear ' + bytes(status.spool.imported_bytes);
@@ -576,7 +578,7 @@ function renderImport(status) {
   // reads as an application that did not notice.
   if (waiting > 0) {
     host.append(banner('good', waiting + ' waiting',
-      'This adds them to your archive and leaves your recordings alone.'));
+      'This adds ' + (waiting === 1 ? 'it' : 'them') + ' to your archive and leaves your recordings alone.'));
   } else if (status.observations > 0) {
     host.append(banner('good', 'Everything has been brought in',
       nextSentence(status.next)));
