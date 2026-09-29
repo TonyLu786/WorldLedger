@@ -238,6 +238,11 @@ func TestConcurrentProcessesPreserveEveryIndexEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Started one after another, the children mostly ran one after another:
+	// each was done with the lock before the next had started. With the lock
+	// downgraded to shared, this test failed two runs in ten on Windows. So each
+	// one waits at a line until all of them are there, and they go together.
+	line := t.TempDir()
 	const count = 12
 	type childProcess struct {
 		command *exec.Cmd
@@ -250,6 +255,7 @@ func TestConcurrentProcessesPreserveEveryIndexEntry(t *testing.T) {
 			"WORLDLEDGER_ARCHIVE_LOCK_HELPER=1",
 			"WORLDLEDGER_ARCHIVE_LOCK_ROOT="+a.Root,
 			"WORLDLEDGER_ARCHIVE_LOCK_INDEX="+strconv.Itoa(index),
+			"WORLDLEDGER_ARCHIVE_LOCK_LINE="+line,
 		)
 		children[index].command = command
 		command.Stdout = &children[index].output
@@ -257,6 +263,16 @@ func TestConcurrentProcessesPreserveEveryIndexEntry(t *testing.T) {
 		if err := command.Start(); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// A child that fails before reaching the line never arrives, so the wait is
+	// bounded, and they are let go regardless: its failure is reported below.
+	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
+		if arrived, _ := filepath.Glob(filepath.Join(line, "ready-*")); len(arrived) == count {
+			break
+		}
+	}
+	if err := os.WriteFile(filepath.Join(line, "go"), nil, 0o644); err != nil {
+		t.Fatal(err)
 	}
 	for index := range children {
 		if err := children[index].command.Wait(); err != nil {
@@ -286,6 +302,18 @@ func TestArchiveLockSubprocessHelper(t *testing.T) {
 	index, err := strconv.Atoi(os.Getenv("WORLDLEDGER_ARCHIVE_LOCK_INDEX"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	line := os.Getenv("WORLDLEDGER_ARCHIVE_LOCK_LINE")
+	if err := os.WriteFile(filepath.Join(line, "ready-"+strconv.Itoa(index)), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(time.Minute); ; time.Sleep(time.Millisecond) {
+		if _, err := os.Stat(filepath.Join(line, "go")); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("never let go")
+		}
 	}
 	a, err := Open(os.Getenv("WORLDLEDGER_ARCHIVE_LOCK_ROOT"))
 	if err != nil {
