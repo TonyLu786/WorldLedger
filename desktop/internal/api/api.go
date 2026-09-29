@@ -24,14 +24,14 @@ import (
 
 // Mount registers every endpoint the page uses.
 //
-// The two handlers that can run for a long time are handed this server's
-// watchdog rather than reaching for it. It used to be a package variable that
-// Mount assigned and they read. That is safe in the program, where Mount runs
-// once before anything is served. The tests start a server for every test,
-// and that made it one variable shared by all of them, kept in order only
-// because each handler happened to read it before answering. What each
-// server's handlers are given, nobody else can reach.
-func Mount(server *app.Server, watchdog *app.Watchdog) {
+// What a handler needs beyond the request is handed to it here: the watchdog
+// that long work holds open, and where installing gets its files. The watchdog
+// used to be a package variable that Mount assigned and two handlers read,
+// which is safe in the program, where Mount runs once. The tests start a
+// server for every test, and that made it one variable shared by all of them,
+// kept in order only because each handler happened to read it before
+// answering. What each server's handlers are given, nobody else can reach.
+func Mount(server *app.Server, watchdog *app.Watchdog, supply Supply) {
 	longWork := hold(watchdog.Hold)
 
 	server.HandleFunc("/api/notice", handleNotice)
@@ -49,8 +49,12 @@ func Mount(server *app.Server, watchdog *app.Watchdog) {
 	})
 	server.HandleFunc("/api/moments", handleMoments)
 	server.HandleFunc("/api/travel", handleTravel)
-	server.HandleFunc("/api/plan", handlePlan)
-	server.HandleFunc("/api/install", handleInstall)
+	server.HandleFunc("/api/plan", func(w http.ResponseWriter, r *http.Request) {
+		handlePlan(w, r, supply)
+	})
+	server.HandleFunc("/api/install", func(w http.ResponseWriter, r *http.Request) {
+		handleInstall(w, r, supply)
+	})
 	server.HandleFunc("/api/uninstall", handleUninstall)
 }
 

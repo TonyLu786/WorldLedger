@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/worldledger/worldledger-mc/desktop/internal/app"
+	"github.com/worldledger/worldledger-mc/desktop/internal/installer"
 	"github.com/worldledger/worldledger-mc/internal/mcpath"
 )
 
@@ -138,9 +139,23 @@ type apiUnderTest struct {
 	machine machine
 }
 
-// newAPI is the only way these tests get a server, so no test can reach a
+// newAPI is the application as it is built from source: it does not know where
+// the mod is, so it cannot install anything.
+func newAPI(t *testing.T) apiUnderTest { return serve(t, Supply{}) }
+
+// modAddress is where a released build would fetch the mod from, in these
+// tests.
+const modAddress = "https://example.invalid/worldledger.jar"
+
+// newRelease is the application as a release is built: it knows where the mod
+// is, and fetches that and everything else through fetcher.
+func newRelease(t *testing.T, fetcher installer.Fetcher) apiUnderTest {
+	return serve(t, Supply{Mod: modAddress, Fetcher: fetcher})
+}
+
+// serve is the only way these tests get a server, so no test can reach a
 // handler without first being isolated.
-func newAPI(t *testing.T) apiUnderTest {
+func serve(t *testing.T, supply Supply) apiUnderTest {
 	t.Helper()
 	m := isolate(t)
 
@@ -150,7 +165,7 @@ func newAPI(t *testing.T) apiUnderTest {
 	}
 	watchdog := app.NewWatchdog(time.Minute)
 	watchdog.Mount(server)
-	Mount(server, watchdog)
+	Mount(server, watchdog, supply)
 	go server.Serve()
 	t.Cleanup(func() { server.Close() })
 	return apiUnderTest{t: t, server: server, base: "http://" + server.Addr(), machine: m}

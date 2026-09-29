@@ -235,10 +235,7 @@ func TestUninstallingPutsEverythingBack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	skipped, err := Uninstall(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
+	skipped := Uninstall(manifest)
 	if len(skipped) != 0 {
 		t.Errorf("uninstalling skipped things it wrote itself: %v", skipped)
 	}
@@ -282,10 +279,7 @@ func TestAFileChangedSinceInstallingIsLeftAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	skipped, err := Uninstall(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
+	skipped := Uninstall(manifest)
 	if len(skipped) == 0 {
 		t.Fatal("the edited file was removed without a word")
 	}
@@ -314,8 +308,8 @@ func TestUninstallingLeavesADirectoryThatHasSomethingElseInIt(t *testing.T) {
 	if err := os.WriteFile(other, []byte("not ours"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Uninstall(manifest); err != nil {
-		t.Fatal(err)
+	if skipped := Uninstall(manifest); len(skipped) != 0 {
+		t.Errorf("uninstalling left what it wrote itself: %v", skipped)
 	}
 	if _, err := os.Stat(other); err != nil {
 		t.Errorf("somebody else's mod was removed: %v", err)
@@ -363,8 +357,8 @@ func TestAFailurePartWayThroughStillReportsWhatWasDone(t *testing.T) {
 	if len(manifest.Records) == 0 {
 		t.Fatal("nothing was recorded, so the part that succeeded cannot be undone")
 	}
-	if _, err := Uninstall(manifest); err != nil {
-		t.Fatalf("undoing a partial install failed: %v", err)
+	if skipped := Uninstall(manifest); len(skipped) != 0 {
+		t.Fatalf("undoing a partial install left %v", skipped)
 	}
 	if _, err := os.Stat(install.VersionProfile(LoaderVersionID())); !os.IsNotExist(err) {
 		t.Error("the half-installed version profile is still there")
@@ -467,10 +461,7 @@ func TestUninstallingRemovesTheLauncherEntryEvenAfterTheLauncherRewroteTheFile(t
 		t.Fatal(err)
 	}
 
-	skipped, err := Uninstall(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
+	skipped := Uninstall(manifest)
 	if len(skipped) != 0 {
 		t.Errorf("uninstalling gave up on something: %v", skipped)
 	}
@@ -505,10 +496,7 @@ func TestUninstallingAnEntryThatIsAlreadyGoneIsNotAProblem(t *testing.T) {
 		[]byte(`{"profiles":{"vanilla":{"lastVersionId":"latest-release"}},"version":6}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	skipped, err := Uninstall(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
+	skipped := Uninstall(manifest)
 	for _, s := range skipped {
 		if strings.Contains(s.Path, "launcher_profiles") {
 			t.Errorf("an entry somebody had already removed was reported as a problem: %s", s)
@@ -609,10 +597,7 @@ func TestAKeptCopyThatCannotBeReadIsAFailureAndStaysToUndo(t *testing.T) {
 		{Path: path, Backup: gone, Digest: hex.EncodeToString(digest[:])},
 	}}
 
-	skipped, err := Uninstall(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
+	skipped := Uninstall(manifest)
 	if len(skipped) != 1 || skipped[0].Path != path {
 		t.Fatalf("skipped %v, want only %s", skipped, path)
 	}
@@ -632,5 +617,50 @@ func TestAKeptCopyThatCannotBeReadIsAFailureAndStaysToUndo(t *testing.T) {
 	}
 	if _, err := os.Stat(other); !os.IsNotExist(err) {
 		t.Error("the file that could be undone was not")
+	}
+}
+
+// A file that cannot be undone does not keep the rest from being undone. The
+// first one used to end the replay, leaving everything it had not reached --
+// here the launcher entry and the Fabric profile -- in somebody's game.
+func TestOneFileThatCannotBeUndoneDoesNotStopTheRest(t *testing.T) {
+	install, manifest := applyFixture(t)
+
+	// In the field it is a jar held open by security software. What refuses to
+	// be removed on every platform a test runs on is a directory with something
+	// in it, so that is what stands where the Fabric API jar was.
+	jar := install.Mod("fabric-api-" + health.FabricAPIVersion + ".jar")
+	if err := os.Remove(jar); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(jar, "held"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	skipped := Uninstall(manifest)
+	if len(skipped) != 1 || skipped[0].Path != jar {
+		t.Fatalf("skipped %v, want only %s", skipped, jar)
+	}
+	if skipped[0].Changed || !strings.Contains(skipped[0].Reason, "could not be removed") {
+		t.Errorf("it is not reported as something that could not be removed: %+v", skipped[0])
+	}
+	for _, path := range []string{
+		install.VersionProfile(LoaderVersionID()),
+		install.Mod("worldledger.jar"),
+		install.CaptureProperties(),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("%s was not undone", path)
+		}
+	}
+	profiles, err := os.ReadFile(install.LauncherProfiles())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(profiles), "worldledger-"+LoaderVersionID()) {
+		t.Error("the launcher entry was left, pointing at a version that has been removed")
+	}
+	if left := Remaining(manifest, skipped); len(left.Records) != 1 || left.Records[0].Path != jar {
+		t.Errorf("what is left to undo is %v, want only %s", left.Records, jar)
 	}
 }

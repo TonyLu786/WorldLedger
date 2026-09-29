@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -173,20 +174,30 @@ func writeWithBackup(path string, payload []byte, backupDir string) (Record, err
 		return record, err
 	}
 
-	// Written beside the target and renamed over it, so an interrupted write
-	// cannot leave a half a file where a whole one was.
-	temporary := path + ".worldledger-tmp"
-	if err := os.WriteFile(temporary, payload, 0o644); err != nil {
-		return record, err
-	}
-	if err := os.Rename(temporary, path); err != nil {
-		os.Remove(temporary)
+	if err := replace(path, payload); err != nil {
 		return record, err
 	}
 
 	digest := sha256.Sum256(payload)
 	record.Digest = hex.EncodeToString(digest[:])
 	return record, nil
+}
+
+// replace puts payload at path in one step. It is written beside the target and
+// renamed over it, so an interrupted write cannot leave half a file where a
+// whole one was. Everything this writes into somebody's game goes through here,
+// putting a file back included.
+func replace(path string, payload []byte) error {
+	temporary := path + ".worldledger-tmp"
+	if err := os.WriteFile(temporary, payload, 0o644); err != nil {
+		os.Remove(temporary)
+		return err
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		os.Remove(temporary)
+		return err
+	}
+	return nil
 }
 
 // ensureDir makes a directory and reports which levels it had to create, so an
@@ -217,10 +228,11 @@ func ensureDir(dir string) ([]string, error) {
 //
 // The reasons are not alike, and the difference is all somebody needs to know.
 // A file changed since it was installed is theirs now, and leaving it alone is
-// the right outcome. A kept copy that could not be read, or a launcher entry
-// that could not be taken out, is the opposite: what was installed is still
-// there, and should not be. The window reported every one of them as the
-// first, under a banner saying everything had been removed.
+// the right outcome. Every other reason is the opposite -- a file that could
+// not be removed or put back, a kept copy that could not be read, a launcher
+// entry that could not be taken out -- and what was installed is still there,
+// and should not be. The window reported every one of them as the first, under
+// a banner saying everything had been removed.
 type Skipped struct {
 	Path string `json:"path"`
 	// Changed is set only for a file left alone because something else changed
@@ -258,13 +270,21 @@ func Remaining(manifest Manifest, skipped []Skipped) Manifest {
 	return remaining
 }
 
-// Uninstall replays a manifest backwards.
+// Uninstall replays a manifest backwards and returns what it did not undo.
 //
 // A file that has changed since we wrote it is left alone. Somebody may have
 // edited their capture.properties, and removing a mod is not a licence to throw
 // away what they wrote afterwards.
-func Uninstall(manifest Manifest) ([]Skipped, error) {
+//
+// A file that cannot be undone -- held open by security software, say -- is
+// reported and passed over, and the rest are still undone. The first such file
+// used to end the replay with an error, leaving everything it had not reached
+// in place as well, with nothing saying what that was.
+func Uninstall(manifest Manifest) []Skipped {
 	var skipped []Skipped
+	notUndone := func(i int, reason string) {
+		skipped = append(skipped, Skipped{Path: manifest.Records[i].Path, Reason: reason, index: i})
+	}
 	for i := len(manifest.Records) - 1; i >= 0; i-- {
 		record := manifest.Records[i]
 
@@ -277,7 +297,7 @@ func Uninstall(manifest Manifest) ([]Skipped, error) {
 		// everything else is left exactly as the launcher last wrote it.
 		if record.Kind == AddLauncherEntry {
 			if err := removeLauncherEntry(record.Path, LoaderVersionID()); err != nil {
-				skipped = append(skipped, Skipped{Path: record.Path, Reason: err.Error(), index: i})
+				notUndone(i, err.Error())
 			}
 			continue
 		}
@@ -293,18 +313,17 @@ func Uninstall(manifest Manifest) ([]Skipped, error) {
 
 		if record.Backup == "" {
 			if err := os.Remove(record.Path); err != nil && !os.IsNotExist(err) {
-				return skipped, err
+				notUndone(i, "could not be removed: "+cause(err))
 			}
 			continue
 		}
 		previous, err := os.ReadFile(record.Backup)
 		if err != nil {
-			skipped = append(skipped, Skipped{Path: record.Path,
-				Reason: "the copy kept from before could not be read, so it was not put back", index: i})
+			notUndone(i, "the copy kept from before could not be read, so it was not put back")
 			continue
 		}
-		if err := os.WriteFile(record.Path, previous, 0o644); err != nil {
-			return skipped, err
+		if err := replace(record.Path, previous); err != nil {
+			notUndone(i, "the copy kept from before could not be put back: "+cause(err))
 		}
 	}
 
@@ -313,7 +332,21 @@ func Uninstall(manifest Manifest) ([]Skipped, error) {
 	for i := len(manifest.Directories) - 1; i >= 0; i-- {
 		os.Remove(manifest.Directories[i])
 	}
-	return skipped, nil
+	return skipped
+}
+
+// cause is what the system said went wrong, without the path it said it about.
+// The window shows the path already, beside the reason.
+func cause(err error) string {
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		return pathErr.Err.Error()
+	}
+	var linkErr *os.LinkError
+	if errors.As(err, &linkErr) {
+		return linkErr.Err.Error()
+	}
+	return err.Error()
 }
 
 // looksLikeJar reports whether these bytes begin the way a zip archive does,
@@ -360,12 +393,7 @@ func removeLauncherEntry(path, versionID string) error {
 	if err != nil {
 		return fmt.Errorf("the launcher's settings could not be rewritten")
 	}
-	temporary := path + ".worldledger-tmp"
-	if err := os.WriteFile(temporary, body, 0o644); err != nil {
-		return fmt.Errorf("the launcher's settings could not be rewritten")
-	}
-	if err := os.Rename(temporary, path); err != nil {
-		os.Remove(temporary)
+	if err := replace(path, body); err != nil {
 		return fmt.Errorf("the launcher's settings could not be rewritten")
 	}
 	return nil

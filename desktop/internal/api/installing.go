@@ -12,6 +12,7 @@ import (
 	"github.com/worldledger/worldledger-mc/desktop/internal/health"
 	"github.com/worldledger/worldledger-mc/desktop/internal/home"
 	"github.com/worldledger/worldledger-mc/desktop/internal/installer"
+	"github.com/worldledger/worldledger-mc/internal/atomicfile"
 	"github.com/worldledger/worldledger-mc/internal/mcpath"
 )
 
@@ -30,16 +31,28 @@ import (
 
 var installing sync.Mutex
 
-// ModSource is where the WorldLedger jar is fetched from.
+// ModSource is where a released build fetches the WorldLedger jar from.
 //
 // It is a variable rather than a constant so a release build can point it at
-// that release's asset while a development build points at a file. The default
-// is empty, which makes the plan refuse rather than download something
+// that release's asset, which the release workflow does at link time. The
+// default is empty, which makes the plan refuse rather than download something
 // arbitrary: an installer that guesses where its own payload lives is one that
-// can be pointed anywhere.
+// can be pointed anywhere. main hands it to Mount, or whatever a development
+// build was pointed at with --mod-source instead.
 var ModSource = ""
 
-func handlePlan(w http.ResponseWriter, r *http.Request) {
+// Supply is where installing gets what it writes into the game: Mod is where
+// the jar comes from, and Fetcher fetches it and everything else a plan names.
+//
+// It is handed to Mount rather than read where it is used so that a test can
+// install through a fetcher of its own, including one that fails part way,
+// which is the case that has to be undone.
+type Supply struct {
+	Mod     string
+	Fetcher installer.Fetcher
+}
+
+func handlePlan(w http.ResponseWriter, r *http.Request, supply Supply) {
 	install, _, found := mcpath.FindInstall()
 	if !found {
 		app.WriteFailure(w, http.StatusNotFound,
@@ -55,7 +68,7 @@ func handlePlan(w http.ResponseWriter, r *http.Request) {
 	// text. Consent had been collected for something that could not happen,
 	// which is worse than not asking, and the same refusal a step earlier costs
 	// nothing and is true at the moment it is said.
-	if ModSource == "" {
+	if supply.Mod == "" {
 		app.WriteJSON(w, http.StatusOK, installer.Plan{
 			Refusal: "this build of the application does not know where to get the mod from, " +
 				"so it cannot set anything up. Use a released version, which carries that address.",
@@ -64,14 +77,14 @@ func handlePlan(w http.ResponseWriter, r *http.Request) {
 	}
 	contributor := r.URL.Query().Get("contributor")
 	app.WriteJSON(w, http.StatusOK,
-		installer.BuildPlan(install, health.Inspect(install), ModSource, contributor))
+		installer.BuildPlan(install, health.Inspect(install), supply.Mod, contributor))
 }
 
 type installRequest struct {
 	Contributor string `json:"contributor"`
 }
 
-func handleInstall(w http.ResponseWriter, r *http.Request) {
+func handleInstall(w http.ResponseWriter, r *http.Request, supply Supply) {
 	if r.Method != http.MethodPost {
 		app.WriteFailure(w, http.StatusMethodNotAllowed,
 			"installing has to be asked for", "use the button on the set up screen")
@@ -103,7 +116,7 @@ func handleInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plan := installer.BuildPlan(install, health.Inspect(install), ModSource, request.Contributor)
+	plan := installer.BuildPlan(install, health.Inspect(install), supply.Mod, request.Contributor)
 	if plan.Refusal != "" {
 		app.WriteFailure(w, http.StatusConflict, plan.Refusal, "nothing was changed")
 		return
@@ -112,7 +125,7 @@ func handleInstall(w http.ResponseWriter, r *http.Request) {
 		app.WriteJSON(w, http.StatusOK, map[string]any{"done": 0, "already": true})
 		return
 	}
-	if ModSource == "" {
+	if supply.Mod == "" {
 		app.WriteFailure(w, http.StatusServiceUnavailable,
 			"this build does not know where to get the mod from",
 			"use a released version of this application")
@@ -124,19 +137,39 @@ func handleInstall(w http.ResponseWriter, r *http.Request) {
 		app.WriteFailure(w, http.StatusInternalServerError, err.Error(), "nothing was changed")
 		return
 	}
-	backups := filepath.Join(dir, "backups")
 
-	manifest, err := installer.Apply(plan, installer.HTTPFetcher{}, backups)
-	// The manifest is saved whether or not it worked. A partial install with no
-	// record is the one outcome with no way back, and undoing has to be possible
-	// from a later run of the application rather than only from this one.
-	saved := saveManifest(dir, manifest)
+	held := heldRecord(dir)
+	manifest, err := installer.Apply(plan, supply.Fetcher, filepath.Join(dir, "backups"))
+	// Recorded before anything else happens, whether or not it worked. A
+	// partial install with no record is the one outcome with no way back, and
+	// undoing has to be possible from a later run of the application rather
+	// than only from this one.
+	//
+	// Added to what is already recorded, not written over it. A plan only
+	// contains steps for what is missing, so a second set-up is usually one
+	// step. Replacing the record with that one step is how Remove came to
+	// remove a single jar and report "Your Minecraft is back to what it was"
+	// while the Fabric profile, the launcher entry, Fabric API and
+	// capture.properties all stayed. The play screen sends people back to Set
+	// up for exactly the case that causes it, a launcher that replaced the mods
+	// folder.
+	record := writeRecord(dir, mergeManifests(held, manifest))
 
 	if err != nil {
-		notUndone, undoErr := installer.Uninstall(manifest)
+		// Undone at once, and the record then says what is still there: what
+		// was held before, and whatever of this attempt could not be put back.
+		// It used to keep all of this attempt, which claimed files that were
+		// gone. Somebody who then fetched Fabric API themselves -- the same
+		// release, under the same name, byte for byte -- would have had it
+		// deleted by Remove, as a file this application wrote.
+		left := installer.Remaining(manifest, installer.Uninstall(manifest))
+		record = writeRecord(dir, mergeManifests(held, left))
 		next := reachabilityAdvice(err)
-		if undoErr != nil || len(notUndone) > 0 {
-			next = "some of it could not be undone automatically; the record is in " + saved
+		if len(left.Records) > 0 {
+			next = "some of it could not be undone"
+			if record != "" {
+				next += ". What is left is recorded, so pressing Remove tries again"
+			}
 		}
 		app.WriteFailure(w, http.StatusInternalServerError, err.Error(), next)
 		return
@@ -144,7 +177,7 @@ func handleInstall(w http.ResponseWriter, r *http.Request) {
 
 	app.WriteJSON(w, http.StatusOK, map[string]any{
 		"done":   len(manifest.Records),
-		"record": saved,
+		"record": record,
 	})
 }
 
@@ -174,29 +207,57 @@ func handleUninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	skipped, err := installer.Uninstall(manifest)
-	if err != nil {
-		app.WriteFailure(w, http.StatusInternalServerError, err.Error(),
-			"some of it was removed; the record is still in "+manifestPath(dir))
-		return
-	}
-
 	// The record used to be deleted here whatever happened, including when
 	// something could not be put back, which left nothing to try again with.
 	// What is kept now is exactly what is still to undo, written over the old
-	// record rather than merged into it: saveManifest adds to what is held,
-	// and adding the remainder back to the whole would keep everything.
-	remaining := installer.Remaining(manifest, skipped)
-	complete := len(remaining.Records) == 0
-	if complete {
-		os.Remove(manifestPath(dir))
-	} else if body, err := json.MarshalIndent(remaining, "", "  "); err == nil {
-		os.WriteFile(manifestPath(dir), body, 0o644)
-	}
-	app.WriteJSON(w, http.StatusOK, map[string]any{"skipped": skipped, "complete": complete})
+	// record rather than merged into it the way a set-up's is: merging the
+	// remainder back into the whole would keep everything.
+	skipped := installer.Uninstall(manifest)
+	left := installer.Remaining(manifest, skipped)
+	writeRecord(dir, left)
+	app.WriteJSON(w, http.StatusOK, map[string]any{"skipped": skipped, "complete": len(left.Records) == 0})
 }
 
 func manifestPath(dir string) string { return filepath.Join(dir, "installed.json") }
+
+// heldRecord is what earlier set-ups recorded. A record that cannot be read
+// counts as none here, as it always has; Remove is where that is reported.
+func heldRecord(dir string) installer.Manifest {
+	var held installer.Manifest
+	raw, err := os.ReadFile(manifestPath(dir))
+	if err != nil || json.Unmarshal(raw, &held) != nil {
+		return installer.Manifest{}
+	}
+	return held
+}
+
+// writeRecord makes the record say exactly this, and returns where it is.
+//
+// It is the one file that makes undoing possible, so it is replaced in one step
+// the way the archive writes its own files. Rewriting it in place meant that a
+// crash part way left half a record, which Remove cannot read at all.
+//
+// A record with nothing in it is removed, so that Remove says there is nothing
+// to undo rather than undoing nothing. The path comes back only when the record
+// now says exactly this; otherwise it is empty.
+func writeRecord(dir string, manifest installer.Manifest) string {
+	path := manifestPath(dir)
+	if len(manifest.Records) == 0 {
+		os.Remove(path)
+		return ""
+	}
+	body, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return ""
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return ""
+	}
+	if err := atomicfile.Write(path, body, 0o644); err != nil {
+		return ""
+	}
+	return path
+}
 
 // reachabilityAdvice turns a failure into the thing to try.
 //
@@ -229,39 +290,6 @@ func reachabilityAdvice(err error) string {
 			"and check that security software is not protecting the folder"
 	}
 	return "nothing was left behind"
-}
-
-// saveManifest writes the record and returns where it went. A failure to save
-// is not worth failing the install over, but it does mean the path reported
-// back should not claim a file that is not there.
-func saveManifest(dir string, manifest installer.Manifest) string {
-	path := manifestPath(dir)
-	// Added to what is already recorded, not written over it.
-	//
-	// A plan only contains steps for what is missing, so a second set-up is
-	// usually one step. Replacing the record with that one step is how Remove
-	// came to remove a single jar and report "Your Minecraft is back to what it
-	// was" while the Fabric profile, the launcher entry, Fabric API and
-	// capture.properties all stayed. The play screen sends people back to
-	// Set up for exactly the case that causes it, a launcher that replaced the
-	// mods folder.
-	if previous, err := os.ReadFile(path); err == nil {
-		var held installer.Manifest
-		if json.Unmarshal(previous, &held) == nil {
-			manifest = mergeManifests(held, manifest)
-		}
-	}
-	body, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		return ""
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return ""
-	}
-	if err := os.WriteFile(path, body, 0o644); err != nil {
-		return ""
-	}
-	return path
 }
 
 // mergeManifests keeps everything an earlier set-up recorded and adds what this

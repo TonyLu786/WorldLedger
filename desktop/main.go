@@ -21,6 +21,7 @@ import (
 	"github.com/worldledger/worldledger-mc/desktop/internal/api"
 	"github.com/worldledger/worldledger-mc/desktop/internal/app"
 	"github.com/worldledger/worldledger-mc/desktop/internal/health"
+	"github.com/worldledger/worldledger-mc/desktop/internal/installer"
 	"github.com/worldledger/worldledger-mc/desktop/internal/shell"
 	"github.com/worldledger/worldledger-mc/desktop/ui"
 )
@@ -62,8 +63,9 @@ func run() error {
 		return nil
 	}
 
+	supply := api.Supply{Mod: api.ModSource, Fetcher: installer.HTTPFetcher{}}
 	if *modSource != "" {
-		api.ModSource = *modSource
+		supply.Mod = *modSource
 	}
 	// The same string --version prints, where the window can reach it.
 	health.Build = version
@@ -82,7 +84,7 @@ func run() error {
 	// failure than lingering a little.
 	watchdog := app.NewWatchdog(45 * time.Second)
 	abandoned := watchdog.Mount(server)
-	api.Mount(server, watchdog)
+	api.Mount(server, watchdog, supply)
 
 	errs := make(chan error, 1)
 	go func() { errs <- server.Serve() }()
