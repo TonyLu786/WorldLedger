@@ -68,6 +68,14 @@ jobs:
           # module, and its tests start real servers, so the detector has
           # something to watch. It needs cgo, which is why it runs on Linux and
           # not in the Windows job.
+          #
+          # Adding it to the Windows job would say less than it seems to. The
+          # Windows locking and replacement code shares nothing between
+          # goroutines, and what it does -- keeping out whoever else holds the
+          # lock -- happens where no race detector looks. What can see that is
+          # the archive's concurrency tests, which run in the Windows job and
+          # fail when the lock is made shared; docs/audit-2026-09-01.md has the
+          # counts.
           go test -race -count=1 ./...
       - name: Build the commands the release ships
         run: |

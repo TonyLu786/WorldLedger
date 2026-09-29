@@ -50,7 +50,7 @@ type exportAnswer struct {
 	Kept int `json:"kept"`
 }
 
-func handleExport(w http.ResponseWriter, r *http.Request) {
+func handleExport(w http.ResponseWriter, r *http.Request, longWork hold) {
 	if r.Method != http.MethodPost {
 		app.WriteFailure(w, http.StatusMethodNotAllowed,
 			"making a world has to be asked for", "use the button on the make a world screen")
@@ -62,7 +62,7 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer exporting.Unlock()
-	defer holdDuringLongWork()()
+	defer longWork()()
 
 	var request exportRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {

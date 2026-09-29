@@ -40,7 +40,7 @@ type importResult struct {
 // to the person would be nonsense.
 var importing sync.Mutex
 
-func handleImport(w http.ResponseWriter, r *http.Request) {
+func handleImport(w http.ResponseWriter, r *http.Request, longWork hold) {
 	if r.Method != http.MethodPost {
 		app.WriteFailure(w, http.StatusMethodNotAllowed,
 			"importing has to be asked for explicitly", "use the button on the import screen")
@@ -52,7 +52,7 @@ func handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer importing.Unlock()
-	defer holdDuringLongWork()()
+	defer longWork()()
 
 	dir, candidates, found := mcpath.FindSpool()
 	if !found {
